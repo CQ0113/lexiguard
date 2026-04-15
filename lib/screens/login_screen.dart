@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../data/dummy_data.dart';
 import 'client/client_dashboard_screen.dart';
+import 'lawyer/lawyer_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -217,13 +219,22 @@ class _LoginScreenState extends State<LoginScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => const ClientDashboardScreen(),
+                                  builder: (context) => ClientDashboardScreen(
+                                    user: DummyData.users.firstWhere(
+                                        (u) => u.role.name == 'client'),
+                                  ),
                                 ),
                               );
                             } else {
-                              // ScaffoldMessenger.of(context).showSnackBar(
-                              //   const SnackBar(content: Text('Lawyer Dashboard not built yet')),
-                              // );
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => LawyerDashboardScreen(
+                                    user: DummyData.users.firstWhere(
+                                        (u) => u.role.name == 'lawyer'),
+                                  ),
+                                ),
+                              );
                             }
                           },
                           style: ElevatedButton.styleFrom(
