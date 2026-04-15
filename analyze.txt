@@ -1,0 +1,6 @@
+Analyzing lei_guard...                                          
+
+   info - Parameter 'key' could be a super parameter - lib\screens\login_screen.dart:5:9 - use_super_parameters
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\login_screen.dart:74:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\login_screen.dart:278:43 - deprecated_member_use
+
