@@ -1,4 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_model.dart';
 import 'user_service.dart';
 
@@ -91,8 +93,78 @@ class AuthService {
     await _auth.sendPasswordResetEmail(email: email.trim());
   }
 
+  /// Sign in with Google
+  Future<UserModel> signInWithGoogle({required String role}) async {
+    UserCredential userCredential;
+
+    try {
+      if (kIsWeb) {
+        // On web, Firebase handles the popup cleanly without needing the separate API keys
+        final googleProvider = GoogleAuthProvider();
+        userCredential = await _auth.signInWithPopup(googleProvider);
+      } else {
+        // On mobile, use standard google_sign_in package
+        final GoogleSignIn googleSignIn = GoogleSignIn();
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+        if (googleUser == null) {
+          throw const AuthException('Google sign in was cancelled.');
+        }
+
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final AuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+
+        userCredential = await _auth.signInWithCredential(credential);
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'popup-closed-by-user') {
+        throw const AuthException('Google sign in was cancelled.');
+      }
+      throw AuthException(e.message ?? 'An error occurred during Google Sign In');
+    }
+
+    final uid = userCredential.user!.uid;
+    UserModel? userModel = await _userService.getUserById(uid);
+
+    final expectedRole = role == 'Client' ? UserRole.client : UserRole.lawyer;
+
+    if (userModel == null) {
+      // First time logging in with Google. Seamlessly create the profile based on the selected role!
+      userModel = UserModel(
+        id: uid,
+        name: userCredential.user!.displayName ?? 'New User',
+        email: userCredential.user!.email ?? '',
+        phone: userCredential.user!.phoneNumber ?? '',
+        role: expectedRole,
+        barCouncilVerified: expectedRole == UserRole.lawyer ? false : null,
+      );
+      await _userService.createUserDocument(userModel);
+    } else {
+      // User document already exists. Verify role matches what they selected on login screen.
+      if (userModel.role != expectedRole) {
+        await signOut();
+        final roleLabel = role == 'Client' ? 'Client' : 'Lawyer';
+        throw AuthException(
+          'This account is registered as a ${userModel.role.name}, '
+          'but you are trying to log in as a $roleLabel. '
+          'Please select the correct role.',
+        );
+      }
+    }
+
+    return userModel;
+  }
+
   /// Sign out.
   Future<void> signOut() async {
+    try {
+      if (!kIsWeb) {
+        await GoogleSignIn().signOut();
+      }
+    } catch (_) {} // Ignore exceptions if they weren't signed in with Google
     await _auth.signOut();
   }
 }
