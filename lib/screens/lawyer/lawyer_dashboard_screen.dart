@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
@@ -66,7 +67,7 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
                           fontWeight: FontWeight.w600)),
                   const Spacer(),
                   GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
+                    onTap: () => FirebaseAuth.instance.signOut(),
                     child: const Icon(Icons.logout_outlined,
                         color: Colors.white70, size: 20),
                   ),

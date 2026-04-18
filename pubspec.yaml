@@ -1,4 +1,4 @@
-name: lei_guard
+name: lexi_guard
 description: "A new Flutter project."
 publish_to: 'none'
 version: 0.1.0
@@ -11,6 +11,9 @@ dependencies:
     sdk: flutter
   google_fonts: ^8.0.2
   intl: ^0.20.2
+  firebase_core: ^3.13.0
+  firebase_auth: ^5.5.2
+  cloud_firestore: ^5.6.6
 
 dev_dependencies:
   flutter_test:

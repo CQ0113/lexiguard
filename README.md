@@ -1,3 +1,3 @@
-# lei_guard
+# lexi_guard
 
 A new Flutter project.

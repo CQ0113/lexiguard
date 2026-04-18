@@ -1,5 +1,4 @@
-// User Model — ready to swap to Firebase Firestore
-// Replace DummyData references with FirebaseFirestore.instance.collection('users')
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum UserRole { client, lawyer }
 
@@ -10,6 +9,7 @@ class UserModel {
   final String phone;
   final UserRole role;
   final String? avatarUrl;
+  final DateTime? createdAt;
 
   // Lawyer-specific fields
   final String? barNumber;
@@ -26,6 +26,7 @@ class UserModel {
     required this.phone,
     required this.role,
     this.avatarUrl,
+    this.createdAt,
     // Lawyer fields
     this.barNumber,
     this.specialization,
@@ -35,11 +36,51 @@ class UserModel {
     this.barCouncilVerified,
   });
 
-  // Convert from Firestore document — replace with:
-  // factory UserModel.fromFirestore(DocumentSnapshot doc) {
-  //   final data = doc.data()! as Map<String, dynamic>;
-  //   return UserModel(id: doc.id, ...);
-  // }
+  // ─── Firestore Deserialization ───────────────────────────────────────────────
+
+  factory UserModel.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data()!;
+    return UserModel(
+      id: doc.id,
+      name: data['name'] as String? ?? '',
+      email: data['email'] as String? ?? '',
+      phone: data['phone'] as String? ?? '',
+      role: data['role'] == 'lawyer' ? UserRole.lawyer : UserRole.client,
+      avatarUrl: data['avatarUrl'] as String?,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      barNumber: data['barNumber'] as String?,
+      specialization: data['specialization'] as String?,
+      hourlyRate: (data['hourlyRate'] as num?)?.toDouble(),
+      rating: (data['rating'] as num?)?.toDouble(),
+      yearsExperience: data['yearsExperience'] as int?,
+      barCouncilVerified: data['barCouncilVerified'] as bool?,
+    );
+  }
+
+  // ─── Firestore Serialization ─────────────────────────────────────────────────
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'email': email,
+      'phone': phone,
+      'role': role == UserRole.lawyer ? 'lawyer' : 'client',
+      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+      'createdAt': FieldValue.serverTimestamp(),
+      // Lawyer-only fields (only written if non-null)
+      if (barNumber != null) 'barNumber': barNumber,
+      if (specialization != null) 'specialization': specialization,
+      if (hourlyRate != null) 'hourlyRate': hourlyRate,
+      if (yearsExperience != null) 'yearsExperience': yearsExperience,
+      if (barCouncilVerified != null)
+        'barCouncilVerified': barCouncilVerified,
+    };
+  }
+
+  // ─── Legacy Map (kept for DummyData compatibility) ───────────────────────────
+
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
       id: map['id'] as String,
@@ -55,24 +96,5 @@ class UserModel {
       yearsExperience: map['yearsExperience'] as int?,
       barCouncilVerified: map['barCouncilVerified'] as bool?,
     );
-  }
-
-  // Convert to Firestore document — replace with:
-  // Future<void> save() => FirebaseFirestore.instance.collection('users').doc(id).set(toMap());
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'email': email,
-      'phone': phone,
-      'role': role == UserRole.lawyer ? 'lawyer' : 'client',
-      'avatarUrl': avatarUrl,
-      'barNumber': barNumber,
-      'specialization': specialization,
-      'hourlyRate': hourlyRate,
-      'rating': rating,
-      'yearsExperience': yearsExperience,
-      'barCouncilVerified': barCouncilVerified,
-    };
   }
 }

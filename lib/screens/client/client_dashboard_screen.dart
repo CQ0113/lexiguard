@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
@@ -103,7 +104,7 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
                   const SizedBox(width: 16),
                   // Logout
                   GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
+                    onTap: () => FirebaseAuth.instance.signOut(),
                     child: const Icon(Icons.logout_outlined,
                         color: Colors.white70, size: 20),
                   ),
