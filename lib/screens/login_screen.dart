@@ -39,8 +39,36 @@ class _LoginScreenState extends State<LoginScreen> {
         : 'Create Account';
   }
 
+  VerificationStatus _initialStatusForJurisdiction(String jurisdiction) {
+    return jurisdiction == 'peninsular'
+        ? VerificationStatus.pending
+        : VerificationStatus.manualReviewRequired;
+  }
+
+  String _verificationProviderForJurisdiction(String jurisdiction) {
+    switch (jurisdiction) {
+      case 'peninsular':
+        return 'malaysian_bar';
+      case 'sabah':
+        return 'manual_review_sabah';
+      case 'sarawak':
+        return 'manual_review_sarawak';
+      default:
+        return 'manual_review';
+    }
+  }
+
+  String _registrationMessageForStatus(VerificationStatus status) {
+    if (status == VerificationStatus.manualReviewRequired) {
+      return 'East Malaysia verification is currently manual review only. Our team will review your profile within 48 hours.';
+    }
+    return 'Verification submitted. You are now in pending sandbox mode.';
+  }
+
   UserModel _buildPendingLawyerFromForm() {
     final template = DummyData.firstPendingLawyer;
+    final jurisdiction = selectedJurisdiction;
+    final initialStatus = _initialStatusForJurisdiction(jurisdiction);
     final legalName = legalFullNameController.text.trim();
     final barNumber = barNumberController.text.trim();
     final firmName = firmNameController.text.trim();
@@ -60,12 +88,12 @@ class _LoginScreenState extends State<LoginScreen> {
       rating: template.rating,
       yearsExperience: template.yearsExperience,
       barCouncilVerified: false,
-      verificationStatus: VerificationStatus.pending,
-      verificationProvider: 'malaysian_bar',
+      verificationStatus: initialStatus,
+      verificationProvider: _verificationProviderForJurisdiction(jurisdiction),
       verificationBadgeVisible: false,
       legalFullName: legalName.isNotEmpty ? legalName : template.legalFullName,
       firmName: firmName.isNotEmpty ? firmName : template.firmName,
-      jurisdiction: selectedJurisdiction,
+      jurisdiction: jurisdiction,
       practiceState: practiceState.isNotEmpty
           ? practiceState
           : template.practiceState,
@@ -103,7 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Verification submitted. You are now in pending sandbox mode.',
+            _registrationMessageForStatus(lawyer.verificationStatus),
             style: GoogleFonts.inter(color: Colors.white),
           ),
           backgroundColor: const Color(0xFF1E3A8A),
@@ -514,7 +542,7 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Lawyer accounts enter pending sandbox mode until verification is approved.',
+              'Peninsular applications start in pending sandbox mode. Sabah and Sarawak applications are routed to manual review.',
               style: GoogleFonts.inter(
                 color: const Color(0xFF92400E),
                 fontSize: 12,

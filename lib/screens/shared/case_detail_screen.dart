@@ -161,7 +161,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Verification is still pending. Express interest will be enabled after your lawyer account is approved.',
+              _lockMessageForStatus(widget.viewer.verificationStatus),
               style: GoogleFonts.inter(
                 color: const Color(0xFF92400E),
                 fontSize: 12,
@@ -173,6 +173,25 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         ],
       ),
     );
+  }
+
+  String _lockMessageForStatus(VerificationStatus status) {
+    switch (status) {
+      case VerificationStatus.pending:
+        return 'Verification is still pending. Express interest will be enabled after your lawyer account is approved.';
+      case VerificationStatus.manualReviewRequired:
+        return 'Your submission is under manual review. Express interest will unlock once the review is completed.';
+      case VerificationStatus.rejected:
+        return 'Your verification was rejected. Update your legal details and resubmit to regain case marketplace access.';
+      case VerificationStatus.reverificationDue:
+        return 'Reverification is required before you can express interest in new cases.';
+      case VerificationStatus.suspended:
+        return 'Your lawyer account is currently suspended. Contact support to restore marketplace access.';
+      case VerificationStatus.unsubmitted:
+        return 'Complete verification to unlock case marketplace actions.';
+      case VerificationStatus.autoVerified:
+        return 'Your account is verified.';
+    }
   }
 
   // ── Sliver AppBar (hero) ─────────────────────────────────────────────────

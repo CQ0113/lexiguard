@@ -1,6 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lei_guard/models/user_model.dart';
 
+class _FakeTimestamp {
+  final DateTime value;
+  const _FakeTimestamp(this.value);
+
+  DateTime toDate() => value;
+}
+
 void main() {
   group('UserModel verification lifecycle', () {
     test('fromMap parses verificationStatus wire value', () {
@@ -48,6 +55,23 @@ void main() {
       expect(map['verificationStatus'], 'pending');
       expect(map['barCouncilVerified'], isFalse);
       expect(map['role'], 'lawyer');
+    });
+
+    test('fromMap parses timestamp-like and firestore map dates', () {
+      final user = UserModel.fromMap({
+        'id': 'lawyer_103',
+        'name': 'Timestamp Lawyer',
+        'email': 'time@example.com',
+        'phone': '+60000000003',
+        'role': 'lawyer',
+        'verifiedAt': _FakeTimestamp(DateTime.utc(2026, 4, 18, 12, 0)),
+        'lastVerifiedAt': '2026-04-18T12:00:00.000Z',
+        'nextReverifyAt': {'_seconds': 1776484800, '_nanoseconds': 0},
+      });
+
+      expect(user.verifiedAt, DateTime.utc(2026, 4, 18, 12, 0));
+      expect(user.lastVerifiedAt?.toUtc(), DateTime.utc(2026, 4, 18, 12, 0));
+      expect(user.nextReverifyAt?.millisecondsSinceEpoch, 1776484800000);
     });
   });
 }

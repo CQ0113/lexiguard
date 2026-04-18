@@ -138,15 +138,9 @@ class UserModel {
               ? VerificationStatus.autoVerified
               : VerificationStatus.unsubmitted),
       verificationProvider: map['verificationProvider'] as String?,
-      verifiedAt: map['verifiedAt'] != null
-          ? DateTime.tryParse(map['verifiedAt'] as String)
-          : null,
-      lastVerifiedAt: map['lastVerifiedAt'] != null
-          ? DateTime.tryParse(map['lastVerifiedAt'] as String)
-          : null,
-      nextReverifyAt: map['nextReverifyAt'] != null
-          ? DateTime.tryParse(map['nextReverifyAt'] as String)
-          : null,
+      verifiedAt: _readDateTime(map['verifiedAt']),
+      lastVerifiedAt: _readDateTime(map['lastVerifiedAt']),
+      nextReverifyAt: _readDateTime(map['nextReverifyAt']),
       verificationBadgeVisible:
           map['verificationBadgeVisible'] as bool? ?? (legacyVerified ?? false),
       legalFullName: map['legalFullName'] as String?,
@@ -176,6 +170,47 @@ class UserModel {
       default:
         return null;
     }
+  }
+
+  static DateTime? _readDateTime(dynamic value) {
+    if (value == null) return null;
+
+    if (value is DateTime) return value;
+
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    }
+
+    if (value is Map) {
+      final seconds = value['_seconds'] ?? value['seconds'];
+      final nanoseconds = value['_nanoseconds'] ?? value['nanoseconds'] ?? 0;
+      if (seconds is num) {
+        final millis =
+            seconds.toInt() * 1000 +
+            ((nanoseconds is num ? nanoseconds.toInt() : 0) ~/ 1000000);
+        return DateTime.fromMillisecondsSinceEpoch(millis);
+      }
+
+      final iso = value['iso'] ?? value['timestamp'];
+      if (iso is String) {
+        return DateTime.tryParse(iso);
+      }
+    }
+
+    try {
+      final dynamic dateValue = value.toDate();
+      if (dateValue is DateTime) {
+        return dateValue;
+      }
+    } catch (_) {
+      // Ignore unsupported timestamp-like values.
+    }
+
+    return null;
   }
 
   // Convert to Firestore document — replace with:
