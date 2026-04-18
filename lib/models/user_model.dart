@@ -3,6 +3,56 @@
 
 enum UserRole { client, lawyer }
 
+enum VerificationStatus {
+  unsubmitted,
+  pending,
+  autoVerified,
+  manualReviewRequired,
+  rejected,
+  reverificationDue,
+  suspended,
+}
+
+extension VerificationStatusWire on VerificationStatus {
+  String get wireValue {
+    switch (this) {
+      case VerificationStatus.unsubmitted:
+        return 'unsubmitted';
+      case VerificationStatus.pending:
+        return 'pending';
+      case VerificationStatus.autoVerified:
+        return 'auto_verified';
+      case VerificationStatus.manualReviewRequired:
+        return 'manual_review_required';
+      case VerificationStatus.rejected:
+        return 'rejected';
+      case VerificationStatus.reverificationDue:
+        return 'reverification_due';
+      case VerificationStatus.suspended:
+        return 'suspended';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case VerificationStatus.unsubmitted:
+        return 'Unsubmitted';
+      case VerificationStatus.pending:
+        return 'Pending Verification';
+      case VerificationStatus.autoVerified:
+        return 'Verified Lawyer';
+      case VerificationStatus.manualReviewRequired:
+        return 'Manual Review Required';
+      case VerificationStatus.rejected:
+        return 'Verification Rejected';
+      case VerificationStatus.reverificationDue:
+        return 'Reverification Due';
+      case VerificationStatus.suspended:
+        return 'Suspended';
+    }
+  }
+}
+
 class UserModel {
   final String id;
   final String name;
@@ -17,7 +67,19 @@ class UserModel {
   final double? hourlyRate;
   final double? rating;
   final int? yearsExperience;
+  // Legacy single-flag field kept for backward compatibility.
   final bool? barCouncilVerified;
+  final VerificationStatus verificationStatus;
+  final String? verificationProvider;
+  final DateTime? verifiedAt;
+  final DateTime? lastVerifiedAt;
+  final DateTime? nextReverifyAt;
+  final bool verificationBadgeVisible;
+  final String? legalFullName;
+  final String? firmName;
+  final String? jurisdiction;
+  final String? practiceState;
+  final String? practiceCity;
 
   const UserModel({
     required this.id,
@@ -33,6 +95,17 @@ class UserModel {
     this.rating,
     this.yearsExperience,
     this.barCouncilVerified,
+    this.verificationStatus = VerificationStatus.unsubmitted,
+    this.verificationProvider,
+    this.verifiedAt,
+    this.lastVerifiedAt,
+    this.nextReverifyAt,
+    this.verificationBadgeVisible = false,
+    this.legalFullName,
+    this.firmName,
+    this.jurisdiction,
+    this.practiceState,
+    this.practiceCity,
   });
 
   // Convert from Firestore document — replace with:
@@ -41,6 +114,11 @@ class UserModel {
   //   return UserModel(id: doc.id, ...);
   // }
   factory UserModel.fromMap(Map<String, dynamic> map) {
+    final legacyVerified = map['barCouncilVerified'] as bool?;
+    final parsedStatus = _verificationStatusFromWire(
+      map['verificationStatus'] as String?,
+    );
+
     return UserModel(
       id: map['id'] as String,
       name: map['name'] as String,
@@ -54,7 +132,50 @@ class UserModel {
       rating: (map['rating'] as num?)?.toDouble(),
       yearsExperience: map['yearsExperience'] as int?,
       barCouncilVerified: map['barCouncilVerified'] as bool?,
+      verificationStatus:
+          parsedStatus ??
+          (legacyVerified == true
+              ? VerificationStatus.autoVerified
+              : VerificationStatus.unsubmitted),
+      verificationProvider: map['verificationProvider'] as String?,
+      verifiedAt: map['verifiedAt'] != null
+          ? DateTime.tryParse(map['verifiedAt'] as String)
+          : null,
+      lastVerifiedAt: map['lastVerifiedAt'] != null
+          ? DateTime.tryParse(map['lastVerifiedAt'] as String)
+          : null,
+      nextReverifyAt: map['nextReverifyAt'] != null
+          ? DateTime.tryParse(map['nextReverifyAt'] as String)
+          : null,
+      verificationBadgeVisible:
+          map['verificationBadgeVisible'] as bool? ?? (legacyVerified ?? false),
+      legalFullName: map['legalFullName'] as String?,
+      firmName: map['firmName'] as String?,
+      jurisdiction: map['jurisdiction'] as String?,
+      practiceState: map['practiceState'] as String?,
+      practiceCity: map['practiceCity'] as String?,
     );
+  }
+
+  static VerificationStatus? _verificationStatusFromWire(String? value) {
+    switch (value) {
+      case 'unsubmitted':
+        return VerificationStatus.unsubmitted;
+      case 'pending':
+        return VerificationStatus.pending;
+      case 'auto_verified':
+        return VerificationStatus.autoVerified;
+      case 'manual_review_required':
+        return VerificationStatus.manualReviewRequired;
+      case 'rejected':
+        return VerificationStatus.rejected;
+      case 'reverification_due':
+        return VerificationStatus.reverificationDue;
+      case 'suspended':
+        return VerificationStatus.suspended;
+      default:
+        return null;
+    }
   }
 
   // Convert to Firestore document — replace with:
@@ -72,7 +193,28 @@ class UserModel {
       'hourlyRate': hourlyRate,
       'rating': rating,
       'yearsExperience': yearsExperience,
-      'barCouncilVerified': barCouncilVerified,
+      'barCouncilVerified': barCouncilVerified ?? isVerified,
+      'verificationStatus': verificationStatus.wireValue,
+      'verificationProvider': verificationProvider,
+      'verifiedAt': verifiedAt?.toIso8601String(),
+      'lastVerifiedAt': lastVerifiedAt?.toIso8601String(),
+      'nextReverifyAt': nextReverifyAt?.toIso8601String(),
+      'verificationBadgeVisible': verificationBadgeVisible,
+      'legalFullName': legalFullName,
+      'firmName': firmName,
+      'jurisdiction': jurisdiction,
+      'practiceState': practiceState,
+      'practiceCity': practiceCity,
     };
+  }
+
+  bool get isVerified => verificationStatus == VerificationStatus.autoVerified;
+
+  bool get canAccessMarketplace => isVerified;
+
+  bool get isPendingLike {
+    return verificationStatus == VerificationStatus.pending ||
+        verificationStatus == VerificationStatus.manualReviewRequired ||
+        verificationStatus == VerificationStatus.reverificationDue;
   }
 }

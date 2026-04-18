@@ -19,7 +19,7 @@ class DummyData {
       phone: '+60167891234',
       role: UserRole.client,
     ),
-    const UserModel(
+    UserModel(
       id: 'lawyer_1',
       name: 'Pn. Aishah binti Kamal',
       email: 'aishah.law@example.com',
@@ -30,10 +30,21 @@ class DummyData {
       rating: 4.8,
       yearsExperience: 8,
       barCouncilVerified: true,
+      verificationStatus: VerificationStatus.autoVerified,
+      verificationProvider: 'malaysian_bar',
+      verificationBadgeVisible: true,
+      legalFullName: 'Aishah binti Kamal',
+      firmName: 'Kamal & Partners',
+      jurisdiction: 'peninsular',
+      practiceState: 'Selangor',
+      practiceCity: 'Shah Alam',
+      verifiedAt: DateTime(2026, 1, 8),
+      lastVerifiedAt: DateTime(2026, 1, 8),
+      nextReverifyAt: DateTime(2027, 1, 8),
       barNumber: 'B/MY/09384',
       avatarUrl: 'https://i.pravatar.cc/150?img=47',
     ),
-    const UserModel(
+    UserModel(
       id: 'lawyer_2',
       name: 'En. Faizal Ibrahim',
       email: 'faizal.legal@example.com',
@@ -43,11 +54,33 @@ class DummyData {
       hourlyRate: 400.0,
       rating: 4.9,
       yearsExperience: 12,
-      barCouncilVerified: true,
+      barCouncilVerified: false,
+      verificationStatus: VerificationStatus.pending,
+      verificationProvider: 'malaysian_bar',
+      verificationBadgeVisible: false,
+      legalFullName: 'Faizal Ibrahim',
+      firmName: 'Ibrahim Legal Chambers',
+      jurisdiction: 'peninsular',
+      practiceState: 'Kuala Lumpur',
+      practiceCity: 'Kuala Lumpur',
       barNumber: 'B/MY/07251',
       avatarUrl: 'https://i.pravatar.cc/150?img=11',
     ),
   ];
+
+  static UserModel get firstVerifiedLawyer {
+    return users.firstWhere(
+      (u) => u.role == UserRole.lawyer && u.canAccessMarketplace,
+      orElse: () => users.firstWhere((u) => u.role == UserRole.lawyer),
+    );
+  }
+
+  static UserModel get firstPendingLawyer {
+    return users.firstWhere(
+      (u) => u.role == UserRole.lawyer && !u.canAccessMarketplace,
+      orElse: () => users.firstWhere((u) => u.role == UserRole.lawyer),
+    );
+  }
 
   // ── Cases assigned to a lawyer ───────────────────────────────────────────
   static final List<CaseModel> cases = [

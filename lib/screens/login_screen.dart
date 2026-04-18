@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../data/dummy_data.dart';
+import '../models/user_model.dart';
 import 'client/client_dashboard_screen.dart';
 import 'lawyer/lawyer_dashboard_screen.dart';
 
@@ -15,9 +17,111 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLogin = true;
   String selectedRole = 'Client'; // 'Client' or 'Lawyer'
   bool obscurePassword = true;
+  String selectedJurisdiction = 'peninsular';
+
+  final TextEditingController legalFullNameController = TextEditingController();
+  final TextEditingController barNumberController = TextEditingController();
+  final TextEditingController firmNameController = TextEditingController();
+  final TextEditingController practiceStateController = TextEditingController();
+  final TextEditingController practiceCityController = TextEditingController();
 
   final Color primaryBlue = const Color(0xFF0C1D36);
   final Color goldAccent = const Color(0xFFCFA92A);
+
+  bool get showLawyerVerificationFields {
+    return !isLogin && selectedRole == 'Lawyer';
+  }
+
+  String get actionLabel {
+    if (isLogin) return 'Sign In';
+    return selectedRole == 'Lawyer'
+        ? 'Register & Start Verification'
+        : 'Create Account';
+  }
+
+  UserModel _buildPendingLawyerFromForm() {
+    final template = DummyData.firstPendingLawyer;
+    final legalName = legalFullNameController.text.trim();
+    final barNumber = barNumberController.text.trim();
+    final firmName = firmNameController.text.trim();
+    final practiceState = practiceStateController.text.trim();
+    final practiceCity = practiceCityController.text.trim();
+
+    return UserModel(
+      id: '${template.id}_new',
+      name: legalName.isNotEmpty ? legalName : template.name,
+      email: template.email,
+      phone: template.phone,
+      role: UserRole.lawyer,
+      avatarUrl: template.avatarUrl,
+      barNumber: barNumber.isNotEmpty ? barNumber : template.barNumber,
+      specialization: template.specialization,
+      hourlyRate: template.hourlyRate,
+      rating: template.rating,
+      yearsExperience: template.yearsExperience,
+      barCouncilVerified: false,
+      verificationStatus: VerificationStatus.pending,
+      verificationProvider: 'malaysian_bar',
+      verificationBadgeVisible: false,
+      legalFullName: legalName.isNotEmpty ? legalName : template.legalFullName,
+      firmName: firmName.isNotEmpty ? firmName : template.firmName,
+      jurisdiction: selectedJurisdiction,
+      practiceState: practiceState.isNotEmpty
+          ? practiceState
+          : template.practiceState,
+      practiceCity: practiceCity.isNotEmpty
+          ? practiceCity
+          : template.practiceCity,
+    );
+  }
+
+  void _onSubmit() {
+    if (selectedRole == 'Client') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ClientDashboardScreen(
+            user: DummyData.users.firstWhere((u) => u.role == UserRole.client),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final lawyer = isLogin
+        ? DummyData.firstVerifiedLawyer
+        : _buildPendingLawyerFromForm();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LawyerDashboardScreen(user: lawyer),
+      ),
+    );
+
+    if (!isLogin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Verification submitted. You are now in pending sandbox mode.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFF1E3A8A),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    legalFullNameController.dispose();
+    barNumberController.dispose();
+    firmNameController.dispose();
+    practiceStateController.dispose();
+    practiceCityController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +136,6 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
               child: Column(
                 children: [
-                  // Logo container
                   Container(
                     width: 90,
                     height: 90,
@@ -44,13 +147,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.shield_outlined, size: 36, color: primaryBlue),
+                          Icon(
+                            Icons.shield_outlined,
+                            size: 36,
+                            color: primaryBlue,
+                          ),
                           Text(
                             'LEXIGUARD\nMALAYSIA',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.inter(
-                              fontSize: 7, 
-                              color: primaryBlue, 
+                              fontSize: 7,
+                              color: primaryBlue,
                               fontWeight: FontWeight.w800,
                               height: 1.1,
                             ),
@@ -79,8 +186,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
             ),
-            
-            // Bottom Sheet Section
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -89,13 +194,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                 ),
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(32),
+                  ),
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24.0,
+                      vertical: 32.0,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Auth Toggle (Login / Register)
                         Container(
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
@@ -109,9 +218,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                   onTap: () => setState(() => isLogin = true),
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 200),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: isLogin ? primaryBlue : Colors.transparent,
+                                      color: isLogin
+                                          ? primaryBlue
+                                          : Colors.transparent,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
@@ -119,7 +232,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                       textAlign: TextAlign.center,
                                       style: GoogleFonts.inter(
                                         fontWeight: FontWeight.w600,
-                                        color: isLogin ? Colors.white : Colors.grey[500],
+                                        color: isLogin
+                                            ? Colors.white
+                                            : Colors.grey[500],
                                       ),
                                     ),
                                   ),
@@ -130,9 +245,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                   onTap: () => setState(() => isLogin = false),
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 200),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: !isLogin ? primaryBlue : Colors.transparent,
+                                      color: !isLogin
+                                          ? primaryBlue
+                                          : Colors.transparent,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
@@ -140,7 +259,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                       textAlign: TextAlign.center,
                                       style: GoogleFonts.inter(
                                         fontWeight: FontWeight.w600,
-                                        color: !isLogin ? Colors.white : Colors.grey[500],
+                                        color: !isLogin
+                                            ? Colors.white
+                                            : Colors.grey[500],
                                       ),
                                     ),
                                   ),
@@ -150,8 +271,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        
-                        // Role Selection Cards
                         Row(
                           children: [
                             Expanded(
@@ -160,7 +279,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 icon: Icons.shield_outlined,
                                 isSelected: selectedRole == 'Client',
                                 activeColor: goldAccent,
-                                onTap: () => setState(() => selectedRole = 'Client'),
+                                onTap: () =>
+                                    setState(() => selectedRole = 'Client'),
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -170,73 +290,78 @@ class _LoginScreenState extends State<LoginScreen> {
                                 icon: Icons.balance,
                                 isSelected: selectedRole == 'Lawyer',
                                 activeColor: goldAccent,
-                                onTap: () => setState(() => selectedRole = 'Lawyer'),
+                                onTap: () =>
+                                    setState(() => selectedRole = 'Lawyer'),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 24),
-                        
-                        // Input Fields
-                        _buildTextField(
-                          hintText: 'Email Address',
-                        ),
+                        _buildTextField(hintText: 'Email Address'),
                         const SizedBox(height: 16),
                         _buildTextField(
                           hintText: 'Password',
                           isPassword: true,
                           obscureText: obscurePassword,
-                          onTogglePassword: () => setState(() => obscurePassword = !obscurePassword),
+                          onTogglePassword: () => setState(
+                            () => obscurePassword = !obscurePassword,
+                          ),
                         ),
+                        if (showLawyerVerificationFields) ...[
+                          const SizedBox(height: 16),
+                          _buildVerificationCard(),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Legal Full Name (as on bar records)',
+                            controller: legalFullNameController,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Bar / Roll Number (optional)',
+                            controller: barNumberController,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Law Firm Name',
+                            controller: firmNameController,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildJurisdictionField(),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Practice State',
+                            controller: practiceStateController,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Practice City',
+                            controller: practiceCityController,
+                          ),
+                        ],
                         const SizedBox(height: 12),
-                        
-                        // Forgot Password
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () {},
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(50, 30),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              'Forgot Password?',
-                              style: GoogleFonts.inter(
-                                color: goldAccent,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
+                        if (isLogin)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () {},
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(50, 30),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                'Forgot Password?',
+                                style: GoogleFonts.inter(
+                                  color: goldAccent,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
                           ),
-                        ),
                         const SizedBox(height: 24),
-                        
-                        // Action Button
                         ElevatedButton(
-                          onPressed: () {
-                            if (selectedRole == 'Client') {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => ClientDashboardScreen(
-                                    user: DummyData.users.firstWhere(
-                                        (u) => u.role.name == 'client'),
-                                  ),
-                                ),
-                              );
-                            } else {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => LawyerDashboardScreen(
-                                    user: DummyData.users.firstWhere(
-                                        (u) => u.role.name == 'lawyer'),
-                                  ),
-                                ),
-                              );
-                            }
-                          },
+                          onPressed: _onSubmit,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryBlue,
                             foregroundColor: Colors.white,
@@ -247,7 +372,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             elevation: 0,
                           ),
                           child: Text(
-                            'Sign In',
+                            actionLabel,
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -255,13 +380,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 32),
-                        
-                        // Or Continue With Divider
                         Row(
                           children: [
                             Expanded(child: Divider(color: Colors.grey[200])),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                              ),
                               child: Text(
                                 'or continue with',
                                 style: GoogleFonts.inter(
@@ -273,7 +398,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Expanded(child: Divider(color: Colors.grey[200])),
                           ],
                         ),
-                        const SizedBox(height: 24), // Leave bottom space for social icons
+                        const SizedBox(height: 24),
                       ],
                     ),
                   ),
@@ -299,7 +424,9 @@ class _LoginScreenState extends State<LoginScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withValues(alpha: 0.05) : Colors.white,
+          color: isSelected
+              ? activeColor.withValues(alpha: 0.05)
+              : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? activeColor : Colors.grey[200]!,
@@ -330,27 +457,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildTextField({
     required String hintText,
+    TextEditingController? controller,
     bool isPassword = false,
     bool? obscureText,
     VoidCallback? onTogglePassword,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC), // subtle slightly cooler grey
+        color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFF1F5F9)), // even lighter border
+        border: Border.all(color: const Color(0xFFF1F5F9)),
       ),
       child: TextField(
+        controller: controller,
         obscureText: obscureText ?? false,
-        style: GoogleFonts.inter(
-          color: primaryBlue,
-          fontSize: 15,
-        ),
+        style: GoogleFonts.inter(color: primaryBlue, fontSize: 15),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: GoogleFonts.inter(color: Colors.grey[400], fontSize: 15),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
           suffixIcon: isPassword
               ? IconButton(
                   icon: Icon(
@@ -361,6 +490,79 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: onTogglePassword,
                 )
               : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVerificationCard() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.verified_user_outlined,
+            color: Color(0xFFB45309),
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Lawyer accounts enter pending sandbox mode until verification is approved.',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF92400E),
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJurisdictionField() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedJurisdiction,
+          isExpanded: true,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: Colors.grey[500],
+          ),
+          style: GoogleFonts.inter(color: primaryBlue, fontSize: 15),
+          items: const [
+            DropdownMenuItem(
+              value: 'peninsular',
+              child: Text('Jurisdiction: Peninsular (Malaysian Bar)'),
+            ),
+            DropdownMenuItem(
+              value: 'sabah',
+              child: Text('Jurisdiction: Sabah Law Society'),
+            ),
+            DropdownMenuItem(
+              value: 'sarawak',
+              child: Text('Jurisdiction: Advocates Assoc. Sarawak'),
+            ),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() => selectedJurisdiction = value);
+          },
         ),
       ),
     );
