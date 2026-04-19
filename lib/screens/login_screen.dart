@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../data/dummy_data.dart';
 import '../models/user_model.dart';
+import '../services/firebase_auth_sync_service.dart';
 import 'client/client_dashboard_screen.dart';
 import 'lawyer/lawyer_dashboard_screen.dart';
 
@@ -19,6 +22,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool obscurePassword = true;
   String selectedJurisdiction = 'peninsular';
 
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
   final TextEditingController legalFullNameController = TextEditingController();
   final TextEditingController barNumberController = TextEditingController();
   final TextEditingController firmNameController = TextEditingController();
@@ -27,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   final Color primaryBlue = const Color(0xFF0C1D36);
   final Color goldAccent = const Color(0xFFCFA92A);
+  final FirebaseAuthSyncService _authSyncService = FirebaseAuthSyncService();
 
   bool get showLawyerVerificationFields {
     return !isLogin && selectedRole == 'Lawyer';
@@ -37,6 +44,64 @@ class _LoginScreenState extends State<LoginScreen> {
     return selectedRole == 'Lawyer'
         ? 'Register & Start Verification'
         : 'Create Account';
+  }
+
+  bool _isValidEmail(String email) {
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    return emailRegex.hasMatch(email);
+  }
+
+  String? _validateInputs() {
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty) {
+      return 'Please enter your email address.';
+    }
+
+    if (!_isValidEmail(email)) {
+      return 'Please enter a valid email address.';
+    }
+
+    if (password.isEmpty) {
+      return 'Please enter your password.';
+    }
+
+    if (!isLogin && password.length < 6) {
+      return 'Password must be at least 6 characters.';
+    }
+
+    if (!showLawyerVerificationFields) {
+      return null;
+    }
+
+    if (legalFullNameController.text.trim().isEmpty) {
+      return 'Legal full name is required for lawyer verification.';
+    }
+
+    if (firmNameController.text.trim().isEmpty) {
+      return 'Law firm name is required for lawyer verification.';
+    }
+
+    if (practiceStateController.text.trim().isEmpty) {
+      return 'Practice state is required for lawyer verification.';
+    }
+
+    if (practiceCityController.text.trim().isEmpty) {
+      return 'Practice city is required for lawyer verification.';
+    }
+
+    return null;
+  }
+
+  void _showInputError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.inter(color: Colors.white)),
+        backgroundColor: const Color(0xFFB91C1C),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   VerificationStatus _initialStatusForJurisdiction(String jurisdiction) {
@@ -77,12 +142,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return UserModel(
       id: '${template.id}_new',
-      name: legalName.isNotEmpty ? legalName : template.name,
-      email: template.email,
+      name: legalName,
+      email: emailController.text.trim(),
       phone: template.phone,
       role: UserRole.lawyer,
       avatarUrl: template.avatarUrl,
-      barNumber: barNumber.isNotEmpty ? barNumber : template.barNumber,
+      barNumber: barNumber.isNotEmpty ? barNumber : null,
       specialization: template.specialization,
       hourlyRate: template.hourlyRate,
       rating: template.rating,
@@ -91,20 +156,33 @@ class _LoginScreenState extends State<LoginScreen> {
       verificationStatus: initialStatus,
       verificationProvider: _verificationProviderForJurisdiction(jurisdiction),
       verificationBadgeVisible: false,
-      legalFullName: legalName.isNotEmpty ? legalName : template.legalFullName,
-      firmName: firmName.isNotEmpty ? firmName : template.firmName,
+      legalFullName: legalName,
+      firmName: firmName,
       jurisdiction: jurisdiction,
-      practiceState: practiceState.isNotEmpty
-          ? practiceState
-          : template.practiceState,
-      practiceCity: practiceCity.isNotEmpty
-          ? practiceCity
-          : template.practiceCity,
+      practiceState: practiceState,
+      practiceCity: practiceCity,
     );
   }
 
   void _onSubmit() {
+    final validationError = _validateInputs();
+    if (validationError != null) {
+      _showInputError(validationError);
+      return;
+    }
+
+    final role = selectedRole == 'Lawyer' ? UserRole.lawyer : UserRole.client;
+
     if (selectedRole == 'Client') {
+      unawaited(
+        _authSyncService.syncSession(
+          isLogin: isLogin,
+          email: emailController.text.trim(),
+          password: passwordController.text.trim(),
+          role: role,
+        ),
+      );
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -119,6 +197,16 @@ class _LoginScreenState extends State<LoginScreen> {
     final lawyer = isLogin
         ? DummyData.firstVerifiedLawyer
         : _buildPendingLawyerFromForm();
+
+    unawaited(
+      _authSyncService.syncSession(
+        isLogin: isLogin,
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+        role: role,
+        lawyerProfile: isLogin ? null : lawyer,
+      ),
+    );
 
     Navigator.push(
       context,
@@ -143,6 +231,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
     legalFullNameController.dispose();
     barNumberController.dispose();
     firmNameController.dispose();
@@ -325,12 +415,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
-                        _buildTextField(hintText: 'Email Address'),
+                        _buildTextField(
+                          hintText: 'Email Address',
+                          controller: emailController,
+                          inputKey: const Key('auth_email_field'),
+                        ),
                         const SizedBox(height: 16),
                         _buildTextField(
                           hintText: 'Password',
+                          controller: passwordController,
                           isPassword: true,
                           obscureText: obscurePassword,
+                          inputKey: const Key('auth_password_field'),
                           onTogglePassword: () => setState(
                             () => obscurePassword = !obscurePassword,
                           ),
@@ -342,16 +438,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           _buildTextField(
                             hintText: 'Legal Full Name (as on bar records)',
                             controller: legalFullNameController,
+                            inputKey: const Key('lawyer_legal_name_field'),
                           ),
                           const SizedBox(height: 12),
                           _buildTextField(
                             hintText: 'Bar / Roll Number (optional)',
                             controller: barNumberController,
+                            inputKey: const Key('lawyer_bar_number_field'),
                           ),
                           const SizedBox(height: 12),
                           _buildTextField(
                             hintText: 'Law Firm Name',
                             controller: firmNameController,
+                            inputKey: const Key('lawyer_firm_field'),
                           ),
                           const SizedBox(height: 12),
                           _buildJurisdictionField(),
@@ -359,11 +458,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           _buildTextField(
                             hintText: 'Practice State',
                             controller: practiceStateController,
+                            inputKey: const Key('lawyer_practice_state_field'),
                           ),
                           const SizedBox(height: 12),
                           _buildTextField(
                             hintText: 'Practice City',
                             controller: practiceCityController,
+                            inputKey: const Key('lawyer_practice_city_field'),
                           ),
                         ],
                         const SizedBox(height: 12),
@@ -371,7 +472,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
-                              onPressed: () {},
+                              onPressed: () => _showInputError(
+                                'Forgot password is not wired yet in demo mode.',
+                              ),
                               style: TextButton.styleFrom(
                                 padding: EdgeInsets.zero,
                                 minimumSize: const Size(50, 30),
@@ -488,6 +591,7 @@ class _LoginScreenState extends State<LoginScreen> {
     TextEditingController? controller,
     bool isPassword = false,
     bool? obscureText,
+    Key? inputKey,
     VoidCallback? onTogglePassword,
   }) {
     return Container(
@@ -497,6 +601,7 @@ class _LoginScreenState extends State<LoginScreen> {
         border: Border.all(color: const Color(0xFFF1F5F9)),
       ),
       child: TextField(
+        key: inputKey,
         controller: controller,
         obscureText: obscureText ?? false,
         style: GoogleFonts.inter(color: primaryBlue, fontSize: 15),
