@@ -1,4 +1,4 @@
-package com.example.lexi_guard
+package com.example.lei_guard
 
 import io.flutter.embedding.android.FlutterActivity
 
