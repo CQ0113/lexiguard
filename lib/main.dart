@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'core/firebase/firebase_initializer.dart';
@@ -6,6 +7,7 @@ import 'screens/login_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: '.env');
   await FirebaseInitializer.ensureInitialized();
   runApp(const MainApp());
 }

@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../login_screen.dart';
 import '../shared/case_detail_screen.dart';
 import 'reviewer_console_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LAWYER SHELL — matches MobileShell + all lawyer screens from Figma
-// Tabs: CRM | My Cases | Chat | Forms | Docs
+// Tabs: CRM | My Cases | Chat | Forms | Docs | Profile
 // ─────────────────────────────────────────────────────────────────────────────
 class LawyerDashboardScreen extends StatefulWidget {
   final UserModel user;
@@ -33,11 +35,16 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
     _Tab(Icons.chat_bubble_outline_rounded, 'Chat'),
     _Tab(Icons.description_outlined, 'Forms'),
     _Tab(Icons.folder_outlined, 'Docs'),
+    _Tab(Icons.person_outline_rounded, 'Profile'),
   ];
+
+  int get _profileTabIndex => _tabs.length - 1;
 
   bool get _isVerifiedLawyer => widget.user.canAccessMarketplace;
 
-  bool _isTabLocked(int index) => !_isVerifiedLawyer && index > 0;
+  bool _isTabLocked(int index) {
+    return !_isVerifiedLawyer && index > 0 && index != _profileTabIndex;
+  }
 
   List<Widget> get _verifiedTabs {
     return [
@@ -46,6 +53,7 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
       _PlaceholderTab('Chat', Icons.chat_bubble_outline_rounded),
       _PlaceholderTab('Forms', Icons.description_outlined),
       _PlaceholderTab('Docs', Icons.folder_outlined),
+      _LawyerProfileTab(user: widget.user),
     ];
   }
 
@@ -56,7 +64,32 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
       _VerificationLockedTab(user: widget.user),
       _VerificationLockedTab(user: widget.user),
       _VerificationLockedTab(user: widget.user),
+      _LawyerProfileTab(user: widget.user),
     ];
+  }
+
+  Future<void> _logout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not sign out cleanly. Returning to login.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFFB91C1C),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -100,7 +133,7 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
                   ),
                   const Spacer(),
                   GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
+                    onTap: _logout,
                     child: const Icon(
                       Icons.logout_outlined,
                       color: Colors.white70,
@@ -1459,6 +1492,19 @@ class _VerificationStatusTab extends StatelessWidget {
     }
   }
 
+  String _displayExperience() {
+    final years = user.yearsExperience;
+    if (years == null) return 'Not provided';
+    return years == 1 ? '1 year' : '$years years';
+  }
+
+  String _displayHourlyRate() {
+    final rate = user.hourlyRate;
+    if (rate == null) return 'Not provided';
+    final amount = rate.toStringAsFixed(rate == rate.roundToDouble() ? 0 : 2);
+    return 'RM $amount / hour';
+  }
+
   @override
   Widget build(BuildContext context) {
     final statusColor = _statusColor();
@@ -1563,6 +1609,44 @@ class _VerificationStatusTab extends StatelessWidget {
                 _profileRow('Jurisdiction', user.jurisdiction ?? 'peninsular'),
                 const SizedBox(height: 8),
                 _profileRow('Status', user.verificationStatus.label),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Professional profile',
+                  style: GoogleFonts.inter(
+                    color: _navy,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _profileRow('Specialization', user.specialization ?? 'Not provided'),
+                const SizedBox(height: 8),
+                _profileRow('Experience', _displayExperience()),
+                const SizedBox(height: 8),
+                _profileRow('Hourly Rate', _displayHourlyRate()),
+                const SizedBox(height: 8),
+                _profileRow('Email', user.email),
+                const SizedBox(height: 8),
+                _profileRow('Phone', user.phone),
               ],
             ),
           ),
@@ -1725,6 +1809,226 @@ class _VerificationLockedTab extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _LawyerProfileTab extends StatelessWidget {
+  final UserModel user;
+  const _LawyerProfileTab({required this.user});
+
+  static const _navy = Color(0xFF0B2447);
+  static const _gold = Color(0xFFD4AF37);
+
+  String _displayExperience() {
+    final years = user.yearsExperience;
+    if (years == null) return 'Not provided';
+    return years == 1 ? '1 year' : '$years years';
+  }
+
+  String _displayHourlyRate() {
+    final rate = user.hourlyRate;
+    if (rate == null) return 'Not provided';
+    final amount = rate.toStringAsFixed(rate == rate.roundToDouble() ? 0 : 2);
+    return 'RM $amount / hour';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Lawyer Profile',
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            'Your public and professional account details.',
+            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: _navy,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _gold, width: 2),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _initials(user.name),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.legalFullName ?? user.name,
+                        style: GoogleFonts.inter(
+                          color: _navy,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        user.email,
+                        style: GoogleFonts.inter(
+                          color: Colors.grey[500],
+                          fontSize: 12,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _gold.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'LAWYER',
+                    style: GoogleFonts.inter(
+                      color: _gold,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _sectionCard(
+            title: 'Professional information',
+            children: [
+              _profileRow('Legal Name', user.legalFullName ?? user.name),
+              const SizedBox(height: 8),
+              _profileRow('Bar Number', user.barNumber ?? 'Not provided'),
+              const SizedBox(height: 8),
+              _profileRow('Firm', user.firmName ?? 'Not provided'),
+              const SizedBox(height: 8),
+              _profileRow('Specialization', user.specialization ?? 'Not provided'),
+              const SizedBox(height: 8),
+              _profileRow('Experience', _displayExperience()),
+              const SizedBox(height: 8),
+              _profileRow('Hourly Rate', _displayHourlyRate()),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _sectionCard(
+            title: 'Account and verification',
+            children: [
+              _profileRow('Status', user.verificationStatus.label),
+              const SizedBox(height: 8),
+              _profileRow('Jurisdiction', user.jurisdiction ?? 'peninsular'),
+              const SizedBox(height: 8),
+              _profileRow('Email', user.email),
+              const SizedBox(height: 8),
+              _profileRow('Phone', user.phone),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionCard({required String title, required List<Widget> children}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _profileRow(String label, String value) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 96,
+          child: Text(
+            label,
+            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return 'U';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 }
 

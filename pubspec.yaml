@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_dotenv: ^5.2.1
   firebase_auth: ^6.0.2
   firebase_core: ^4.1.1
   cloud_firestore: ^6.0.1
@@ -24,3 +25,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - .env

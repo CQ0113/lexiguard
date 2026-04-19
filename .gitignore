@@ -57,3 +57,8 @@ lib/firebase_options.dart
 tools/firestore_admin/node_modules/
 tools/firestore_admin/service-account.json
 tools/firestore_admin/backups/
+
+# Environment files
+.env
+.env.*
+!.env.example

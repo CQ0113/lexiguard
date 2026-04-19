@@ -5,12 +5,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../login_screen.dart';
 import '../shared/post_case_screen.dart';
 import '../shared/case_detail_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT SHELL — matches MobileShell + all client screens from Figma
-// Tabs: Home | Post Case | Chat | Vault | Sign
+// Tabs: Home | Post Case | Chat | Vault | Sign | Profile
 // ─────────────────────────────────────────────────────────────────────────────
 class ClientDashboardScreen extends StatefulWidget {
   final UserModel user;
@@ -33,6 +34,7 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
     _Tab(Icons.chat_bubble_outline_rounded, 'Chat'),
     _Tab(Icons.folder_outlined, 'Vault'),
     _Tab(Icons.edit_document, 'Sign'),
+    _Tab(Icons.person_outline_rounded, 'Profile'),
   ];
 
   Future<void> _onTabTap(int idx) async {
@@ -47,6 +49,30 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       return;
     }
     setState(() => _currentTab = idx);
+  }
+
+  Future<void> _logout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not sign out cleanly. Returning to login.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFFB91C1C),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -104,7 +130,7 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
                   const SizedBox(width: 16),
                   // Logout
                   GestureDetector(
-                    onTap: () => FirebaseAuth.instance.signOut(),
+                    onTap: _logout,
                     child: const Icon(Icons.logout_outlined,
                         color: Colors.white70, size: 20),
                   ),
@@ -116,12 +142,13 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       ),
       // ── Body ─────────────────────────────────────────────────────────────
       body: IndexedStack(
-        index: _currentTab == 1 ? 0 : _currentTab,
+        index: _currentTab <= 1 ? 0 : _currentTab - 1,
         children: [
           _ClientHomeTab(user: widget.user),
           _PlaceholderTab('Chat', Icons.chat_bubble_outline_rounded),
           _PlaceholderTab('Vault', Icons.folder_outlined),
           _PlaceholderTab('Sign', Icons.edit_document),
+          _ClientProfileTab(user: widget.user),
         ],
       ),
       // ── Bottom nav (from mobile-shell.tsx) ───────────────────────────────
@@ -654,6 +681,248 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
         ),
       ),
     );
+  }
+
+}
+
+class _ClientProfileTab extends StatelessWidget {
+  final UserModel user;
+  const _ClientProfileTab({required this.user});
+
+  static const _navy = Color(0xFF0B2447);
+  static const _gold = Color(0xFFD4AF37);
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'My Profile',
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          Text(
+            'Manage your account details and preferences.',
+            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: _navy,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _gold, width: 2),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _initials(user.name),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.name,
+                        style: GoogleFonts.inter(
+                          color: _navy,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        user.email,
+                        style: GoogleFonts.inter(
+                          color: Colors.grey[500],
+                          fontSize: 12,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _gold.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'CLIENT',
+                    style: GoogleFonts.inter(
+                      color: _gold,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _sectionCard(
+            title: 'Personal information',
+            children: [
+              _profileRow('Full Name', user.name),
+              const SizedBox(height: 8),
+              _profileRow('Email', user.email),
+              const SizedBox(height: 8),
+              _profileRow('Phone', user.phone),
+              const SizedBox(height: 8),
+              _profileRow('Account ID', user.id),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _sectionCard(
+            title: 'Security',
+            children: [
+              _settingRow(Icons.lock_outline, 'Change Password', 'Recommended monthly'),
+              const SizedBox(height: 8),
+              _settingRow(Icons.verified_user_outlined, 'Two-Factor Authentication', 'Not enabled'),
+              const SizedBox(height: 8),
+              _settingRow(Icons.notifications_none, 'Notification Preferences', 'Push and email alerts'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionCard({required String title, required List<Widget> children}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _profileRow(String label, String value) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 92,
+          child: Text(
+            label,
+            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _settingRow(IconData icon, String title, String subtitle) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: _navy.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 16, color: _navy),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  color: _navy,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  color: Colors.grey[500],
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Icon(Icons.chevron_right, color: Colors.grey[400], size: 18),
+      ],
+    );
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return 'U';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 }
 
