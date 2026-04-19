@@ -2,10 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../services/auth_service.dart';
-import '../models/user_model.dart';
-import 'client/client_dashboard_screen.dart';
-import 'lawyer/lawyer_dashboard_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String initialRole; // 'Client' or 'Lawyer'
@@ -22,7 +20,6 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   // Step controller
   int _currentStep = 0;
-  final int _totalSteps = 3;
 
   // Role
   late String _selectedRole;
@@ -115,25 +112,25 @@ class _RegisterScreenState extends State<RegisterScreen>
         password: _passwordController.text,
         phone: _phoneController.text,
         role: _selectedRole,
-        barNumber: _selectedRole == 'Lawyer'
-            ? _barNumberController.text
-            : null,
+        barNumber: _selectedRole == 'Lawyer' ? _barNumberController.text : null,
         specialization: _selectedRole == 'Lawyer'
             ? (_selectedSpecialization ?? '')
             : null,
-        hourlyRate: _selectedRole == 'Lawyer' &&
-                _hourlyRateController.text.isNotEmpty
+        hourlyRate:
+            _selectedRole == 'Lawyer' && _hourlyRateController.text.isNotEmpty
             ? double.tryParse(_hourlyRateController.text)
             : null,
-        yearsExperience: _selectedRole == 'Lawyer' &&
-                _yearsExpController.text.isNotEmpty
+        yearsExperience:
+            _selectedRole == 'Lawyer' && _yearsExpController.text.isNotEmpty
             ? int.tryParse(_yearsExpController.text)
             : null,
       );
 
       // AuthGate responds automatically to the authentication and shows the dashboard.
-      if (mounted) Navigator.pop(context); // Pop the register screen since it was pushed on top of AuthGate
-
+      if (mounted)
+        Navigator.pop(
+          context,
+        ); // Pop the register screen since it was pushed on top of AuthGate
     } on FirebaseAuthException catch (e) {
       _showError(_friendlyFirebaseError(e.code));
     } on AuthException catch (e) {
@@ -189,12 +186,12 @@ class _RegisterScreenState extends State<RegisterScreen>
                 width: double.infinity,
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(32)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                 ),
                 child: ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(32)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(32),
+                  ),
                   child: Column(
                     children: [
                       _buildStepIndicator(),
@@ -299,22 +296,25 @@ class _RegisterScreenState extends State<RegisterScreen>
                               color: isActive
                                   ? _primaryBlue
                                   : isCompleted
-                                      ? _goldAccent
-                                      : Colors.grey[100],
+                                  ? _goldAccent
+                                  : Colors.grey[100],
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: isActive
                                     ? _primaryBlue
                                     : isCompleted
-                                        ? _goldAccent
-                                        : Colors.grey[300]!,
+                                    ? _goldAccent
+                                    : Colors.grey[300]!,
                                 width: 1.5,
                               ),
                             ),
                             child: Center(
                               child: isCompleted
-                                  ? const Icon(Icons.check,
-                                      color: Colors.white, size: 16)
+                                  ? const Icon(
+                                      Icons.check,
+                                      color: Colors.white,
+                                      size: 16,
+                                    )
                                   : Text(
                                       '${i + 1}',
                                       style: GoogleFonts.inter(
@@ -346,8 +346,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                           fontWeight: isActive
                               ? FontWeight.w600
                               : FontWeight.normal,
-                          color:
-                              isActive ? _primaryBlue : Colors.grey[400],
+                          color: isActive ? _primaryBlue : Colors.grey[400],
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -384,8 +383,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               return Expanded(
                 child: Padding(
                   padding: EdgeInsets.only(
-                      right: role == 'Client' ? 8 : 0,
-                      left: role == 'Lawyer' ? 8 : 0),
+                    right: role == 'Client' ? 8 : 0,
+                    left: role == 'Lawyer' ? 8 : 0,
+                  ),
                   child: GestureDetector(
                     onTap: () => setState(() => _selectedRole = role),
                     child: AnimatedContainer(
@@ -397,8 +397,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                             : Colors.white,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color:
-                              isSelected ? _goldAccent : Colors.grey[200]!,
+                          color: isSelected ? _goldAccent : Colors.grey[200]!,
                           width: isSelected ? 1.5 : 1,
                         ),
                       ),
@@ -409,9 +408,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                             role == 'Client'
                                 ? Icons.shield_outlined
                                 : Icons.balance,
-                            color: isSelected
-                                ? _goldAccent
-                                : Colors.grey[400],
+                            color: isSelected ? _goldAccent : Colors.grey[400],
                             size: 18,
                           ),
                           const SizedBox(width: 8),
@@ -457,8 +454,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               if (v == null || v.trim().isEmpty) {
                 return 'Email is required';
               }
-              if (!RegExp(r'^[\w-.]+@([\w-]+\.)+[\w]{2,}$')
-                  .hasMatch(v.trim())) {
+              if (!RegExp(
+                r'^[\w-.]+@([\w-]+\.)+[\w]{2,}$',
+              ).hasMatch(v.trim())) {
                 return 'Enter a valid email';
               }
               return null;
@@ -473,7 +471,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
             inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s]'))
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s]')),
             ],
             validator: (v) =>
                 v == null || v.trim().isEmpty ? 'Phone is required' : null,
@@ -570,9 +568,8 @@ class _RegisterScreenState extends State<RegisterScreen>
             controller: _barNumberController,
             hint: 'e.g. BAR/MY/2018/12345',
             icon: Icons.badge_outlined,
-            validator: (v) => v == null || v.trim().isEmpty
-                ? 'Bar number is required'
-                : null,
+            validator: (v) =>
+                v == null || v.trim().isEmpty ? 'Bar number is required' : null,
           ),
           const SizedBox(height: 16),
           _buildSectionLabel('Area of Specialization'),
@@ -588,13 +585,14 @@ class _RegisterScreenState extends State<RegisterScreen>
               value: _selectedSpecialization,
               hint: Text(
                 'Select specialization',
-                style: GoogleFonts.inter(
-                    color: Colors.grey[400], fontSize: 15),
+                style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 15),
               ),
               decoration: const InputDecoration(
                 border: InputBorder.none,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
               ),
               icon: Icon(Icons.expand_more, color: Colors.grey[400]),
               items: _specializations.map((s) {
@@ -602,15 +600,12 @@ class _RegisterScreenState extends State<RegisterScreen>
                   value: s,
                   child: Text(
                     s,
-                    style: GoogleFonts.inter(
-                        fontSize: 15, color: _primaryBlue),
+                    style: GoogleFonts.inter(fontSize: 15, color: _primaryBlue),
                   ),
                 );
               }).toList(),
-              onChanged: (v) =>
-                  setState(() => _selectedSpecialization = v),
-              validator: (v) =>
-                  v == null ? 'Specialization is required' : null,
+              onChanged: (v) => setState(() => _selectedSpecialization = v),
+              validator: (v) => v == null ? 'Specialization is required' : null,
             ),
           ),
           const SizedBox(height: 16),
@@ -627,10 +622,10 @@ class _RegisterScreenState extends State<RegisterScreen>
                       hint: 'e.g. 250',
                       icon: Icons.attach_money,
                       keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true),
+                        decimal: true,
+                      ),
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                            RegExp(r'[0-9.]'))
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                       ],
                     ),
                   ],
@@ -648,9 +643,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                       hint: 'e.g. 8',
                       icon: Icons.work_outline,
                       keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     ),
                   ],
                 ),
@@ -701,13 +694,11 @@ class _RegisterScreenState extends State<RegisterScreen>
           decoration: BoxDecoration(
             color: _primaryBlue.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(12),
-            border:
-                Border.all(color: _primaryBlue.withValues(alpha: 0.1)),
+            border: Border.all(color: _primaryBlue.withValues(alpha: 0.1)),
           ),
           child: Row(
             children: [
-              Icon(Icons.verified_user_outlined,
-                  color: _primaryBlue, size: 18),
+              Icon(Icons.verified_user_outlined, color: _primaryBlue, size: 18),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -765,35 +756,36 @@ class _RegisterScreenState extends State<RegisterScreen>
             ),
           ),
           Divider(height: 1, color: Colors.grey[100]),
-          ...items.entries.map((e) => Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 120,
-                      child: Text(
-                        e.key,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: Colors.grey[400],
-                        ),
+          ...items.entries.map(
+            (e) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 120,
+                    child: Text(
+                      e.key,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Colors.grey[400],
                       ),
                     ),
-                    Expanded(
-                      child: Text(
-                        e.value.isEmpty ? '—' : e.value,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _primaryBlue,
-                        ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      e.value.isEmpty ? '—' : e.value,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: _primaryBlue,
                       ),
                     ),
-                  ],
-                ),
-              )),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -817,7 +809,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   side: BorderSide(color: Colors.grey[300]!),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: Text(
                   'Back',
@@ -840,7 +833,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 0,
               ),
               child: _isLoading
@@ -923,8 +917,10 @@ class _RegisterScreenState extends State<RegisterScreen>
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFD32F2F)),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
     );
   }

@@ -64,14 +64,52 @@ void main() {
         'email': 'time@example.com',
         'phone': '+60000000003',
         'role': 'lawyer',
+        'createdAt': '2026-04-18T10:00:00.000Z',
         'verifiedAt': _FakeTimestamp(DateTime.utc(2026, 4, 18, 12, 0)),
         'lastVerifiedAt': '2026-04-18T12:00:00.000Z',
         'nextReverifyAt': {'_seconds': 1776484800, '_nanoseconds': 0},
       });
 
+      expect(user.createdAt?.toUtc(), DateTime.utc(2026, 4, 18, 10, 0));
       expect(user.verifiedAt, DateTime.utc(2026, 4, 18, 12, 0));
       expect(user.lastVerifiedAt?.toUtc(), DateTime.utc(2026, 4, 18, 12, 0));
       expect(user.nextReverifyAt?.millisecondsSinceEpoch, 1776484800000);
+    });
+
+    test('toFirestore writes verification lifecycle fields', () {
+      final user = UserModel(
+        id: 'lawyer_104',
+        name: 'Scaffold Lawyer',
+        email: 'scaffold@example.com',
+        phone: '+60000000004',
+        role: UserRole.lawyer,
+        barNumber: 'B/MY/12345',
+        legalFullName: 'Scaffold Lawyer',
+        firmName: 'Scaffold & Co',
+        jurisdiction: 'sabah',
+        practiceState: 'Sabah',
+        practiceCity: 'Kota Kinabalu',
+        verificationStatus: VerificationStatus.manualReviewRequired,
+        verificationProvider: 'manual_review_sabah',
+        verificationBadgeVisible: false,
+        createdAt: DateTime.utc(2026, 4, 19, 0, 0),
+        lastVerifiedAt: DateTime.utc(2026, 4, 19, 0, 5),
+      );
+
+      final firestoreMap = user.toFirestore();
+
+      expect(
+        firestoreMap['verificationStatus'],
+        'manual_review_required',
+      );
+      expect(firestoreMap['verificationProvider'], 'manual_review_sabah');
+      expect(firestoreMap['verificationBadgeVisible'], isFalse);
+      expect(firestoreMap['legalFullName'], 'Scaffold Lawyer');
+      expect(firestoreMap['firmName'], 'Scaffold & Co');
+      expect(firestoreMap['jurisdiction'], 'sabah');
+      expect(firestoreMap['barCouncilVerified'], isFalse);
+      expect(firestoreMap.containsKey('createdAt'), isTrue);
+      expect(firestoreMap.containsKey('lastVerifiedAt'), isTrue);
     });
   });
 }

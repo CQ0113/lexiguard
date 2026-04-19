@@ -112,22 +112,15 @@ class UserModel {
   // ─── Firestore Deserialization ───────────────────────────────────────────────
 
   factory UserModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data()!;
-    return UserModel(
-      id: doc.id,
-      name: data['name'] as String? ?? '',
-      email: data['email'] as String? ?? '',
-      phone: data['phone'] as String? ?? '',
-      role: data['role'] == 'lawyer' ? UserRole.lawyer : UserRole.client,
-      avatarUrl: data['avatarUrl'] as String?,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
-      barNumber: data['barNumber'] as String?,
-      specialization: data['specialization'] as String?,
-      hourlyRate: (data['hourlyRate'] as num?)?.toDouble(),
-      rating: (data['rating'] as num?)?.toDouble(),
-      yearsExperience: data['yearsExperience'] as int?,
-      barCouncilVerified: data['barCouncilVerified'] as bool?,
-    );
+    final data = doc.data();
+    if (data == null) {
+      throw StateError('User document ${doc.id} has no data.');
+    }
+
+    final normalized = Map<String, dynamic>.from(data);
+    normalized.putIfAbsent('id', () => doc.id);
+
+    return UserModel.fromMap(normalized);
   }
 
   // ─── Firestore Serialization ─────────────────────────────────────────────────
@@ -139,13 +132,30 @@ class UserModel {
       'phone': phone,
       'role': role == UserRole.lawyer ? 'lawyer' : 'client',
       if (avatarUrl != null) 'avatarUrl': avatarUrl,
-      'createdAt': FieldValue.serverTimestamp(),
+      'createdAt': createdAt == null
+          ? FieldValue.serverTimestamp()
+          : Timestamp.fromDate(createdAt!),
       // Lawyer-only fields (only written if non-null)
       if (barNumber != null) 'barNumber': barNumber,
       if (specialization != null) 'specialization': specialization,
       if (hourlyRate != null) 'hourlyRate': hourlyRate,
+      if (rating != null) 'rating': rating,
       if (yearsExperience != null) 'yearsExperience': yearsExperience,
-      if (barCouncilVerified != null) 'barCouncilVerified': barCouncilVerified,
+      'barCouncilVerified': barCouncilVerified ?? isVerified,
+      'verificationStatus': verificationStatus.wireValue,
+      if (verificationProvider != null)
+        'verificationProvider': verificationProvider,
+      if (verifiedAt != null) 'verifiedAt': Timestamp.fromDate(verifiedAt!),
+      if (lastVerifiedAt != null)
+        'lastVerifiedAt': Timestamp.fromDate(lastVerifiedAt!),
+      if (nextReverifyAt != null)
+        'nextReverifyAt': Timestamp.fromDate(nextReverifyAt!),
+      'verificationBadgeVisible': verificationBadgeVisible,
+      if (legalFullName != null) 'legalFullName': legalFullName,
+      if (firmName != null) 'firmName': firmName,
+      if (jurisdiction != null) 'jurisdiction': jurisdiction,
+      if (practiceState != null) 'practiceState': practiceState,
+      if (practiceCity != null) 'practiceCity': practiceCity,
     };
   }
 
@@ -154,7 +164,7 @@ class UserModel {
   factory UserModel.fromMap(Map<String, dynamic> map) {
     final legacyVerified = map['barCouncilVerified'] as bool?;
     final parsedStatus = _verificationStatusFromWire(
-      map['verificationStatus'] as String?,
+      map['verificationStatus']?.toString(),
     );
 
     return UserModel(
@@ -164,6 +174,7 @@ class UserModel {
       phone: map['phone'] as String,
       role: map['role'] == 'lawyer' ? UserRole.lawyer : UserRole.client,
       avatarUrl: map['avatarUrl'] as String?,
+      createdAt: _readDateTime(map['createdAt']),
       barNumber: map['barNumber'] as String?,
       specialization: map['specialization'] as String?,
       hourlyRate: (map['hourlyRate'] as num?)?.toDouble(),

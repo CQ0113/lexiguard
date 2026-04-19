@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -5,27 +6,40 @@ import '../core/firebase/firebase_initializer.dart';
 import '../models/user_model.dart';
 import '../repositories/lawyer_profile_repository.dart';
 import '../repositories/user_repository.dart';
+import '../repositories/verification_review_repository.dart';
 
 class FirebaseAuthSyncService {
   FirebaseAuthSyncService({
     FirebaseAuth? auth,
+    FirebaseFunctions? functions,
     UserRepository? userRepository,
     LawyerProfileRepository? lawyerProfileRepository,
+    VerificationReviewRepository? verificationReviewRepository,
   }) : _auth = auth,
+       _functions = functions,
        _userRepository = userRepository,
-       _lawyerProfileRepository = lawyerProfileRepository;
+       _lawyerProfileRepository = lawyerProfileRepository,
+       _verificationReviewRepository = verificationReviewRepository;
 
   final FirebaseAuth? _auth;
+  final FirebaseFunctions? _functions;
   final UserRepository? _userRepository;
   final LawyerProfileRepository? _lawyerProfileRepository;
+  final VerificationReviewRepository? _verificationReviewRepository;
 
   FirebaseAuth get _resolvedAuth => _auth ?? FirebaseAuth.instance;
+
+  FirebaseFunctions get _resolvedFunctions =>
+      _functions ?? FirebaseFunctions.instance;
 
   UserRepository get _resolvedUserRepository =>
       _userRepository ?? UserRepository();
 
   LawyerProfileRepository get _resolvedLawyerProfileRepository =>
       _lawyerProfileRepository ?? LawyerProfileRepository();
+
+  VerificationReviewRepository get _resolvedVerificationReviewRepository =>
+      _verificationReviewRepository ?? VerificationReviewRepository();
 
   Future<void> syncSession({
     required bool isLogin,
@@ -120,6 +134,15 @@ class FirebaseAuthSyncService {
         profile: lawyerProfile,
       );
 
+      if (lawyerProfile.isPendingLike) {
+        await _resolvedVerificationReviewRepository.enqueueRegistrationReview(
+          uid: uid,
+          profile: lawyerProfile,
+        );
+      }
+
+      await _triggerVerificationScaffold(uid: uid, profile: lawyerProfile);
+
       return;
     }
 
@@ -133,5 +156,27 @@ class FirebaseAuthSyncService {
         'createdAt': now,
       },
     );
+  }
+
+  Future<void> _triggerVerificationScaffold({
+    required String uid,
+    required UserModel profile,
+  }) async {
+    try {
+      final callable = _resolvedFunctions.httpsCallable('startVerification');
+
+      await callable.call({
+        'uid': uid,
+        'legalFullName': profile.legalFullName ?? profile.name,
+        'barOrRollNumber': profile.barNumber,
+        'firmName': profile.firmName,
+        'jurisdiction': profile.jurisdiction ?? 'peninsular',
+        'practiceState': profile.practiceState,
+        'practiceCity': profile.practiceCity,
+      });
+    } catch (error) {
+      // Keep registration resilient while Functions backend is still scaffolded.
+      debugPrint('Verification callable trigger skipped: $error');
+    }
   }
 }

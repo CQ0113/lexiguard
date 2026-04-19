@@ -21,6 +21,10 @@ This README is written for teammates, reviewers, and anyone who wants to run or 
 - `lib/core/firebase/firebase_initializer.dart`: Firebase initialization and placeholder guard.
 - `lib/firebase_options.dart`: generated FlutterFire config.
 - `lib/services/firebase_auth_sync_service.dart`: auth/profile sync scaffolding.
+- `lib/repositories/verification_review_repository.dart`: manual review queue writes.
+- `functions/src/index.js`: callable verification scaffold entry points.
+- `functions/src/verification/malaysian_bar_adapter.js`: live Malaysian Bar lookup adapter.
+- `functions/src/verification/verification_decision.js`: scoring and decision rules.
 - `tools/firestore_admin/manage_firestore.js`: Firestore admin utility.
 - `tools/firestore_admin/seed_data.json`: baseline test seed data.
 
@@ -97,6 +101,52 @@ flutter pub get
 flutter run -d chrome
 ```
 
+### 6. Cloud Functions scaffold (verification adapters)
+
+This repository includes a starter backend scaffold in `functions/`:
+
+- `startVerification` callable function
+- `reviewVerificationRequest` callable function
+- adapter/decision modules under `functions/src/verification/`
+
+Current adapter behavior:
+
+- Peninsular requests call Malaysian Bar live lookup endpoint.
+- East Malaysia requests route to manual review by design.
+- Decision logic applies weighted matching (name/firm/state) and status checks.
+
+Install dependencies:
+
+```bash
+npm --prefix functions install
+```
+
+Run local emulator:
+
+```bash
+npm --prefix functions run serve
+```
+
+Deploy functions:
+
+```bash
+npm --prefix functions install
+firebase deploy --only functions
+```
+
+### 7. Firestore rules and indexes for verification queue
+
+This repository includes:
+
+- `firestore.rules`
+- `firestore.indexes.json`
+
+Deploy them with:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
 ## Firestore admin tool (safe data operations)
 
 This repository includes a local Node-based admin tool in `tools/firestore_admin`.
@@ -150,6 +200,22 @@ node tools/firestore_admin/manage_firestore.js flush --yes
 - Backups are written to `tools/firestore_admin/backups/`.
 - A `fetch-doc` command returns exit code `2` when a document does not exist.
   This is expected for "verify deletion" checks.
+
+## Verification queue collections
+
+Current verification flow writes to these Firestore collections:
+
+- `users`
+- `lawyer_profiles`
+- `verification_requests`
+
+## Reviewer console (demo)
+
+- In the lawyer Verification Center tab, use `Open Reviewer Console (Demo)`.
+- The screen streams queued documents from `verification_requests`.
+- Approve/Reject actions call `reviewVerificationRequest` Cloud Function.
+- In production, review actions require a Firebase Auth custom claim: `reviewer: true`.
+- In local emulator mode, claim enforcement is relaxed for faster testing.
 
 ## Testing
 

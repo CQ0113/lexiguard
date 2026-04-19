@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../shared/case_detail_screen.dart';
+import 'reviewer_console_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LAWYER SHELL — matches MobileShell + all lawyer screens from Figma
@@ -1591,6 +1593,41 @@ class _VerificationStatusTab extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: () {
+              if (!FirebaseInitializer.isReady) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Reviewer console requires Firebase configuration.',
+                      style: GoogleFonts.inter(color: Colors.white),
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: const Color(0xFFB91C1C),
+                  ),
+                );
+                return;
+              }
+
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ReviewerConsoleScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
+            label: Text(
+              'Open Reviewer Console (Demo)',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 46),
+              foregroundColor: const Color(0xFF1E3A8A),
+              side: const BorderSide(color: Color(0xFF93C5FD)),
+              backgroundColor: const Color(0xFFF8FAFF),
             ),
           ),
         ],
