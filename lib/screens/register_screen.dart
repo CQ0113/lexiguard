@@ -127,10 +127,11 @@ class _RegisterScreenState extends State<RegisterScreen>
       );
 
       // AuthGate responds automatically to the authentication and shows the dashboard.
-      if (mounted)
+      if (mounted) {
         Navigator.pop(
           context,
         ); // Pop the register screen since it was pushed on top of AuthGate
+      }
     } on FirebaseAuthException catch (e) {
       _showError(_friendlyFirebaseError(e.code));
     } on AuthException catch (e) {
@@ -580,9 +581,8 @@ class _RegisterScreenState extends State<RegisterScreen>
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFFF1F5F9)),
             ),
-            // ignore: deprecated_member_use
             child: DropdownButtonFormField<String>(
-              value: _selectedSpecialization,
+              initialValue: _selectedSpecialization,
               hint: Text(
                 'Select specialization',
                 style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 15),

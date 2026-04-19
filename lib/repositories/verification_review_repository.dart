@@ -4,10 +4,9 @@ import '../models/user_model.dart';
 
 class VerificationReviewRepository {
   VerificationReviewRepository({FirebaseFirestore? firestore})
-    : _requests =
-          (firestore ?? FirebaseFirestore.instance).collection(
-            'verification_requests',
-          );
+    : _requests = (firestore ?? FirebaseFirestore.instance).collection(
+        'verification_requests',
+      );
 
   final CollectionReference<Map<String, dynamic>> _requests;
 

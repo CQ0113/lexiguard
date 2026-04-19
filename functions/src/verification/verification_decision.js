@@ -1,35 +1,35 @@
 const HONORIFICS = new Set([
-  'pn',
-  'en',
-  'encik',
-  'puan',
-  'mr',
-  'mrs',
-  'ms',
-  'dr',
-  'dato',
-  'datuk',
-  'datin',
-  'hj',
-  'haji',
-  'hajah',
+  "pn",
+  "en",
+  "encik",
+  "puan",
+  "mr",
+  "mrs",
+  "ms",
+  "dr",
+  "dato",
+  "datuk",
+  "datin",
+  "hj",
+  "haji",
+  "hajah",
 ]);
 
 function normalizeText(value) {
-  const cleaned = String(value || '')
+  const cleaned = String(value || "")
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 
   if (!cleaned) {
-    return '';
+    return "";
   }
 
   return cleaned
-    .split(' ')
+    .split(" ")
     .filter((token) => token && !HONORIFICS.has(token))
-    .join(' ');
+    .join(" ");
 }
 
 function tokenize(value) {
@@ -38,7 +38,7 @@ function tokenize(value) {
     return [];
   }
 
-  return normalized.split(' ').filter(Boolean);
+  return normalized.split(" ").filter(Boolean);
 }
 
 function tokenSimilarity(a, b) {
@@ -107,13 +107,14 @@ function scoreFirm(candidate, profile) {
     return 0;
   }
 
-  return candidateFirm.includes(profileFirm) || profileFirm.includes(candidateFirm)
+  return candidateFirm.includes(profileFirm) ||
+    profileFirm.includes(candidateFirm)
     ? 0.75
     : 0;
 }
 
 function normalizeState(value) {
-  return normalizeText(value).replace(/^wilayah persekutuan\s+/, '');
+  return normalizeText(value).replace(/^wilayah persekutuan\s+/, "");
 }
 
 function scoreState(candidate, profile) {
@@ -132,13 +133,16 @@ function scoreState(candidate, profile) {
     return 1;
   }
 
-  return candidateState.includes(profileState) || profileState.includes(candidateState)
+  return candidateState.includes(profileState) ||
+    profileState.includes(candidateState)
     ? 0.8
     : 0;
 }
 
 function isCandidateInactive(candidate) {
-  const statusText = normalizeText(candidate.statusText || candidate.status || '');
+  const statusText = normalizeText(
+    candidate.statusText || candidate.status || "",
+  );
 
   if (!statusText) {
     return false;
@@ -149,7 +153,7 @@ function isCandidateInactive(candidate) {
   }
 
   return /(suspend|struck|inactive|ceased|expired|terminated|disbar|revoked)/.test(
-    statusText
+    statusText,
   );
 }
 
@@ -158,10 +162,7 @@ function scoreCandidate(candidate, profile) {
   const firmScore = scoreFirm(candidate, profile);
   const stateScore = scoreState(candidate, profile);
 
-  const totalScore =
-    nameScore * 0.55 +
-    firmScore * 0.25 +
-    stateScore * 0.2;
+  const totalScore = nameScore * 0.55 + firmScore * 0.25 + stateScore * 0.2;
 
   return {
     candidate,
@@ -174,25 +175,25 @@ function scoreCandidate(candidate, profile) {
 }
 
 function buildVerificationDecision({ profile, adapterResult }) {
-  if (profile.jurisdiction && profile.jurisdiction !== 'peninsular') {
+  if (profile.jurisdiction && profile.jurisdiction !== "peninsular") {
     return {
-      verificationStatus: 'manual_review_required',
-      verificationProvider: 'manual_review',
+      verificationStatus: "manual_review_required",
+      verificationProvider: "manual_review",
       verificationBadgeVisible: false,
-      queueStatus: 'queued',
-      reason: 'east_malaysia_manual_review_only',
+      queueStatus: "queued",
+      reason: "east_malaysia_manual_review_only",
       matchedCandidate: null,
       confidenceScore: 0,
     };
   }
 
-  if (adapterResult?.adapterStatus === 'request_failed') {
+  if (adapterResult?.adapterStatus === "request_failed") {
     return {
-      verificationStatus: 'manual_review_required',
-      verificationProvider: 'malaysian_bar',
+      verificationStatus: "manual_review_required",
+      verificationProvider: "malaysian_bar",
       verificationBadgeVisible: false,
-      queueStatus: 'queued',
-      reason: 'source_request_failed',
+      queueStatus: "queued",
+      reason: "source_request_failed",
       matchedCandidate: null,
       confidenceScore: 0,
     };
@@ -204,11 +205,11 @@ function buildVerificationDecision({ profile, adapterResult }) {
 
   if (!candidates.length) {
     return {
-      verificationStatus: 'manual_review_required',
-      verificationProvider: 'malaysian_bar',
+      verificationStatus: "manual_review_required",
+      verificationProvider: "malaysian_bar",
       verificationBadgeVisible: false,
-      queueStatus: 'queued',
-      reason: adapterResult?.adapterStatus || 'no_candidate_found',
+      queueStatus: "queued",
+      reason: adapterResult?.adapterStatus || "no_candidate_found",
       matchedCandidate: null,
       confidenceScore: 0,
     };
@@ -223,11 +224,11 @@ function buildVerificationDecision({ profile, adapterResult }) {
 
   if (best && best.inactive && bestNameScore >= 0.9) {
     return {
-      verificationStatus: 'rejected',
-      verificationProvider: 'malaysian_bar',
+      verificationStatus: "rejected",
+      verificationProvider: "malaysian_bar",
       verificationBadgeVisible: false,
-      queueStatus: 'resolved',
-      reason: 'listed_inactive_or_suspended',
+      queueStatus: "resolved",
+      reason: "listed_inactive_or_suspended",
       matchedCandidate: {
         ...best.candidate,
         confidenceScore: Number(best.totalScore.toFixed(4)),
@@ -238,11 +239,11 @@ function buildVerificationDecision({ profile, adapterResult }) {
 
   if (best && best.totalScore >= 0.85 && !best.inactive) {
     return {
-      verificationStatus: 'auto_verified',
-      verificationProvider: 'malaysian_bar',
+      verificationStatus: "auto_verified",
+      verificationProvider: "malaysian_bar",
       verificationBadgeVisible: true,
-      queueStatus: 'resolved',
-      reason: 'strong_match',
+      queueStatus: "resolved",
+      reason: "strong_match",
       matchedCandidate: {
         ...best.candidate,
         confidenceScore: Number(best.totalScore.toFixed(4)),
@@ -252,11 +253,14 @@ function buildVerificationDecision({ profile, adapterResult }) {
   }
 
   return {
-    verificationStatus: 'manual_review_required',
-    verificationProvider: 'malaysian_bar',
+    verificationStatus: "manual_review_required",
+    verificationProvider: "malaysian_bar",
     verificationBadgeVisible: false,
-    queueStatus: 'queued',
-    reason: best && best.totalScore >= 0.6 ? 'ambiguous_match' : 'low_confidence_match',
+    queueStatus: "queued",
+    reason:
+      best && best.totalScore >= 0.6
+        ? "ambiguous_match"
+        : "low_confidence_match",
     matchedCandidate: best
       ? {
           ...best.candidate,

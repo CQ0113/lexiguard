@@ -1,13 +1,13 @@
-import 'dart:async';
-
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../data/dummy_data.dart';
+import '../core/firebase/firebase_initializer.dart';
 import '../models/user_model.dart';
 import '../services/firebase_auth_sync_service.dart';
 import 'client/client_dashboard_screen.dart';
 import 'lawyer/lawyer_dashboard_screen.dart';
+import 'shared/live_dashboard_router_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final Color primaryBlue = const Color(0xFF0C1D36);
   final Color goldAccent = const Color(0xFFCFA92A);
   final FirebaseAuthSyncService _authSyncService = FirebaseAuthSyncService();
+  bool _isSubmitting = false;
 
   bool get showLawyerVerificationFields {
     return !isLogin && selectedRole == 'Lawyer';
@@ -131,7 +132,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   UserModel _buildPendingLawyerFromForm() {
-    final template = DummyData.firstPendingLawyer;
     final jurisdiction = selectedJurisdiction;
     final initialStatus = _initialStatusForJurisdiction(jurisdiction);
     final legalName = legalFullNameController.text.trim();
@@ -141,17 +141,13 @@ class _LoginScreenState extends State<LoginScreen> {
     final practiceCity = practiceCityController.text.trim();
 
     return UserModel(
-      id: '${template.id}_new',
+      id: 'local_lawyer_${DateTime.now().millisecondsSinceEpoch}',
       name: legalName,
       email: emailController.text.trim(),
-      phone: template.phone,
+      phone: '',
       role: UserRole.lawyer,
-      avatarUrl: template.avatarUrl,
       barNumber: barNumber.isNotEmpty ? barNumber : null,
-      specialization: template.specialization,
-      hourlyRate: template.hourlyRate,
-      rating: template.rating,
-      yearsExperience: template.yearsExperience,
+      specialization: 'General Practice',
       barCouncilVerified: false,
       verificationStatus: initialStatus,
       verificationProvider: _verificationProviderForJurisdiction(jurisdiction),
@@ -164,51 +160,51 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _onSubmit() {
-    final validationError = _validateInputs();
-    if (validationError != null) {
-      _showInputError(validationError);
-      return;
-    }
+  UserModel _buildFallbackClient() {
+    final email = emailController.text.trim();
+    final localName = email.split('@').first.trim();
 
-    final role = selectedRole == 'Lawyer' ? UserRole.lawyer : UserRole.client;
+    return UserModel(
+      id: 'local_client_${DateTime.now().millisecondsSinceEpoch}',
+      name: localName.isEmpty ? 'Client User' : localName,
+      email: email,
+      phone: '',
+      role: UserRole.client,
+    );
+  }
 
-    if (selectedRole == 'Client') {
-      unawaited(
-        _authSyncService.syncSession(
-          isLogin: isLogin,
-          email: emailController.text.trim(),
-          password: passwordController.text.trim(),
-          role: role,
-        ),
-      );
+  UserModel _buildFallbackLawyerLogin() {
+    final email = emailController.text.trim();
+    final localName = email.split('@').first.trim();
 
-      Navigator.push(
+    return UserModel(
+      id: 'local_lawyer_login',
+      name: localName.isEmpty ? 'Lawyer User' : localName,
+      email: email,
+      phone: '',
+      role: UserRole.lawyer,
+      specialization: 'General Practice',
+      verificationStatus: VerificationStatus.autoVerified,
+      verificationBadgeVisible: true,
+    );
+  }
+
+  void _navigateFallback(UserRole role, UserModel? lawyerProfile) {
+    if (!mounted) return;
+
+    if (role == UserRole.client) {
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => ClientDashboardScreen(
-            user: DummyData.users.firstWhere((u) => u.role == UserRole.client),
-          ),
+          builder: (context) =>
+              ClientDashboardScreen(user: _buildFallbackClient()),
         ),
       );
       return;
     }
 
-    final lawyer = isLogin
-        ? DummyData.firstVerifiedLawyer
-        : _buildPendingLawyerFromForm();
-
-    unawaited(
-      _authSyncService.syncSession(
-        isLogin: isLogin,
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-        role: role,
-        lawyerProfile: isLogin ? null : lawyer,
-      ),
-    );
-
-    Navigator.push(
+    final lawyer = lawyerProfile ?? _buildFallbackLawyerLogin();
+    Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => LawyerDashboardScreen(user: lawyer),
@@ -226,6 +222,62 @@ class _LoginScreenState extends State<LoginScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  Future<void> _onSubmit() async {
+    if (_isSubmitting) return;
+
+    final validationError = _validateInputs();
+    if (validationError != null) {
+      _showInputError(validationError);
+      return;
+    }
+
+    final role = selectedRole == 'Lawyer' ? UserRole.lawyer : UserRole.client;
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    final lawyerProfile = role == UserRole.lawyer
+        ? (isLogin ? null : _buildPendingLawyerFromForm())
+        : null;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      if (!FirebaseInitializer.isReady) {
+        _navigateFallback(role, lawyerProfile);
+        return;
+      }
+
+      await _authSyncService.syncSession(
+        isLogin: isLogin,
+        email: email,
+        password: password,
+        role: role,
+        lawyerProfile: lawyerProfile,
+      );
+
+      if (!mounted) return;
+
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        _navigateFallback(role, lawyerProfile);
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LiveDashboardRouterScreen(uid: currentUser.uid),
+        ),
+      );
+    } catch (_) {
+      _showInputError('Could not reach Firebase. Continuing in local mode.');
+      _navigateFallback(role, lawyerProfile);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
@@ -492,7 +544,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         const SizedBox(height: 24),
                         ElevatedButton(
-                          onPressed: _onSubmit,
+                          onPressed: _isSubmitting ? null : _onSubmit,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryBlue,
                             foregroundColor: Colors.white,
@@ -502,13 +554,24 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             elevation: 0,
                           ),
-                          child: Text(
-                            actionLabel,
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          child: _isSubmitting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : Text(
+                                  actionLabel,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                         ),
                         const SizedBox(height: 32),
                         Row(

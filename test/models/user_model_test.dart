@@ -98,10 +98,7 @@ void main() {
 
       final firestoreMap = user.toFirestore();
 
-      expect(
-        firestoreMap['verificationStatus'],
-        'manual_review_required',
-      );
+      expect(firestoreMap['verificationStatus'], 'manual_review_required');
       expect(firestoreMap['verificationProvider'], 'manual_review_sabah');
       expect(firestoreMap['verificationBadgeVisible'], isFalse);
       expect(firestoreMap['legalFullName'], 'Scaffold Lawyer');

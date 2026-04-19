@@ -162,25 +162,29 @@ class UserModel {
   // ─── Legacy Map (kept for DummyData compatibility) ───────────────────────────
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
-    final legacyVerified = map['barCouncilVerified'] as bool?;
+    final legacyVerified = _readBool(map['barCouncilVerified']);
     final parsedStatus = _verificationStatusFromWire(
       map['verificationStatus']?.toString(),
     );
 
+    final roleWire = map['role']?.toString().toLowerCase();
+    final email = map['email']?.toString() ?? '';
+    final fallbackName = email.contains('@') ? email.split('@').first : 'User';
+
     return UserModel(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      email: map['email'] as String,
-      phone: map['phone'] as String,
-      role: map['role'] == 'lawyer' ? UserRole.lawyer : UserRole.client,
+      id: map['id']?.toString() ?? '',
+      name: map['name']?.toString() ?? fallbackName,
+      email: email,
+      phone: map['phone']?.toString() ?? '',
+      role: roleWire == 'lawyer' ? UserRole.lawyer : UserRole.client,
       avatarUrl: map['avatarUrl'] as String?,
       createdAt: _readDateTime(map['createdAt']),
       barNumber: map['barNumber'] as String?,
       specialization: map['specialization'] as String?,
-      hourlyRate: (map['hourlyRate'] as num?)?.toDouble(),
-      rating: (map['rating'] as num?)?.toDouble(),
-      yearsExperience: map['yearsExperience'] as int?,
-      barCouncilVerified: map['barCouncilVerified'] as bool?,
+      hourlyRate: _readDouble(map['hourlyRate']),
+      rating: _readDouble(map['rating']),
+      yearsExperience: _readInt(map['yearsExperience']),
+      barCouncilVerified: legacyVerified,
       verificationStatus:
           parsedStatus ??
           (legacyVerified == true
@@ -191,7 +195,8 @@ class UserModel {
       lastVerifiedAt: _readDateTime(map['lastVerifiedAt']),
       nextReverifyAt: _readDateTime(map['nextReverifyAt']),
       verificationBadgeVisible:
-          map['verificationBadgeVisible'] as bool? ?? (legacyVerified ?? false),
+          _readBool(map['verificationBadgeVisible']) ??
+          (legacyVerified ?? false),
       legalFullName: map['legalFullName'] as String?,
       firmName: map['firmName'] as String?,
       jurisdiction: map['jurisdiction'] as String?,
@@ -259,6 +264,35 @@ class UserModel {
       // Ignore unsupported timestamp-like values.
     }
 
+    return null;
+  }
+
+  static bool? _readBool(dynamic value) {
+    if (value is bool) return value;
+
+    if (value is num) {
+      return value != 0;
+    }
+
+    if (value is String) {
+      final normalized = value.toLowerCase().trim();
+      if (normalized == 'true' || normalized == '1') return true;
+      if (normalized == 'false' || normalized == '0') return false;
+    }
+
+    return null;
+  }
+
+  static double? _readDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static int? _readInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
     return null;
   }
 

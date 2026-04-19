@@ -1,35 +1,40 @@
-const BASE_URL = 'https://legaldirectory.malaysianbar.org.my';
+const BASE_URL = "https://legaldirectory.malaysianbar.org.my";
 const LOOKUP_ENDPOINT = `${BASE_URL}/a/Lawyer/getLawyerResult`;
 const MAX_PAGES = 3;
 const REQUEST_TIMEOUT_MS = 12000;
 
 const STATE_CODE_BY_NAME = {
-  johor: 'JH',
-  johore: 'JH',
-  kedah: 'KD',
-  kelantan: 'KT',
-  melaka: 'MK',
-  malacca: 'MK',
-  'negeri sembilan': 'NS',
-  pahang: 'PH',
-  penang: 'PG',
-  'pulau pinang': 'PG',
-  perak: 'PK',
-  perlis: 'PR',
-  selangor: 'SG',
-  terengganu: 'TG',
-  'kuala lumpur': 'WPKL',
-  kl: 'WPKL',
-  labuan: 'WL',
-  putrajaya: 'WPP',
+  johor: "JH",
+  johore: "JH",
+  kedah: "KD",
+  kelantan: "KT",
+  melaka: "MK",
+  malacca: "MK",
+  "negeri sembilan": "NS",
+  pahang: "PH",
+  penang: "PG",
+  "pulau pinang": "PG",
+  perak: "PK",
+  perlis: "PR",
+  selangor: "SG",
+  terengganu: "TG",
+  "kuala lumpur": "WPKL",
+  kl: "WPKL",
+  labuan: "WL",
+  putrajaya: "WPP",
 };
 
 function normalizeWhitespace(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim();
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function stripHtml(value) {
-  return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return String(value || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeKey(value) {
@@ -39,7 +44,7 @@ function normalizeKey(value) {
 function resolveStateCode(practiceState) {
   const normalized = normalizeKey(practiceState);
   if (!normalized) {
-    return '';
+    return "";
   }
 
   const mapped = STATE_CODE_BY_NAME[normalized];
@@ -47,8 +52,8 @@ function resolveStateCode(practiceState) {
     return mapped;
   }
 
-  const compact = normalized.replace(/[^a-z]/g, '').toUpperCase();
-  if (compact === 'WPKL' || compact === 'WL' || compact === 'WPP') {
+  const compact = normalized.replace(/[^a-z]/g, "").toUpperCase();
+  if (compact === "WPKL" || compact === "WL" || compact === "WPP") {
     return compact;
   }
 
@@ -56,11 +61,11 @@ function resolveStateCode(practiceState) {
     return compact;
   }
 
-  return '';
+  return "";
 }
 
 function parseJsonPayload(body) {
-  const trimmed = String(body || '').trim();
+  const trimmed = String(body || "").trim();
   if (!trimmed) {
     return null;
   }
@@ -68,8 +73,8 @@ function parseJsonPayload(body) {
   try {
     return JSON.parse(trimmed);
   } catch (_) {
-    const firstBrace = trimmed.indexOf('{');
-    const lastBrace = trimmed.lastIndexOf('}');
+    const firstBrace = trimmed.indexOf("{");
+    const lastBrace = trimmed.lastIndexOf("}");
 
     if (firstBrace >= 0 && lastBrace > firstBrace) {
       try {
@@ -85,22 +90,29 @@ function parseJsonPayload(body) {
 
 function extractCookieHeader(response) {
   const getSetCookie = response?.headers?.getSetCookie;
-  if (typeof getSetCookie === 'function') {
+  if (typeof getSetCookie === "function") {
     const cookies = getSetCookie.call(response.headers) || [];
-    return cookies.map((cookie) => cookie.split(';')[0]).filter(Boolean).join('; ');
+    return cookies
+      .map((cookie) => cookie.split(";")[0])
+      .filter(Boolean)
+      .join("; ");
   }
 
-  const setCookie = response?.headers?.get('set-cookie');
+  const setCookie = response?.headers?.get("set-cookie");
   if (!setCookie) {
-    return '';
+    return "";
   }
 
-  return setCookie.split(',').map((cookie) => cookie.split(';')[0]).filter(Boolean).join('; ');
+  return setCookie
+    .split(",")
+    .map((cookie) => cookie.split(";")[0])
+    .filter(Boolean)
+    .join("; ");
 }
 
 async function bootstrapSessionCookie() {
   const response = await fetch(`${BASE_URL}/`, {
-    method: 'GET',
+    method: "GET",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
@@ -109,24 +121,29 @@ async function bootstrapSessionCookie() {
 
 function buildLookupPayload({ legalFullName, stateCode, page }) {
   const formData = new URLSearchParams();
-  formData.set('name', legalFullName);
-  formData.set('alphabet', '');
-  formData.set('searchtype', 'Lawyer');
-  formData.set('state', stateCode);
-  formData.set('city', '');
-  formData.set('keyword', '');
-  formData.set('orderby', 'name');
-  formData.set('dir', 'asc');
-  formData.set('page', String(page));
+  formData.set("name", legalFullName);
+  formData.set("alphabet", "");
+  formData.set("searchtype", "Lawyer");
+  formData.set("state", stateCode);
+  formData.set("city", "");
+  formData.set("keyword", "");
+  formData.set("orderby", "name");
+  formData.set("dir", "asc");
+  formData.set("page", String(page));
   return formData.toString();
 }
 
-async function fetchLawyerPage({ legalFullName, stateCode, page, cookieHeader }) {
+async function fetchLawyerPage({
+  legalFullName,
+  stateCode,
+  page,
+  cookieHeader,
+}) {
   const response = await fetch(LOOKUP_ENDPOINT, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-      'x-requested-with': 'XMLHttpRequest',
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "x-requested-with": "XMLHttpRequest",
       origin: BASE_URL,
       referer: `${BASE_URL}/v/search-result`,
       ...(cookieHeader ? { cookie: cookieHeader } : {}),
@@ -141,8 +158,8 @@ async function fetchLawyerPage({ legalFullName, stateCode, page, cookieHeader })
   }
 
   const parsed = parseJsonPayload(body);
-  if (!parsed || typeof parsed !== 'object') {
-    throw new Error('Lookup response is not valid JSON payload.');
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Lookup response is not valid JSON payload.");
   }
 
   return parsed;
@@ -160,13 +177,13 @@ function deriveActiveFlag(statusText) {
     return null;
   }
 
-  if (normalized.includes('active')) {
+  if (normalized.includes("active")) {
     return true;
   }
 
   if (
     /(suspend|struck|inactive|ceased|expired|terminated|revoked|disbar)/.test(
-      normalized
+      normalized,
     )
   ) {
     return false;
@@ -205,13 +222,13 @@ function normalizeCandidate(row) {
 
 function getLawyerRows(payload) {
   const lawyers = payload?.data?.lawyers;
-  if (!lawyers || typeof lawyers !== 'object') {
+  if (!lawyers || typeof lawyers !== "object") {
     return { rows: [], numPages: 0, numRows: 0 };
   }
 
   const rows = Array.isArray(lawyers.data) ? lawyers.data : [];
-  const numPages = Number.parseInt(String(lawyers.numpage || '0'), 10) || 0;
-  const numRows = Number.parseInt(String(lawyers.numrow || '0'), 10) || 0;
+  const numPages = Number.parseInt(String(lawyers.numpage || "0"), 10) || 0;
+  const numRows = Number.parseInt(String(lawyers.numrow || "0"), 10) || 0;
 
   return { rows, numPages, numRows };
 }
@@ -221,20 +238,20 @@ async function lookupMalaysianBarCandidates({ legalFullName, practiceState }) {
 
   if (!normalizedName) {
     return {
-      source: 'malaysian_bar',
-      adapterStatus: 'skipped_missing_name',
+      source: "malaysian_bar",
+      adapterStatus: "skipped_missing_name",
       query: null,
       candidates: [],
     };
   }
 
   const stateCode = resolveStateCode(practiceState);
-  let sessionCookie = '';
+  let sessionCookie = "";
 
   try {
     sessionCookie = await bootstrapSessionCookie();
   } catch (_) {
-    sessionCookie = '';
+    sessionCookie = "";
   }
 
   try {
@@ -262,8 +279,8 @@ async function lookupMalaysianBarCandidates({ legalFullName, practiceState }) {
     }
 
     return {
-      source: 'malaysian_bar',
-      adapterStatus: candidates.length ? 'success' : 'no_results',
+      source: "malaysian_bar",
+      adapterStatus: candidates.length ? "success" : "no_results",
       query: {
         legalFullName: normalizedName,
         requestedPracticeState: normalizeWhitespace(practiceState),
@@ -279,8 +296,8 @@ async function lookupMalaysianBarCandidates({ legalFullName, practiceState }) {
     };
   } catch (error) {
     return {
-      source: 'malaysian_bar',
-      adapterStatus: 'request_failed',
+      source: "malaysian_bar",
+      adapterStatus: "request_failed",
       query: {
         legalFullName: normalizedName,
         requestedPracticeState: normalizeWhitespace(practiceState),
