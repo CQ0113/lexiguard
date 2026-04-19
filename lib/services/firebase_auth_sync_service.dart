@@ -41,7 +41,7 @@ class FirebaseAuthSyncService {
   VerificationReviewRepository get _resolvedVerificationReviewRepository =>
       _verificationReviewRepository ?? VerificationReviewRepository();
 
-  Future<void> syncSession({
+  Future<({bool adapterFailed})> syncSession({
     required bool isLogin,
     required String email,
     required String password,
@@ -49,7 +49,7 @@ class FirebaseAuthSyncService {
     UserModel? lawyerProfile,
   }) async {
     if (!FirebaseInitializer.isReady) {
-      return;
+      return (adapterFailed: false);
     }
 
     try {
@@ -61,11 +61,11 @@ class FirebaseAuthSyncService {
 
       final user = credential.user;
       if (user == null) {
-        return;
+        return (adapterFailed: false);
       }
 
       if (!isLogin) {
-        await _persistInitialProfile(
+        return await _persistInitialProfile(
           uid: user.uid,
           email: email,
           role: role,
@@ -76,6 +76,7 @@ class FirebaseAuthSyncService {
       // Keep UX uninterrupted while backend wiring is being finalized.
       debugPrint('Firebase sync skipped: $error');
     }
+    return (adapterFailed: false);
   }
 
   Future<UserCredential> _resolveCredential({
@@ -106,7 +107,7 @@ class FirebaseAuthSyncService {
     }
   }
 
-  Future<void> _persistInitialProfile({
+  Future<({bool adapterFailed})> _persistInitialProfile({
     required String uid,
     required String email,
     required UserRole role,
@@ -141,9 +142,7 @@ class FirebaseAuthSyncService {
         );
       }
 
-      await _triggerVerificationScaffold(uid: uid, profile: lawyerProfile);
-
-      return;
+      return await _triggerVerificationScaffold(uid: uid, profile: lawyerProfile);
     }
 
     await _resolvedUserRepository.upsertUser(
@@ -156,16 +155,17 @@ class FirebaseAuthSyncService {
         'createdAt': now,
       },
     );
+    return (adapterFailed: false);
   }
 
-  Future<void> _triggerVerificationScaffold({
+  Future<({bool adapterFailed})> _triggerVerificationScaffold({
     required String uid,
     required UserModel profile,
   }) async {
     try {
       final callable = _resolvedFunctions.httpsCallable('startVerification');
 
-      await callable.call({
+      final result = await callable.call({
         'uid': uid,
         'legalFullName': profile.legalFullName ?? profile.name,
         'barOrRollNumber': profile.barNumber,
@@ -174,9 +174,19 @@ class FirebaseAuthSyncService {
         'practiceState': profile.practiceState,
         'practiceCity': profile.practiceCity,
       });
+
+      final adapterStatus =
+          (result.data as Map<Object?, Object?>?)?['adapterStatus'] as String?;
+      if (adapterStatus == 'request_failed') {
+        debugPrint(
+          'Verification adapter failed for $uid — queued for manual review.',
+        );
+        return (adapterFailed: true);
+      }
+      return (adapterFailed: false);
     } catch (error) {
-      // Keep registration resilient while Functions backend is still scaffolded.
       debugPrint('Verification callable trigger skipped: $error');
+      return (adapterFailed: false);
     }
   }
 }

@@ -249,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      await _authSyncService.syncSession(
+      final syncResult = await _authSyncService.syncSession(
         isLogin: isLogin,
         email: email,
         password: password,
@@ -271,6 +271,19 @@ class _LoginScreenState extends State<LoginScreen> {
           builder: (context) => LiveDashboardRouterScreen(uid: currentUser.uid),
         ),
       );
+
+      if (syncResult.adapterFailed && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'We could not reach the Malaysian Bar directory. '
+              'Your verification has been queued for manual review.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 6),
+          ),
+        );
+      }
     } catch (_) {
       _showInputError('Could not reach Firebase. Continuing in local mode.');
       _navigateFallback(role, lawyerProfile);

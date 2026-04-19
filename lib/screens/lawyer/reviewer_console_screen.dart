@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -112,6 +113,13 @@ class _ReviewerConsoleScreenState extends State<ReviewerConsoleScreen> {
     }
   }
 
+  Future<bool> _hasReviewerClaim() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+    final token = await user.getIdTokenResult();
+    return token.claims?['reviewer'] == true;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,7 +129,41 @@ class _ReviewerConsoleScreenState extends State<ReviewerConsoleScreen> {
           style: GoogleFonts.inter(fontWeight: FontWeight.w700),
         ),
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      body: FutureBuilder<bool>(
+        future: _hasReviewerClaim(),
+        builder: (context, authSnapshot) {
+          if (authSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (authSnapshot.data != true) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.lock_outline, size: 48, color: Color(0xFF6B7280)),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Access Denied',
+                      style: GoogleFonts.inter(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0B2447),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'You do not have the reviewer role required to access this console.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF6B7280)),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _queueStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -256,6 +298,8 @@ class _ReviewerConsoleScreenState extends State<ReviewerConsoleScreen> {
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemCount: docs.length,
           );
+        },
+      );
         },
       ),
     );
