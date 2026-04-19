@@ -44,8 +44,16 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Settings
+.vscode
+
 # Firebase API Keys and Config Files
-lib/firebase_options.dart
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 macos/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+
+# Local Firestore admin tooling artifacts
+tools/firestore_admin/node_modules/
+tools/firestore_admin/service-account.json
+tools/firestore_admin/backups/

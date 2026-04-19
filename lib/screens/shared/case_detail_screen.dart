@@ -35,6 +35,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   }
 
   bool get _isLawyer => widget.viewer.role == UserRole.lawyer;
+  bool get _canLawyerExpressInterest =>
+      _isLawyer && widget.viewer.canAccessMarketplace;
   bool get _hasExpressedInterest =>
       _case.interestedLawyerIds.contains(widget.viewer.id);
 
@@ -115,6 +117,10 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildStatusRow(),
+                  if (_isLawyer && !widget.viewer.canAccessMarketplace)
+                    const SizedBox(height: 14),
+                  if (_isLawyer && !widget.viewer.canAccessMarketplace)
+                    _buildVerificationLockNotice(),
                   const SizedBox(height: 20),
                   _buildDescriptionCard(),
                   const SizedBox(height: 20),
@@ -133,10 +139,59 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: _isLawyer && _case.status == CaseStatus.pending
+      floatingActionButton:
+          _canLawyerExpressInterest && _case.status == CaseStatus.pending
           ? _buildInterestFAB()
           : null,
     );
+  }
+
+  Widget _buildVerificationLockNotice() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.lock_outline, color: Color(0xFFD97706), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _lockMessageForStatus(widget.viewer.verificationStatus),
+              style: GoogleFonts.inter(
+                color: const Color(0xFF92400E),
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _lockMessageForStatus(VerificationStatus status) {
+    switch (status) {
+      case VerificationStatus.pending:
+        return 'Verification is still pending. Express interest will be enabled after your lawyer account is approved.';
+      case VerificationStatus.manualReviewRequired:
+        return 'Your submission is under manual review. Express interest will unlock once the review is completed.';
+      case VerificationStatus.rejected:
+        return 'Your verification was rejected. Update your legal details and resubmit to regain case marketplace access.';
+      case VerificationStatus.reverificationDue:
+        return 'Reverification is required before you can express interest in new cases.';
+      case VerificationStatus.suspended:
+        return 'Your lawyer account is currently suspended. Contact support to restore marketplace access.';
+      case VerificationStatus.unsubmitted:
+        return 'Complete verification to unlock case marketplace actions.';
+      case VerificationStatus.autoVerified:
+        return 'Your account is verified.';
+    }
   }
 
   // ── Sliver AppBar (hero) ─────────────────────────────────────────────────
@@ -147,8 +202,11 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       pinned: true,
       backgroundColor: _navy,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new,
-            color: Colors.white, size: 18),
+        icon: const Icon(
+          Icons.arrow_back_ios_new,
+          color: Colors.white,
+          size: 18,
+        ),
         onPressed: () => Navigator.of(context).pop(),
       ),
       actions: [
@@ -175,7 +233,10 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                 children: [
                   Row(
                     children: [
-                      _chip(_case.categoryLabel, _categoryColor(_case.category)),
+                      _chip(
+                        _case.categoryLabel,
+                        _categoryColor(_case.category),
+                      ),
                       const SizedBox(width: 8),
                       _chip(_case.urgencyLabel, urgencyColor),
                     ],
@@ -193,13 +254,18 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.access_time_outlined,
-                          color: Colors.white54, size: 13),
+                      const Icon(
+                        Icons.access_time_outlined,
+                        color: Colors.white54,
+                        size: 13,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'Posted ${_timeAgo(_case.createdAt)}',
                         style: GoogleFonts.inter(
-                            color: Colors.white54, fontSize: 12),
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -221,15 +287,19 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         if (_case.interestedLawyerIds.isNotEmpty)
           Row(
             children: [
-              const Icon(Icons.group_outlined,
-                  color: Color(0xFFCFA92A), size: 16),
+              const Icon(
+                Icons.group_outlined,
+                color: Color(0xFFCFA92A),
+                size: 16,
+              ),
               const SizedBox(width: 4),
               Text(
                 '${_case.interestedLawyerIds.length} lawyer${_case.interestedLawyerIds.length > 1 ? 's' : ''} interested',
                 style: GoogleFonts.inter(
-                    color: _gold,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13),
+                  color: _gold,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
               ),
             ],
           ),
@@ -284,8 +354,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             _detailRow(
               Icons.event_available_outlined,
               'Next Hearing',
-              DateFormat('d MMMM yyyy  •  hh:mm a')
-                  .format(_case.nextHearing!),
+              DateFormat('d MMMM yyyy  •  hh:mm a').format(_case.nextHearing!),
               valueColor: Colors.redAccent,
             ),
           ],
@@ -295,8 +364,10 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
               Icons.balance_outlined,
               'Assigned Lawyer',
               DummyData.users
-                  .firstWhere((u) => u.id == _case.lawyerId,
-                      orElse: () => DummyData.users.first)
+                  .firstWhere(
+                    (u) => u.id == _case.lawyerId,
+                    orElse: () => DummyData.users.first,
+                  )
                   .name,
               valueColor: const Color(0xFF2E7D32),
             ),
@@ -323,13 +394,18 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
               padding: const EdgeInsets.only(top: 8, bottom: 4),
               child: Row(
                 children: [
-                  Icon(Icons.hourglass_empty,
-                      color: Colors.grey[300], size: 20),
+                  Icon(
+                    Icons.hourglass_empty,
+                    color: Colors.grey[300],
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
                   Text(
                     'No lawyers have expressed interest yet.',
                     style: GoogleFonts.inter(
-                        color: Colors.grey[400], fontSize: 13),
+                      color: Colors.grey[400],
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -362,17 +438,22 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
               image: lawyer.avatarUrl != null
                   ? DecorationImage(
                       image: NetworkImage(lawyer.avatarUrl!),
-                      fit: BoxFit.cover)
+                      fit: BoxFit.cover,
+                    )
                   : null,
               color: _navy,
             ),
             child: lawyer.avatarUrl == null
                 ? Center(
-                    child: Text(lawyer.name[0],
-                        style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16)))
+                    child: Text(
+                      lawyer.name[0],
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  )
                 : null,
           ),
           const SizedBox(width: 12),
@@ -380,15 +461,52 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(lawyer.name,
-                    style: GoogleFonts.inter(
-                        color: _navy,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14)),
+                Text(
+                  lawyer.name,
+                  style: GoogleFonts.inter(
+                    color: _navy,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(lawyer.specialization ?? 'Legal Practitioner',
+                Text(
+                  lawyer.specialization ?? 'Legal Practitioner',
+                  style: GoogleFonts.inter(
+                    color: Colors.grey[400],
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: lawyer.isVerified
+                        ? const Color(0xFFF0FDF4)
+                        : const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: lawyer.isVerified
+                          ? const Color(0xFFBBF7D0)
+                          : const Color(0xFFFDE68A),
+                    ),
+                  ),
+                  child: Text(
+                    lawyer.isVerified
+                        ? 'Verified'
+                        : lawyer.verificationStatus.label,
                     style: GoogleFonts.inter(
-                        color: Colors.grey[400], fontSize: 12)),
+                      color: lawyer.isVerified
+                          ? const Color(0xFF15803D)
+                          : const Color(0xFFD97706),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -398,15 +516,19 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.star_rounded,
-                      color: Color(0xFFCFA92A), size: 14),
+                  const Icon(
+                    Icons.star_rounded,
+                    color: Color(0xFFCFA92A),
+                    size: 14,
+                  ),
                   const SizedBox(width: 2),
                   Text(
                     '${lawyer.rating ?? '-'}',
                     style: GoogleFonts.inter(
-                        color: _navy,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12),
+                      color: _navy,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
@@ -417,16 +539,21 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   onTap: () {},
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: _navy,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text('Hire',
-                        style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600)),
+                    child: Text(
+                      'Hire',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -461,9 +588,10 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
               Text(
                 '${_case.progressPercent.toInt()}%',
                 style: GoogleFonts.inter(
-                    color: _navy,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14),
+                  color: _navy,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
             ],
           ),
@@ -487,7 +615,9 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2.5),
+                    color: Colors.white,
+                    strokeWidth: 2.5,
+                  ),
                 )
               : Icon(
                   expressed
@@ -497,14 +627,14 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                 ),
           label: Text(
             expressed ? 'Withdraw Interest' : 'Express Interest',
-            style:
-                GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15),
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15),
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: expressed ? Colors.grey[700] : _navy,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+              borderRadius: BorderRadius.circular(16),
+            ),
             elevation: expressed ? 0 : 4,
             shadowColor: _navy.withValues(alpha: 0.4),
           ),
@@ -524,9 +654,10 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         border: Border.all(color: Colors.grey[100]!),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: child,
@@ -538,30 +669,43 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       children: [
         Icon(icon, color: _navy, size: 18),
         const SizedBox(width: 8),
-        Text(title,
-            style: GoogleFonts.inter(
-                color: _navy, fontWeight: FontWeight.w700, fontSize: 15)),
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            color: _navy,
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _detailRow(IconData icon, String label, String value,
-      {Color? valueColor}) {
+  Widget _detailRow(
+    IconData icon,
+    String label,
+    String value, {
+    Color? valueColor,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           Icon(icon, color: Colors.grey[400], size: 16),
           const SizedBox(width: 10),
-          Text(label,
-              style: GoogleFonts.inter(
-                  color: Colors.grey[500], fontSize: 13)),
+          Text(
+            label,
+            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
+          ),
           const Spacer(),
-          Text(value,
-              style: GoogleFonts.inter(
-                  color: valueColor ?? _navy,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13)),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              color: valueColor ?? _navy,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
         ],
       ),
     );
@@ -578,11 +722,14 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
-      child: Text(label,
-          style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.w600)),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 
@@ -619,11 +766,14 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         children: [
           Icon(icon, color: color, size: 14),
           const SizedBox(width: 5),
-          Text(label,
-              style: GoogleFonts.inter(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12)),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );

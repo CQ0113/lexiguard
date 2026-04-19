@@ -1,11 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../core/firebase/firebase_initializer.dart';
 import '../models/user_model.dart';
-import '../services/auth_service.dart';
+import '../services/firebase_auth_sync_service.dart';
 import 'client/client_dashboard_screen.dart';
 import 'lawyer/lawyer_dashboard_screen.dart';
-import 'register_screen.dart';
+import 'shared/live_dashboard_router_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,153 +17,303 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _authService = AuthService();
-
+  bool isLogin = true;
   String selectedRole = 'Client'; // 'Client' or 'Lawyer'
-  bool _obscurePassword = true;
-  bool _isLoading = false;
-  bool _isForgotLoading = false;
+  bool obscurePassword = true;
+  String selectedJurisdiction = 'peninsular';
 
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
-  static const Color _primaryBlue = Color(0xFF0C1D36);
-  static const Color _goldAccent = Color(0xFFCFA92A);
+  final TextEditingController legalFullNameController = TextEditingController();
+  final TextEditingController barNumberController = TextEditingController();
+  final TextEditingController firmNameController = TextEditingController();
+  final TextEditingController practiceStateController = TextEditingController();
+  final TextEditingController practiceCityController = TextEditingController();
 
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  final Color primaryBlue = const Color(0xFF0C1D36);
+  final Color goldAccent = const Color(0xFFCFA92A);
+  final FirebaseAuthSyncService _authSyncService = FirebaseAuthSyncService();
+  bool _isSubmitting = false;
+
+  bool get showLawyerVerificationFields {
+    return !isLogin && selectedRole == 'Lawyer';
   }
 
-  // ─── Sign In ──────────────────────────────────────────────────────────────
-
-  Future<void> _signIn() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await _authService.signIn(
-        email: email,
-        password: password,
-        role: selectedRole,
-      );
-
-      // We don't push a new route here. The AuthGate in main.dart listens to 
-      // the auth state change and will seamlessly swap the LoginScreen with the Dashboard!
-    } on FirebaseAuthException catch (e) {
-      _showError(_friendlyFirebaseError(e.code));
-    } on AuthException catch (e) {
-      _showError(e.message);
-    } catch (_) {
-      _showError('Something went wrong. Please try again.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  String get actionLabel {
+    if (isLogin) return 'Sign In';
+    return selectedRole == 'Lawyer'
+        ? 'Register & Start Verification'
+        : 'Create Account';
   }
 
-  Future<void> _signInWithGoogle() async {
-    setState(() => _isLoading = true);
-    try {
-      await _authService.signInWithGoogle(role: selectedRole);
-    } on AuthException catch (e) {
-      _showError(e.message);
-    } catch (e) {
-      _showError('Google Sign-In failed. Please try again.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  bool _isValidEmail(String email) {
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+    return emailRegex.hasMatch(email);
   }
 
+  String? _validateInputs() {
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
 
-  // ─── Forgot Password ──────────────────────────────────────────────────────
-
-  Future<void> _forgotPassword() async {
-    final email = _emailController.text.trim();
     if (email.isEmpty) {
-      _showError('Enter your email above, then tap Forgot Password.');
-      return;
+      return 'Please enter your email address.';
     }
 
-    setState(() => _isForgotLoading = true);
-    try {
-      await _authService.sendPasswordResetEmail(email);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Password reset email sent to $email',
-            style: GoogleFonts.inter(color: Colors.white),
-          ),
-          backgroundColor: const Color(0xFF2E7D32),
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
-    } on FirebaseAuthException catch (e) {
-      _showError(_friendlyFirebaseError(e.code));
-    } finally {
-      if (mounted) setState(() => _isForgotLoading = false);
+    if (!_isValidEmail(email)) {
+      return 'Please enter a valid email address.';
     }
+
+    if (password.isEmpty) {
+      return 'Please enter your password.';
+    }
+
+    if (!isLogin && password.length < 6) {
+      return 'Password must be at least 6 characters.';
+    }
+
+    if (!showLawyerVerificationFields) {
+      return null;
+    }
+
+    if (legalFullNameController.text.trim().isEmpty) {
+      return 'Legal full name is required for lawyer verification.';
+    }
+
+    if (firmNameController.text.trim().isEmpty) {
+      return 'Law firm name is required for lawyer verification.';
+    }
+
+    if (practiceStateController.text.trim().isEmpty) {
+      return 'Practice state is required for lawyer verification.';
+    }
+
+    if (practiceCityController.text.trim().isEmpty) {
+      return 'Practice city is required for lawyer verification.';
+    }
+
+    return null;
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
-
-  void _showError(String msg) {
-    if (!mounted) return;
+  void _showInputError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, style: GoogleFonts.inter(color: Colors.white)),
-        backgroundColor: const Color(0xFFD32F2F),
+        content: Text(message, style: GoogleFonts.inter(color: Colors.white)),
+        backgroundColor: const Color(0xFFB91C1C),
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
       ),
     );
   }
 
-  String _friendlyFirebaseError(String code) {
-    switch (code) {
-      case 'user-not-found':
-        return 'No account found for this email. Please register first.';
-      case 'wrong-password':
-      case 'invalid-credential':
-        return 'Incorrect email or password. Please try again.';
-      case 'invalid-email':
-        return 'Please enter a valid email address.';
-      case 'user-disabled':
-        return 'This account has been disabled. Contact support.';
-      case 'too-many-requests':
-        return 'Too many attempts. Please wait a moment and try again.';
-      case 'network-request-failed':
-        return 'No internet connection. Please check your network.';
+  VerificationStatus _initialStatusForJurisdiction(String jurisdiction) {
+    return jurisdiction == 'peninsular'
+        ? VerificationStatus.pending
+        : VerificationStatus.manualReviewRequired;
+  }
+
+  String _verificationProviderForJurisdiction(String jurisdiction) {
+    switch (jurisdiction) {
+      case 'peninsular':
+        return 'malaysian_bar';
+      case 'sabah':
+        return 'manual_review_sabah';
+      case 'sarawak':
+        return 'manual_review_sarawak';
       default:
-        return 'Sign in failed. Please try again.';
+        return 'manual_review';
     }
   }
 
-  // ─── Build ────────────────────────────────────────────────────────────────
+  String _registrationMessageForStatus(VerificationStatus status) {
+    if (status == VerificationStatus.manualReviewRequired) {
+      return 'East Malaysia verification is currently manual review only. Our team will review your profile within 48 hours.';
+    }
+    return 'Verification submitted. You are now in pending sandbox mode.';
+  }
+
+  UserModel _buildPendingLawyerFromForm() {
+    final jurisdiction = selectedJurisdiction;
+    final initialStatus = _initialStatusForJurisdiction(jurisdiction);
+    final legalName = legalFullNameController.text.trim();
+    final barNumber = barNumberController.text.trim();
+    final firmName = firmNameController.text.trim();
+    final practiceState = practiceStateController.text.trim();
+    final practiceCity = practiceCityController.text.trim();
+
+    return UserModel(
+      id: 'local_lawyer_${DateTime.now().millisecondsSinceEpoch}',
+      name: legalName,
+      email: emailController.text.trim(),
+      phone: '',
+      role: UserRole.lawyer,
+      barNumber: barNumber.isNotEmpty ? barNumber : null,
+      specialization: 'General Practice',
+      barCouncilVerified: false,
+      verificationStatus: initialStatus,
+      verificationProvider: _verificationProviderForJurisdiction(jurisdiction),
+      verificationBadgeVisible: false,
+      legalFullName: legalName,
+      firmName: firmName,
+      jurisdiction: jurisdiction,
+      practiceState: practiceState,
+      practiceCity: practiceCity,
+    );
+  }
+
+  UserModel _buildFallbackClient() {
+    final email = emailController.text.trim();
+    final localName = email.split('@').first.trim();
+
+    return UserModel(
+      id: 'local_client_${DateTime.now().millisecondsSinceEpoch}',
+      name: localName.isEmpty ? 'Client User' : localName,
+      email: email,
+      phone: '',
+      role: UserRole.client,
+    );
+  }
+
+  UserModel _buildFallbackLawyerLogin() {
+    final email = emailController.text.trim();
+    final localName = email.split('@').first.trim();
+
+    return UserModel(
+      id: 'local_lawyer_login',
+      name: localName.isEmpty ? 'Lawyer User' : localName,
+      email: email,
+      phone: '',
+      role: UserRole.lawyer,
+      specialization: 'General Practice',
+      verificationStatus: VerificationStatus.autoVerified,
+      verificationBadgeVisible: true,
+    );
+  }
+
+  void _navigateFallback(UserRole role, UserModel? lawyerProfile) {
+    if (!mounted) return;
+
+    if (role == UserRole.client) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              ClientDashboardScreen(user: _buildFallbackClient()),
+        ),
+      );
+      return;
+    }
+
+    final lawyer = lawyerProfile ?? _buildFallbackLawyerLogin();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LawyerDashboardScreen(user: lawyer),
+      ),
+    );
+
+    if (!isLogin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _registrationMessageForStatus(lawyer.verificationStatus),
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFF1E3A8A),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onSubmit() async {
+    if (_isSubmitting) return;
+
+    final validationError = _validateInputs();
+    if (validationError != null) {
+      _showInputError(validationError);
+      return;
+    }
+
+    final role = selectedRole == 'Lawyer' ? UserRole.lawyer : UserRole.client;
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+    final lawyerProfile = role == UserRole.lawyer
+        ? (isLogin ? null : _buildPendingLawyerFromForm())
+        : null;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      if (!FirebaseInitializer.isReady) {
+        _navigateFallback(role, lawyerProfile);
+        return;
+      }
+
+      final syncResult = await _authSyncService.syncSession(
+        isLogin: isLogin,
+        email: email,
+        password: password,
+        role: role,
+        lawyerProfile: lawyerProfile,
+      );
+
+      if (!mounted) return;
+
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        _navigateFallback(role, lawyerProfile);
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LiveDashboardRouterScreen(uid: currentUser.uid),
+        ),
+      );
+
+      if (syncResult.adapterFailed && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'We could not reach the Malaysian Bar directory. '
+              'Your verification has been queued for manual review.',
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 6),
+          ),
+        );
+      }
+    } catch (_) {
+      _showInputError('Could not reach Firebase. Continuing in local mode.');
+      _navigateFallback(role, lawyerProfile);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    legalFullNameController.dispose();
+    barNumberController.dispose();
+    firmNameController.dispose();
+    practiceStateController.dispose();
+    practiceCityController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        backgroundColor: _primaryBlue,
-        body: SafeArea(
+    return Scaffold(
+      backgroundColor: primaryBlue,
+      body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            // Header
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
@@ -178,14 +330,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.shield_outlined,
-                              size: 36, color: _primaryBlue),
+                          Icon(
+                            Icons.shield_outlined,
+                            size: 36,
+                            color: primaryBlue,
+                          ),
                           Text(
                             'LEXIGUARD\nMALAYSIA',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.inter(
                               fontSize: 7,
-                              color: _primaryBlue,
+                              color: primaryBlue,
                               fontWeight: FontWeight.w800,
                               height: 1.1,
                             ),
@@ -214,26 +369,91 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
             ),
-
-            // Bottom Sheet
             Expanded(
               child: Container(
                 width: double.infinity,
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(32)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                 ),
                 child: ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(32)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(32),
+                  ),
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 24.0, vertical: 32.0),
+                      horizontal: 24.0,
+                      vertical: 32.0,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Role selection
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() => isLogin = true),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isLogin
+                                          ? primaryBlue
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'Login',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.inter(
+                                        fontWeight: FontWeight.w600,
+                                        color: isLogin
+                                            ? Colors.white
+                                            : Colors.grey[500],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() => isLogin = false),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: !isLogin
+                                          ? primaryBlue
+                                          : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'Register',
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.inter(
+                                        fontWeight: FontWeight.w600,
+                                        color: !isLogin
+                                            ? Colors.white
+                                            : Colors.grey[500],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
                         Row(
                           children: [
                             Expanded(
@@ -241,6 +461,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 title: "I'm a Client",
                                 icon: Icons.shield_outlined,
                                 isSelected: selectedRole == 'Client',
+                                activeColor: goldAccent,
                                 onTap: () =>
                                     setState(() => selectedRole = 'Client'),
                               ),
@@ -251,163 +472,128 @@ class _LoginScreenState extends State<LoginScreen> {
                                 title: "I'm a Lawyer",
                                 icon: Icons.balance,
                                 isSelected: selectedRole == 'Lawyer',
+                                activeColor: goldAccent,
                                 onTap: () =>
                                     setState(() => selectedRole = 'Lawyer'),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 28),
-
-                        Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // Email
-                              _buildTextField(
-                                controller: _emailController,
-                                hintText: 'Email Address',
-                                icon: Icons.email_outlined,
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.next,
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return 'Please enter your email';
-                                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v.trim())) {
-                                    return 'Please enter a valid email address';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 16),
-
-                              // Password
-                              _buildTextField(
-                                controller: _passwordController,
-                                hintText: 'Password',
-                                icon: Icons.lock_outline,
-                                isPassword: true,
-                                obscureText: _obscurePassword,
-                                textInputAction: TextInputAction.done,
-                                onFieldSubmitted: (_) => _signIn(),
-                                onTogglePassword: () => setState(
-                                    () => _obscurePassword = !_obscurePassword),
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) return 'Please enter your password';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 12),
-
-                              // Forgot Password
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: _isForgotLoading
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2),
-                                      )
-                                    : TextButton(
-                                        onPressed: _forgotPassword,
-                                        style: TextButton.styleFrom(
-                                          padding: EdgeInsets.zero,
-                                          minimumSize: const Size(50, 30),
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                        ),
-                                        child: Text(
-                                          'Forgot Password?',
-                                          style: GoogleFonts.inter(
-                                            color: _goldAccent,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                              const SizedBox(height: 24),
-
-                              // Sign In Button
-                              ElevatedButton(
-                                onPressed: _isLoading ? null : _signIn,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _primaryBlue,
-                                  foregroundColor: Colors.white,
-                                  disabledBackgroundColor:
-                                      _primaryBlue.withValues(alpha: 0.6),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2.5,
-                                        ),
-                                      )
-                                    : Text(
-                                        'Sign In',
-                                        style: GoogleFonts.inter(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                              ),
-                            ],
+                        const SizedBox(height: 24),
+                        _buildTextField(
+                          hintText: 'Email Address',
+                          controller: emailController,
+                          inputKey: const Key('auth_email_field'),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildTextField(
+                          hintText: 'Password',
+                          controller: passwordController,
+                          isPassword: true,
+                          obscureText: obscurePassword,
+                          inputKey: const Key('auth_password_field'),
+                          onTogglePassword: () => setState(
+                            () => obscurePassword = !obscurePassword,
                           ),
                         ),
-                        const SizedBox(height: 20),
-
-                        // Register CTA
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "Don't have an account? ",
-                              style: GoogleFonts.inter(
-                                color: Colors.grey[500],
-                                fontSize: 14,
+                        if (showLawyerVerificationFields) ...[
+                          const SizedBox(height: 16),
+                          _buildVerificationCard(),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Legal Full Name (as on bar records)',
+                            controller: legalFullNameController,
+                            inputKey: const Key('lawyer_legal_name_field'),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Bar / Roll Number (optional)',
+                            controller: barNumberController,
+                            inputKey: const Key('lawyer_bar_number_field'),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Law Firm Name',
+                            controller: firmNameController,
+                            inputKey: const Key('lawyer_firm_field'),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildJurisdictionField(),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Practice State',
+                            controller: practiceStateController,
+                            inputKey: const Key('lawyer_practice_state_field'),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildTextField(
+                            hintText: 'Practice City',
+                            controller: practiceCityController,
+                            inputKey: const Key('lawyer_practice_city_field'),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        if (isLogin)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () => _showInputError(
+                                'Forgot password is not wired yet in demo mode.',
                               ),
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => RegisterScreen(
-                                      initialRole: selectedRole,
-                                    ),
-                                  ),
-                                );
-                              },
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(50, 30),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
                               child: Text(
-                                'Register',
+                                'Forgot Password?',
                                 style: GoogleFonts.inter(
-                                  color: _goldAccent,
-                                  fontSize: 14,
+                                  color: goldAccent,
                                   fontWeight: FontWeight.w600,
+                                  fontSize: 13,
                                 ),
                               ),
                             ),
-                          ],
+                          ),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: _isSubmitting ? null : _onSubmit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryBlue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: _isSubmitting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : Text(
+                                  actionLabel,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                         ),
                         const SizedBox(height: 32),
-
-                        // Divider
                         Row(
                           children: [
                             Expanded(child: Divider(color: Colors.grey[200])),
                             Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 16.0),
+                                horizontal: 16.0,
+                              ),
                               child: Text(
                                 'or continue with',
                                 style: GoogleFonts.inter(
@@ -420,32 +606,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
-                        
-                        // Google Sign-In Button
-                        OutlinedButton.icon(
-                          onPressed: _isLoading ? null : _signInWithGoogle,
-                          icon: Image.network(
-                            'https://cdn1.iconfinder.com/data/icons/google-s-logo/150/Google_Icons-09-512.png',
-                            width: 24,
-                            height: 24,
-                          ),
-                          label: Text(
-                            'Google',
-                            style: GoogleFonts.inter(
-                              color: Colors.black87,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            side: BorderSide(color: Colors.grey[300]!),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -455,14 +615,14 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildRoleCard({
     required String title,
     required IconData icon,
     required bool isSelected,
+    required Color activeColor,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
@@ -471,11 +631,12 @@ class _LoginScreenState extends State<LoginScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          color:
-              isSelected ? _goldAccent.withValues(alpha: 0.05) : Colors.white,
+          color: isSelected
+              ? activeColor.withValues(alpha: 0.05)
+              : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? _goldAccent : Colors.grey[200]!,
+            color: isSelected ? activeColor : Colors.grey[200]!,
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -483,16 +644,15 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Icon(
               icon,
-              color: isSelected ? _goldAccent : Colors.grey[400],
+              color: isSelected ? activeColor : Colors.grey[400],
               size: 28,
             ),
             const SizedBox(height: 12),
             Text(
               title,
               style: GoogleFonts.inter(
-                color: isSelected ? _primaryBlue : Colors.grey[500],
-                fontWeight:
-                    isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? primaryBlue : Colors.grey[500],
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 fontSize: 14,
               ),
             ),
@@ -503,62 +663,116 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildTextField({
-    required TextEditingController controller,
     required String hintText,
-    IconData? icon,
+    TextEditingController? controller,
     bool isPassword = false,
     bool? obscureText,
+    Key? inputKey,
     VoidCallback? onTogglePassword,
-    TextInputType? keyboardType,
-    TextInputAction? textInputAction,
-    Function(String)? onFieldSubmitted,
-    String? Function(String?)? validator,
   }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText ?? false,
-      keyboardType: keyboardType,
-      textInputAction: textInputAction,
-      onFieldSubmitted: onFieldSubmitted,
-      validator: validator,
-      style: GoogleFonts.inter(color: _primaryBlue, fontSize: 15),
-      decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: GoogleFonts.inter(color: Colors.grey[400], fontSize: 15),
-        prefixIcon: icon != null ? Icon(icon, color: Colors.grey[400], size: 20) : null,
-        filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: TextField(
+        key: inputKey,
+        controller: controller,
+        obscureText: obscureText ?? false,
+        style: GoogleFonts.inter(color: primaryBlue, fontSize: 15),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: GoogleFonts.inter(color: Colors.grey[400], fontSize: 15),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    obscureText! ? Icons.visibility_off : Icons.visibility,
+                    color: Colors.grey[400],
+                    size: 20,
+                  ),
+                  onPressed: onTogglePassword,
+                )
+              : null,
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFF1F5F9)),
+      ),
+    );
+  }
+
+  Widget _buildVerificationCard() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.verified_user_outlined,
+            color: Color(0xFFB45309),
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Peninsular applications start in pending sandbox mode. Sabah and Sarawak applications are routed to manual review.',
+              style: GoogleFonts.inter(
+                color: const Color(0xFF92400E),
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJurisdictionField() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedJurisdiction,
+          isExpanded: true,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: Colors.grey[500],
+          ),
+          style: GoogleFonts.inter(color: primaryBlue, fontSize: 15),
+          items: const [
+            DropdownMenuItem(
+              value: 'peninsular',
+              child: Text('Jurisdiction: Peninsular (Malaysian Bar)'),
+            ),
+            DropdownMenuItem(
+              value: 'sabah',
+              child: Text('Jurisdiction: Sabah Law Society'),
+            ),
+            DropdownMenuItem(
+              value: 'sarawak',
+              child: Text('Jurisdiction: Advocates Assoc. Sarawak'),
+            ),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() => selectedJurisdiction = value);
+          },
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _primaryBlue.withValues(alpha: 0.4)),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD32F2F)),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFD32F2F)),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        suffixIcon: isPassword
-            ? IconButton(
-                icon: Icon(
-                  obscureText! ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.grey[400],
-                  size: 20,
-                ),
-                onPressed: onTogglePassword,
-              )
-            : null,
       ),
     );
   }

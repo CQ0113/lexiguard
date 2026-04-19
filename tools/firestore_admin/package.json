@@ -1,0 +1,19 @@
+{
+  "name": "lexiguard-firestore-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Workspace-local Firestore admin tooling for LexiGuard",
+  "type": "commonjs",
+  "scripts": {
+    "fetch:user": "node manage_firestore.js fetch-user",
+    "fetch:doc": "node manage_firestore.js fetch-doc",
+    "fetch:url": "node manage_firestore.js fetch-url",
+    "backup": "node manage_firestore.js backup",
+    "flush": "node manage_firestore.js flush --yes",
+    "seed": "node manage_firestore.js seed --seed-file ./seed_data.json",
+    "flush-and-seed": "node manage_firestore.js flush-and-seed --seed-file ./seed_data.json --yes"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

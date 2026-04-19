@@ -1,1 +1,32 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"lexiguard-32c63","appId":"1:398456425469:android:f92734f15a08e7b86e2794","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"lexiguard-32c63","configurations":{"android":"1:398456425469:android:f92734f15a08e7b86e2794","ios":"1:398456425469:ios:6580b1dc03c52ebc6e2794","macos":"1:398456425469:ios:6580b1dc03c52ebc6e2794","web":"1:398456425469:web:76da0bd3462ff6746e2794","windows":"1:398456425469:web:c40ca24374b879e36e2794"}}}}}}
+{
+  "functions": {
+    "source": "functions"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "lexiguard-32c63",
+          "appId": "1:398456425469:android:f92734f15a08e7b86e2794",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "lexiguard-32c63",
+          "configurations": {
+            "android": "1:398456425469:android:f92734f15a08e7b86e2794",
+            "ios": "1:398456425469:ios:6580b1dc03c52ebc6e2794",
+            "macos": "1:398456425469:ios:6580b1dc03c52ebc6e2794",
+            "web": "1:398456425469:web:76da0bd3462ff6746e2794",
+            "windows": "1:398456425469:web:c40ca24374b879e36e2794"
+          }
+        }
+      }
+    }
+  }
+}
