@@ -1,0 +1,87 @@
+{
+  "users": [
+    {
+      "id": "test_client_ahmad",
+      "name": "Ahmad Razif",
+      "email": "ahmad.razif@example.com",
+      "phone": "+60123456789",
+      "role": "client",
+      "createdAt": "2026-04-19T00:00:00.000Z",
+      "updatedAt": "2026-04-19T00:00:00.000Z"
+    },
+    {
+      "id": "test_lawyer_aishah",
+      "name": "Pn. Aishah binti Kamal",
+      "email": "aishah.law@example.com",
+      "phone": "+60198765432",
+      "role": "lawyer",
+      "barNumber": "B/MY/09384",
+      "specialization": "Property Law",
+      "yearsExperience": 8,
+      "barCouncilVerified": true,
+      "verificationStatus": "auto_verified",
+      "verificationProvider": "malaysian_bar",
+      "verificationBadgeVisible": true,
+      "legalFullName": "Aishah binti Kamal",
+      "firmName": "Kamal & Partners",
+      "jurisdiction": "peninsular",
+      "practiceState": "Selangor",
+      "practiceCity": "Shah Alam",
+      "createdAt": "2026-04-19T00:00:00.000Z",
+      "updatedAt": "2026-04-19T00:00:00.000Z"
+    },
+    {
+      "id": "test_lawyer_faizal",
+      "name": "En. Faizal Ibrahim",
+      "email": "faizal.legal@example.com",
+      "phone": "+60112233445",
+      "role": "lawyer",
+      "barNumber": "B/MY/07251",
+      "specialization": "Criminal Law",
+      "yearsExperience": 12,
+      "barCouncilVerified": false,
+      "verificationStatus": "pending",
+      "verificationProvider": "malaysian_bar",
+      "verificationBadgeVisible": false,
+      "legalFullName": "Faizal Ibrahim",
+      "firmName": "Ibrahim Legal Chambers",
+      "jurisdiction": "peninsular",
+      "practiceState": "Kuala Lumpur",
+      "practiceCity": "Kuala Lumpur",
+      "createdAt": "2026-04-19T00:00:00.000Z",
+      "updatedAt": "2026-04-19T00:00:00.000Z"
+    }
+  ],
+  "lawyer_profiles": [
+    {
+      "id": "test_lawyer_aishah",
+      "uid": "test_lawyer_aishah",
+      "legalFullName": "Aishah binti Kamal",
+      "firmName": "Kamal & Partners",
+      "jurisdiction": "peninsular",
+      "practiceState": "Selangor",
+      "practiceCity": "Shah Alam",
+      "barOrRollNumber": "B/MY/09384",
+      "verificationStatus": "auto_verified",
+      "verificationProvider": "malaysian_bar",
+      "verificationBadgeVisible": true,
+      "createdAt": "2026-04-19T00:00:00.000Z",
+      "updatedAt": "2026-04-19T00:00:00.000Z"
+    },
+    {
+      "id": "test_lawyer_faizal",
+      "uid": "test_lawyer_faizal",
+      "legalFullName": "Faizal Ibrahim",
+      "firmName": "Ibrahim Legal Chambers",
+      "jurisdiction": "peninsular",
+      "practiceState": "Kuala Lumpur",
+      "practiceCity": "Kuala Lumpur",
+      "barOrRollNumber": "B/MY/07251",
+      "verificationStatus": "pending",
+      "verificationProvider": "malaysian_bar",
+      "verificationBadgeVisible": false,
+      "createdAt": "2026-04-19T00:00:00.000Z",
+      "updatedAt": "2026-04-19T00:00:00.000Z"
+    }
+  ]
+}
