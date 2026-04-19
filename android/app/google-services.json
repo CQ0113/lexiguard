@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "398456425469",
+    "firebase_url": "https://lexiguard-32c63-default-rtdb.asia-southeast1.firebasedatabase.app",
     "project_id": "lexiguard-32c63",
     "storage_bucket": "lexiguard-32c63.firebasestorage.app"
   },
@@ -12,7 +13,12 @@
           "package_name": "com.example.lexi_guard"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "398456425469-vu3tc7loivac3b8r7rjaur0gfnvjklfu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDl9R55zChTMVS0-4wQPxK-Z3rkp5PYkmk"
@@ -20,7 +26,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "398456425469-vu3tc7loivac3b8r7rjaur0gfnvjklfu.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "398456425469-v4060i1mchj507fsvtogllok79pkvn6s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.leiGuard"
+              }
+            }
+          ]
         }
       }
     }

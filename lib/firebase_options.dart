@@ -18,9 +18,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.windows:
       case TargetPlatform.linux:
       case TargetPlatform.fuchsia:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions are not supported for this platform.',
-        );
+        return windows;
     }
   }
 
@@ -30,33 +28,51 @@ class DefaultFirebaseOptions {
     messagingSenderId: '398456425469',
     projectId: 'lexiguard-32c63',
     authDomain: 'lexiguard-32c63.firebaseapp.com',
+    databaseURL: 'https://lexiguard-32c63-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'lexiguard-32c63.firebasestorage.app',
     measurementId: 'G-FQ38MDTXDE',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.firebasestorage.app',
+    apiKey: 'AIzaSyDl9R55zChTMVS0-4wQPxK-Z3rkp5PYkmk',
+    appId: '1:398456425469:android:f92734f15a08e7b86e2794',
+    messagingSenderId: '398456425469',
+    projectId: 'lexiguard-32c63',
+    databaseURL: 'https://lexiguard-32c63-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'lexiguard-32c63.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR_IOS_API_KEY',
-    appId: 'YOUR_IOS_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.firebasestorage.app',
-    iosBundleId: 'com.example.lexi_guard',
+    apiKey: 'AIzaSyBxNyFEkZIyKTOIZdDG5gLONvIo3RwHKP8',
+    appId: '1:398456425469:ios:6580b1dc03c52ebc6e2794',
+    messagingSenderId: '398456425469',
+    projectId: 'lexiguard-32c63',
+    databaseURL: 'https://lexiguard-32c63-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'lexiguard-32c63.firebasestorage.app',
+    iosClientId: '398456425469-v4060i1mchj507fsvtogllok79pkvn6s.apps.googleusercontent.com',
+    iosBundleId: 'com.example.leiGuard',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'YOUR_MACOS_API_KEY',
-    appId: 'YOUR_MACOS_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.firebasestorage.app',
-    iosBundleId: 'com.example.lexi_guard',
+    apiKey: 'AIzaSyBxNyFEkZIyKTOIZdDG5gLONvIo3RwHKP8',
+    appId: '1:398456425469:ios:6580b1dc03c52ebc6e2794',
+    messagingSenderId: '398456425469',
+    projectId: 'lexiguard-32c63',
+    databaseURL: 'https://lexiguard-32c63-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'lexiguard-32c63.firebasestorage.app',
+    iosClientId: '398456425469-v4060i1mchj507fsvtogllok79pkvn6s.apps.googleusercontent.com',
+    iosBundleId: 'com.example.leiGuard',
   );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyCRYXDbWcNAM4S3jxixlvnLnKegqQBxUW4',
+    appId: '1:398456425469:web:44d3ae362b41df2f6e2794',
+    messagingSenderId: '398456425469',
+    projectId: 'lexiguard-32c63',
+    authDomain: 'lexiguard-32c63.firebaseapp.com',
+    databaseURL: 'https://lexiguard-32c63-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'lexiguard-32c63.firebasestorage.app',
+    measurementId: 'G-RFKLC9VNHB',
+  );
+
 }
