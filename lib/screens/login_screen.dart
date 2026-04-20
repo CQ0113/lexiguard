@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../core/firebase/firebase_initializer.dart';
 import '../models/user_model.dart';
+import '../services/auth_service.dart';
 import '../services/firebase_auth_sync_service.dart';
 import 'client/client_dashboard_screen.dart';
 import 'lawyer/lawyer_dashboard_screen.dart';
@@ -34,7 +35,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final Color primaryBlue = const Color(0xFF0C1D36);
   final Color goldAccent = const Color(0xFFCFA92A);
   final FirebaseAuthSyncService _authSyncService = FirebaseAuthSyncService();
+  final AuthService _authService = AuthService();
   bool _isSubmitting = false;
+  bool _isGoogleSubmitting = false;
 
   bool get showLawyerVerificationFields {
     return !isLogin && selectedRole == 'Lawyer';
@@ -224,6 +227,48 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     }
   }
+
+  Future<void> _onGoogleSignIn() async {
+    if (_isGoogleSubmitting || _isSubmitting) return;
+
+    setState(() => _isGoogleSubmitting = true);
+
+    try {
+      if (!FirebaseInitializer.isReady) {
+        _showInputError('Firebase is not available. Please try again later.');
+        return;
+      }
+
+      final userModel = await _authService.signInWithGoogle(role: selectedRole);
+
+      if (!mounted) return;
+
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        _navigateFallback(
+          userModel.role,
+          userModel.role == UserRole.lawyer ? userModel : null,
+        );
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LiveDashboardRouterScreen(uid: currentUser.uid),
+        ),
+      );
+    } on AuthException catch (e) {
+      if (mounted) _showInputError(e.message);
+    } catch (e) {
+      // Show the actual exception message so we can diagnose the problem.
+      if (mounted) _showInputError(e.toString());
+    } finally {
+      if (mounted) setState(() => _isGoogleSubmitting = false);
+    }
+  }
+
+
 
   Future<void> _onSubmit() async {
     if (_isSubmitting) return;
@@ -605,7 +650,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Expanded(child: Divider(color: Colors.grey[200])),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
+                        _buildGoogleSignInButton(),
+                        const SizedBox(height: 32),
                       ],
                     ),
                   ),
@@ -776,4 +823,90 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
+  Widget _buildGoogleSignInButton() {
+    return OutlinedButton(
+      onPressed: (_isSubmitting || _isGoogleSubmitting) ? null : _onGoogleSignIn,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        side: BorderSide(color: Colors.grey[200]!, width: 1.5),
+        backgroundColor: Colors.white,
+        foregroundColor: primaryBlue,
+      ),
+      child: _isGoogleSubmitting
+          ? SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(primaryBlue),
+              ),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CustomPaint(painter: _GoogleGPainter()),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  isLogin ? 'Continue with Google' : 'Sign up with Google',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: primaryBlue,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _GoogleGPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final double cx = size.width / 2;
+    final double cy = size.height / 2;
+    final double r = size.width / 2;
+
+    // Draw coloured arc segments
+    final segments = [
+      (startAngle: -0.52, sweepAngle: 1.57, color: const Color(0xFF4285F4)), // blue
+      (startAngle: 1.05, sweepAngle: 1.57, color: const Color(0xFF34A853)), // green
+      (startAngle: 2.62, sweepAngle: 1.05, color: const Color(0xFFFBBC05)), // yellow
+      (startAngle: 3.67, sweepAngle: 1.05, color: const Color(0xFFEA4335)), // red
+    ];
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.18
+      ..strokeCap = StrokeCap.butt;
+
+    for (final seg in segments) {
+      paint.color = seg.color;
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.78),
+        seg.startAngle,
+        seg.sweepAngle,
+        false,
+        paint,
+      );
+    }
+
+    final barPaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawRect(
+      Rect.fromLTWH(cx, cy - size.height * 0.09, r * 0.82, size.height * 0.18),
+      barPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

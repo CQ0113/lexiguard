@@ -1,5 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_model.dart';
 import 'user_service.dart';
@@ -88,19 +88,18 @@ class AuthService {
     return userModel;
   }
 
-  /// Send password reset email.
   Future<void> sendPasswordResetEmail(String email) async {
     await _auth.sendPasswordResetEmail(email: email.trim());
   }
 
-  /// Sign in with Google
   Future<UserModel> signInWithGoogle({required String role}) async {
     UserCredential userCredential;
 
     try {
       if (kIsWeb) {
-        // On web, Firebase handles the popup cleanly without needing the separate API keys
         final googleProvider = GoogleAuthProvider();
+        googleProvider.addScope('email');
+        googleProvider.addScope('profile');
         userCredential = await _auth.signInWithPopup(googleProvider);
       } else {
         // On mobile, use standard google_sign_in package
@@ -111,7 +110,8 @@ class AuthService {
           throw const AuthException('Google sign in was cancelled.');
         }
 
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
         final AuthCredential credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
@@ -120,10 +120,18 @@ class AuthService {
         userCredential = await _auth.signInWithCredential(credential);
       }
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'popup-closed-by-user') {
+      debugPrint('[AuthService] FirebaseAuthException during Google sign-in: '
+          'code=${e.code} message=${e.message}');
+      if (e.code == 'popup-closed-by-user' ||
+          e.code == 'cancelled-popup-request') {
         throw const AuthException('Google sign in was cancelled.');
       }
-      throw AuthException(e.message ?? 'An error occurred during Google Sign In');
+      throw AuthException(
+        e.message ?? 'Firebase error during Google Sign In (code: ${e.code})',
+      );
+    } catch (e) {
+      debugPrint('[AuthService] Unexpected error during Google sign-in: $e');
+      throw AuthException('Unexpected error: $e');
     }
 
     final uid = userCredential.user!.uid;
@@ -132,7 +140,7 @@ class AuthService {
     final expectedRole = role == 'Client' ? UserRole.client : UserRole.lawyer;
 
     if (userModel == null) {
-      // First time logging in with Google. Seamlessly create the profile based on the selected role!
+      // First time logging in with Google — create profile for selected role.
       userModel = UserModel(
         id: uid,
         name: userCredential.user!.displayName ?? 'New User',
@@ -143,7 +151,7 @@ class AuthService {
       );
       await _userService.createUserDocument(userModel);
     } else {
-      // User document already exists. Verify role matches what they selected on login screen.
+      // User document already exists — verify role matches selection.
       if (userModel.role != expectedRole) {
         await signOut();
         final roleLabel = role == 'Client' ? 'Client' : 'Lawyer';

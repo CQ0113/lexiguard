@@ -5,6 +5,7 @@ import '../../models/user_model.dart';
 import '../../repositories/user_repository.dart';
 import '../client/client_dashboard_screen.dart';
 import '../lawyer/lawyer_dashboard_screen.dart';
+import '../lawyer/lawyer_verification_screen.dart';
 
 class LiveDashboardRouterScreen extends StatelessWidget {
   const LiveDashboardRouterScreen({super.key, required this.uid});
@@ -46,11 +47,19 @@ class LiveDashboardRouterScreen extends StatelessWidget {
           return ClientDashboardScreen(user: user);
         }
 
+        // Lawyers who registered via Google Sign-In (or any path that skipped
+        // the verification form) land here with verificationStatus = unsubmitted.
+        // Send them to the completion screen before granting dashboard access.
+        if (user.verificationStatus == VerificationStatus.unsubmitted) {
+          return LawyerVerificationScreen(user: user);
+        }
+
         return LawyerDashboardScreen(user: user);
       },
     );
   }
 }
+
 
 class _RouterStatusView extends StatelessWidget {
   const _RouterStatusView({
