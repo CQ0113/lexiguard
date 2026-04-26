@@ -125,7 +125,7 @@ class _LawyerVerificationScreenState extends State<LawyerVerificationScreen> {
         firmName: _firmNameController.text.trim(),
         jurisdiction: _jurisdiction,
         practiceState: _practiceStateController.text.trim(),
-        practiceCity: _practicyCityController.text.trim(),
+        practiceCity: _practiceCityController.text.trim(),
       );
 
       // 1. Update the users document with full verification info
@@ -475,6 +475,4 @@ class _LawyerVerificationScreenState extends State<LawyerVerificationScreen> {
     );
   }
 
-  // Typo-safe alias used in _submit
-  TextEditingController get _practicyCityController => _practiceCityController;
 }
