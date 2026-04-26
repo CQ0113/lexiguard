@@ -72,8 +72,13 @@ class FirebaseAuthSyncService {
           lawyerProfile: lawyerProfile,
         );
       }
+    } on FirebaseAuthException {
+      // Always re-throw auth credential errors (wrong password, invalid email,
+      // user-not-found, etc.) so the UI can show the correct error message.
+      rethrow;
     } catch (error) {
-      // Keep UX uninterrupted while backend wiring is being finalized.
+      // Only swallow non-auth errors (e.g. Firestore writes, Functions calls)
+      // so that backend wiring issues don't block the user from signing in.
       debugPrint('Firebase sync skipped: $error');
     }
     return (adapterFailed: false);
