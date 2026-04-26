@@ -8,6 +8,7 @@ import '../../models/user_model.dart';
 import '../login_screen.dart';
 import '../shared/post_case_screen.dart';
 import '../shared/case_detail_screen.dart';
+import '../shared/vault_tab_router_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT SHELL — matches MobileShell + all client screens from Figma
@@ -48,6 +49,19 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       if (result != null) setState(() {});
       return;
     }
+
+    if (idx == 3) {
+      if (idx == 3) {
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => VaultTabRouterScreen(user: widget.user),
+          ),
+        );
+        return;
+      }
+    }
+
+
     setState(() => _currentTab = idx);
   }
 
