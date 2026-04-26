@@ -6,93 +6,114 @@ import '../../models/vault_document_model.dart';
 
 class VaultDocumentTileWidget extends StatelessWidget {
   final VaultDocumentModel document;
-  final bool canDelete;
-  final VoidCallback? onDelete;
+  final VoidCallback onTap;
+  final Widget? trailing; 
+  final String? extraSubtitle;
 
   const VaultDocumentTileWidget({
     super.key,
     required this.document,
-    required this.canDelete,
-    this.onDelete,
+    required this.onTap,
+    this.trailing,
+    this.extraSubtitle,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Format date like "28 Mar 2026"
     final createdLabel = document.createdAt == null
-        ? 'Pending timestamp'
-        : DateFormat('dd MMM yyyy, h:mm a').format(document.createdAt!);
-    final sizeKb = document.sizeBytes == null
-        ? null
-        : (document.sizeBytes! / 1024).toStringAsFixed(1);
+        ? 'Pending'
+        : DateFormat('dd MMM yyyy').format(document.createdAt!);
+    
+    // Format size into MB or KB
+    String sizeLabel = '';
+    if (document.sizeBytes != null) {
+      if (document.sizeBytes! >= 1024 * 1024) {
+        sizeLabel = '${(document.sizeBytes! / (1024 * 1024)).toStringAsFixed(1)} MB';
+      } else {
+        sizeLabel = '${(document.sizeBytes! / 1024).toStringAsFixed(0)} KB';
+      }
+    }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.description_outlined,
-              color: Color(0xFF0B2447),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  document.fileName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                    color: const Color(0xFF111827),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  'Uploaded: $createdLabel',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: const Color(0xFF6B7280),
-                  ),
-                ),
-                if (sizeKb != null)
-                  Text(
-                    'Size: $sizeKb KB',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: const Color(0xFF6B7280),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (canDelete)
-            IconButton(
-              onPressed: onDelete,
-              tooltip: 'Delete file',
-              icon: const Icon(
-                Icons.delete_outline_rounded,
-                color: Color(0xFFB91C1C),
+    final isImage = document.fileName.toLowerCase().endsWith('.png') || 
+                    document.fileName.toLowerCase().endsWith('.jpg') || 
+                    document.fileName.toLowerCase().endsWith('.jpeg');
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            )
+          ],
+          border: Border.all(color: const Color(0xFFF1F5F9)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                isImage ? Icons.image_outlined : Icons.description_outlined,
+                color: const Color(0xFF0B2447),
+                size: 24,
               ),
             ),
-        ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    document.fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${sizeLabel.isNotEmpty ? "$sizeLabel  •  " : ""}$createdLabel',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: const Color(0xFF64748B),
+                    ),
+                  ),
+                  if (extraSubtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      extraSubtitle!,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: const Color(0xFF94A3B8),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (trailing != null) trailing!,
+          ],
+        ),
       ),
     );
   }
