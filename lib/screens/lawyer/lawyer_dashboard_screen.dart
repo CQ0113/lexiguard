@@ -8,6 +8,7 @@ import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../login_screen.dart';
 import '../shared/case_detail_screen.dart';
+import '../shared/vault_tab_router_screen.dart';
 import 'reviewer_console_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,6 +45,20 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
 
   bool _isTabLocked(int index) {
     return !_isVerifiedLawyer && index > 0 && index != _profileTabIndex;
+  }
+
+  Future<void> _onTabTap(int index) async {
+    // Docs/Vault tab for verified lawyer opens dedicated Vault screen.
+    if (_isVerifiedLawyer && index == 4) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => VaultTabRouterScreen(user: widget.user),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _currentTab = index);
   }
 
   List<Widget> get _verifiedTabs {
@@ -164,7 +179,7 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
               final active = _currentTab == i;
               return Expanded(
                 child: GestureDetector(
-                  onTap: () => setState(() => _currentTab = i),
+                  onTap: () => _onTabTap(i),
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),

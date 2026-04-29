@@ -8,6 +8,7 @@ import '../../models/user_model.dart';
 import '../login_screen.dart';
 import '../shared/post_case_screen.dart';
 import '../shared/case_detail_screen.dart';
+import '../shared/vault_tab_router_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT SHELL — matches MobileShell + all client screens from Figma
@@ -27,7 +28,7 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
 
   int _currentTab = 0;
 
-  // Bottom nav tabs (from mobile-shell.tsx clientTabs)
+  // Bottom nav tabs (following your exact 6 tabs)
   static const _tabs = [
     _Tab(Icons.grid_view_rounded, 'Home'),
     _Tab(Icons.add_circle_outline_rounded, 'Post Case'),
@@ -48,6 +49,8 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       if (result != null) setState(() {});
       return;
     }
+
+    // Switched to internal tab navigation instead of Navigator.push
     setState(() => _currentTab = idx);
   }
 
@@ -142,13 +145,15 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       ),
       // ── Body ─────────────────────────────────────────────────────────────
       body: IndexedStack(
+        // The math maps the bottom nav index to the list of 5 screens below 
+        // (skipping index 1 because Post Case is a push overlay)
         index: _currentTab <= 1 ? 0 : _currentTab - 1,
         children: [
-          _ClientHomeTab(user: widget.user),
-          _PlaceholderTab('Chat', Icons.chat_bubble_outline_rounded),
-          _PlaceholderTab('Vault', Icons.folder_outlined),
-          _PlaceholderTab('Sign', Icons.edit_document),
-          _ClientProfileTab(user: widget.user),
+          _ClientHomeTab(user: widget.user),                                  // Maps to index 0 (Home)
+          _PlaceholderTab('Chat', Icons.chat_bubble_outline_rounded),         // Maps to index 2 (Chat)
+          VaultTabRouterScreen(user: widget.user),                            // Maps to index 3 (Vault)
+          _PlaceholderTab('Sign', Icons.edit_document),                       // Maps to index 4 (Sign)
+          _ClientProfileTab(user: widget.user),                               // Maps to index 5 (Profile)
         ],
       ),
       // ── Bottom nav (from mobile-shell.tsx) ───────────────────────────────
