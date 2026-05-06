@@ -111,7 +111,7 @@ class VaultDocumentTileWidget extends StatelessWidget {
                 ],
               ),
             ),
-            if (trailing != null) trailing!,
+            ?trailing,
           ],
         ),
       ),

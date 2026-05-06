@@ -8,6 +8,7 @@ import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../login_screen.dart';
 import '../shared/case_detail_screen.dart';
+import '../shared/profile_screen.dart';
 import '../shared/vault_tab_router_screen.dart';
 import 'reviewer_console_screen.dart';
 
@@ -68,7 +69,7 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
       _PlaceholderTab('Chat', Icons.chat_bubble_outline_rounded),
       _PlaceholderTab('Forms', Icons.description_outlined),
       _PlaceholderTab('Docs', Icons.folder_outlined),
-      _LawyerProfileTab(user: widget.user),
+      ProfileScreen(user: widget.user, embedded: true),
     ];
   }
 
@@ -79,7 +80,7 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
       _VerificationLockedTab(user: widget.user),
       _VerificationLockedTab(user: widget.user),
       _VerificationLockedTab(user: widget.user),
-      _LawyerProfileTab(user: widget.user),
+      ProfileScreen(user: widget.user, embedded: true),
     ];
   }
 
@@ -1653,7 +1654,10 @@ class _VerificationStatusTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _profileRow('Specialization', user.specialization ?? 'Not provided'),
+                _profileRow(
+                  'Specialization',
+                  user.specialization ?? 'Not provided',
+                ),
                 const SizedBox(height: 8),
                 _profileRow('Experience', _displayExperience()),
                 const SizedBox(height: 8),
@@ -1827,6 +1831,7 @@ class _VerificationLockedTab extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _LawyerProfileTab extends StatelessWidget {
   final UserModel user;
   const _LawyerProfileTab({required this.user});
@@ -1956,7 +1961,10 @@ class _LawyerProfileTab extends StatelessWidget {
               const SizedBox(height: 8),
               _profileRow('Firm', user.firmName ?? 'Not provided'),
               const SizedBox(height: 8),
-              _profileRow('Specialization', user.specialization ?? 'Not provided'),
+              _profileRow(
+                'Specialization',
+                user.specialization ?? 'Not provided',
+              ),
               const SizedBox(height: 8),
               _profileRow('Experience', _displayExperience()),
               const SizedBox(height: 8),

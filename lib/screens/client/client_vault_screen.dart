@@ -53,7 +53,7 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
   Future<void> _openDocument(VaultDocumentModel document) async {
     final urlString = document.downloadUrl;
     
-    if (urlString == null || urlString.isEmpty) {
+    if (urlString.isEmpty) {
       _showSnack('File link is not available.');
       return;
     }
