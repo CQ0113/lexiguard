@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
+import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../../repositories/case_repository.dart';
 import '../login_screen.dart';
 import '../shared/post_case_screen.dart';
 import '../shared/case_detail_screen.dart';
@@ -249,6 +252,7 @@ class _ClientHomeTab extends StatefulWidget {
 class _ClientHomeTabState extends State<_ClientHomeTab> {
   static const _navy = Color(0xFF0B2447);
   static const _gold = Color(0xFFD4AF37);
+  final CaseRepository _caseRepository = CaseRepository();
 
   // Pending requests count (simulated from connection-context)
   final int _pendingCount = 2;
@@ -296,6 +300,62 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     ...DummyData.openCases.where((c) => c.clientId == widget.user.id),
   ];
 
+  List<CaseModel> _mergeCases(
+    List<CaseModel> primaryCases,
+    List<CaseModel> fallbackCases,
+  ) {
+    final merged = <String, CaseModel>{};
+
+    for (final caseModel in fallbackCases) {
+      merged[caseModel.id] = caseModel;
+    }
+
+    for (final caseModel in primaryCases) {
+      merged[caseModel.id] = caseModel;
+    }
+
+    final cases = merged.values.toList();
+    cases.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    return cases;
+  }
+
+  bool get _canUseFirestoreCases {
+    if (!FirebaseInitializer.isReady) return false;
+    return FirebaseAuth.instance.currentUser?.uid == widget.user.id;
+  }
+
+  CaseModel? _activeCaseFrom(List<CaseModel> cases) {
+    for (final caseModel in cases) {
+      if (caseModel.status == CaseStatus.active) {
+        return caseModel;
+      }
+    }
+    return null;
+  }
+
+  String _lawyerLabelFor(CaseModel caseModel) {
+    if (caseModel.lawyerId == null || caseModel.lawyerId!.isEmpty) {
+      return 'Lawyer: Awaiting assignment';
+    }
+
+    try {
+      final lawyer = DummyData.users.firstWhere(
+        (u) => u.id == caseModel.lawyerId,
+      );
+      return 'Lawyer: ${lawyer.name}';
+    } catch (_) {
+      return 'Lawyer assigned';
+    }
+  }
+
+  String _hearingLabelFor(CaseModel caseModel) {
+    if (caseModel.nextHearing == null) {
+      return 'Next hearing: To be scheduled';
+    }
+
+    return 'Next hearing: ${DateFormat('d MMMM yyyy').format(caseModel.nextHearing!)}';
+  }
+
   Future<void> _openPostCase() async {
     final result = await Navigator.of(context).push<CaseModel>(
       MaterialPageRoute(builder: (_) => PostCaseScreen(poster: widget.user)),
@@ -305,8 +365,31 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    final activeCase = _activeCase;
+    if (!_canUseFirestoreCases) {
+      return _buildContent(myCases: _myCases, activeCase: _activeCase);
+    }
 
+    return StreamBuilder<List<CaseModel>>(
+      stream: _caseRepository.streamClientCases(clientId: widget.user.id),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _buildContent(myCases: _myCases, activeCase: _activeCase);
+        }
+
+        final myCases = _mergeCases(
+          snapshot.data ?? const <CaseModel>[],
+          _myCases,
+        );
+        final activeCase = _activeCaseFrom(myCases);
+        return _buildContent(myCases: myCases, activeCase: activeCase);
+      },
+    );
+  }
+
+  Widget _buildContent({
+    required List<CaseModel> myCases,
+    required CaseModel? activeCase,
+  }) {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
       child: Column(
@@ -513,7 +596,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                     ),
                   ),
                   Text(
-                    'Lawyer: Pn. Aishah binti Kamal',
+                    _lawyerLabelFor(activeCase),
                     style: GoogleFonts.inter(
                       color: Colors.white60,
                       fontSize: 12,
@@ -549,7 +632,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Next hearing: 15 April 2026',
+                    _hearingLabelFor(activeCase),
                     style: GoogleFonts.inter(
                       color: Colors.white38,
                       fontSize: 11,
@@ -628,7 +711,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           ..._activities.map((item) => _activityCard(item)),
 
           // ── My Cases ─────────────────────────────────────────────────────
-          if (_myCases.isNotEmpty) ...[
+          if (myCases.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -652,7 +735,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
               ],
             ),
             const SizedBox(height: 12),
-            ..._myCases.take(3).map((c) => _caseCard(c)),
+            ...myCases.take(3).map((c) => _caseCard(c)),
           ],
         ],
       ),

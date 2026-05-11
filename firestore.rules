@@ -34,6 +34,38 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /cases/{caseId} {
+      allow read: if isSignedIn() &&
+          (resource.data.clientId == request.auth.uid ||
+              resource.data.lawyerId == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+          request.resource.data.clientId == request.auth.uid &&
+          request.resource.data.title is string &&
+          request.resource.data.description is string &&
+          request.resource.data.category is string &&
+          request.resource.data.status is string &&
+          request.resource.data.status in ['pending', 'active', 'closed'] &&
+          request.resource.data.urgency is string &&
+          request.resource.data.progressPercent is number &&
+          request.resource.data.createdAt is timestamp &&
+          request.resource.data.interestedLawyerIds is list &&
+          (!('lawyerId' in request.resource.data) ||
+              request.resource.data.lawyerId == null ||
+              request.resource.data.lawyerId is string) &&
+          (!('nextHearing' in request.resource.data) ||
+              request.resource.data.nextHearing == null ||
+              request.resource.data.nextHearing is timestamp);
+
+      allow update: if isSignedIn() &&
+          (resource.data.clientId == request.auth.uid ||
+              resource.data.lawyerId == request.auth.uid) &&
+          request.resource.data.clientId == resource.data.clientId &&
+          request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if false;
+    }
+
     match /vault_documents/{docId} {
       allow read: if isSignedIn() &&
           (resource.data.ownerUserId == request.auth.uid ||

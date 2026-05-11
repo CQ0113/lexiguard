@@ -40,6 +40,31 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   bool get _hasExpressedInterest =>
       _case.interestedLawyerIds.contains(widget.viewer.id);
 
+  UserModel _resolveClientUser() {
+    try {
+      return DummyData.users.firstWhere((u) => u.id == _case.clientId);
+    } catch (_) {
+      if (widget.viewer.role == UserRole.client &&
+          widget.viewer.id == _case.clientId) {
+        return widget.viewer;
+      }
+      return DummyData.users.first;
+    }
+  }
+
+  String _assignedLawyerLabel() {
+    final lawyerId = _case.lawyerId;
+    if (lawyerId == null || lawyerId.isEmpty) {
+      return 'Awaiting assignment';
+    }
+
+    try {
+      return DummyData.users.firstWhere((u) => u.id == lawyerId).name;
+    } catch (_) {
+      return 'Assigned lawyer';
+    }
+  }
+
   // ── Express / withdraw interest ──────────────────────────────────────────
   Future<void> _toggleInterest() async {
     setState(() => _isLoadingInterest = true);
@@ -330,10 +355,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
 
   // ── Details Card ─────────────────────────────────────────────────────────
   Widget _buildDetailsCard() {
-    final clientUser = DummyData.users.firstWhere(
-      (u) => u.id == _case.clientId,
-      orElse: () => DummyData.users.first,
-    );
+    final clientUser = _resolveClientUser();
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,12 +385,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             _detailRow(
               Icons.balance_outlined,
               'Assigned Lawyer',
-              DummyData.users
-                  .firstWhere(
-                    (u) => u.id == _case.lawyerId,
-                    orElse: () => DummyData.users.first,
-                  )
-                  .name,
+              _assignedLawyerLabel(),
               valueColor: const Color(0xFF2E7D32),
             ),
           ],

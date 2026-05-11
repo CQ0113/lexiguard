@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../../repositories/case_repository.dart';
 
 // Exact replica of the Figma-exported post-case.tsx
 // Design: #0B2447 navy, #D4AF37 gold, white cards, gray-50 bg
@@ -66,6 +69,7 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
   String _budget = 'RM 200 - 400/hr';
   List<String> _files = [];
   bool _submitting = false;
+  final CaseRepository _caseRepository = CaseRepository();
 
   @override
   void dispose() {
@@ -79,6 +83,11 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       _category.isNotEmpty &&
       _descCtrl.text.trim().isNotEmpty &&
       _locationIdx >= 0;
+
+  bool get _canUseFirestore {
+    if (!FirebaseInitializer.isReady) return false;
+    return FirebaseAuth.instance.currentUser?.uid == widget.poster.id;
+  }
 
   void _addFile() {
     const mockFiles = [
@@ -106,7 +115,8 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       cat = CaseCategory.family;
     } else if (_category.contains('Criminal')) {
       cat = CaseCategory.criminal;
-    } else if (_category.contains('Corporate') || _category.contains('Banking')) {
+    } else if (_category.contains('Corporate') ||
+        _category.contains('Banking')) {
       cat = CaseCategory.commercial;
     } else if (_category.contains('Employment')) {
       cat = CaseCategory.employment;
@@ -137,7 +147,22 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       interestedLawyerIds: [],
     );
 
-    DummyData.openCases.insert(0, newCase);
+    var storedInFirestore = false;
+    if (_canUseFirestore) {
+      try {
+        await _caseRepository.createCase(newCase);
+        storedInFirestore = true;
+      } catch (_) {
+        // Keep the demo-friendly local flow when Firestore is unavailable.
+      }
+    }
+
+    if (!storedInFirestore) {
+      DummyData.openCases.insert(0, newCase);
+    }
+
+    // TODO: Persist location, budget, and attachment metadata when the case
+    // model is expanded beyond the low-risk Sprint 1 scope.
 
     if (mounted) {
       setState(() => _submitting = false);
@@ -168,10 +193,7 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
               const SizedBox(height: 4),
               Text(
                 "Describe your legal concern and we'll match you with the best lawyers nearby.",
-                style: GoogleFonts.inter(
-                  color: Colors.grey[500],
-                  fontSize: 13,
-                ),
+                style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
               ),
               const SizedBox(height: 20),
 
@@ -193,21 +215,31 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                         color: _gold.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.auto_awesome,
-                          color: _gold, size: 20),
+                      child: const Icon(
+                        Icons.auto_awesome,
+                        color: _gold,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Smart Matching',
-                            style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600)),
-                        Text('AI matches by distance + specialization proficiency',
-                            style: GoogleFonts.inter(
-                                color: Colors.white60, fontSize: 11)),
+                        Text(
+                          'Smart Matching',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          'AI matches by distance + specialization proficiency',
+                          style: GoogleFonts.inter(
+                            color: Colors.white60,
+                            fontSize: 11,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -240,7 +272,9 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                 child: Text(
                   '${_descCtrl.text.length}/500',
                   style: GoogleFonts.inter(
-                      color: Colors.grey[400], fontSize: 11),
+                    color: Colors.grey[400],
+                    fontSize: 11,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -248,14 +282,20 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
               // Location label with MapPin
               Row(
                 children: [
-                  const Icon(Icons.location_on_outlined,
-                      size: 14, color: _navy),
+                  const Icon(
+                    Icons.location_on_outlined,
+                    size: 14,
+                    color: _navy,
+                  ),
                   const SizedBox(width: 4),
-                  Text('Your Location *',
-                      style: GoogleFonts.inter(
-                          color: _navy,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
+                  Text(
+                    'Your Location *',
+                    style: GoogleFonts.inter(
+                      color: _navy,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -263,8 +303,8 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                 value: _locationIdx >= 0 ? _locations[_locationIdx] : null,
                 hint: 'Select your area...',
                 items: _locations,
-                onChanged: (v) => setState(
-                    () => _locationIdx = _locations.indexOf(v ?? '')),
+                onChanged: (v) =>
+                    setState(() => _locationIdx = _locations.indexOf(v ?? '')),
               ),
               const SizedBox(height: 16),
 
@@ -297,8 +337,11 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline,
-                        color: Color(0xFF3B82F6), size: 16),
+                    const Icon(
+                      Icons.info_outline,
+                      color: Color(0xFF3B82F6),
+                      size: 16,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -322,8 +365,9 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                 child: ElevatedButton(
                   onPressed: (_isValid && !_submitting) ? _handleSubmit : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        (_isValid && !_submitting) ? _gold : Colors.grey[200],
+                    backgroundColor: (_isValid && !_submitting)
+                        ? _gold
+                        : Colors.grey[200],
                     disabledBackgroundColor: Colors.grey[200],
                     foregroundColor: _navy,
                     disabledForegroundColor: Colors.grey[400],
@@ -343,14 +387,18 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                    _navy.withValues(alpha: 0.5)),
+                                  _navy.withValues(alpha: 0.5),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 10),
-                            Text('Finding best lawyers...',
-                                style: GoogleFonts.inter(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600)),
+                            Text(
+                              'Finding best lawyers...',
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         )
                       : Row(
@@ -358,10 +406,13 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                           children: [
                             const Icon(Icons.auto_awesome, size: 20),
                             const SizedBox(width: 8),
-                            Text('Submit & Find Lawyers',
-                                style: GoogleFonts.inter(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600)),
+                            Text(
+                              'Submit & Find Lawyers',
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ],
                         ),
                 ),
@@ -378,11 +429,14 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
   Widget _buildFieldLabel(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(label,
-          style: GoogleFonts.inter(
-              color: const Color(0xFF0B2447),
-              fontSize: 13,
-              fontWeight: FontWeight.w600)),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(
+          color: const Color(0xFF0B2447),
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 
@@ -396,12 +450,13 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle:
-            GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
+        hintStyle: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
         filled: true,
         fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -428,13 +483,14 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       decoration: InputDecoration(
         hintText:
             "Provide details about your legal issue, timeline, and what outcome you're hoping for...",
-        hintStyle:
-            GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
+        hintStyle: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
         filled: true,
         fillColor: Colors.white,
         counterText: '',
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -468,20 +524,26 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
           value: value,
           hint: Padding(
             padding: const EdgeInsets.only(left: 16),
-            child: Text(hint,
-                style: GoogleFonts.inter(
-                    color: Colors.grey[400], fontSize: 13)),
+            child: Text(
+              hint,
+              style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
+            ),
           ),
           isExpanded: true,
           icon: Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: Icon(Icons.keyboard_arrow_down,
-                color: Colors.grey[400], size: 20),
+            child: Icon(
+              Icons.keyboard_arrow_down,
+              color: Colors.grey[400],
+              size: 20,
+            ),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           borderRadius: BorderRadius.circular(12),
           style: GoogleFonts.inter(
-              color: const Color(0xFF0B2447), fontSize: 13),
+            color: const Color(0xFF0B2447),
+            fontSize: 13,
+          ),
           items: items
               .map((i) => DropdownMenuItem(value: i, child: Text(i)))
               .toList(),
@@ -519,12 +581,14 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                   ),
                 ),
                 child: Center(
-                  child: Text(label,
-                      style: GoogleFonts.inter(
-                        color: isActive ? activeColor : Colors.grey[500],
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      )),
+                  child: Text(
+                    label,
+                    style: GoogleFonts.inter(
+                      color: isActive ? activeColor : Colors.grey[500],
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -545,17 +609,22 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.description_outlined,
-              color: Color(0xFF0B2447), size: 16),
+          const Icon(
+            Icons.description_outlined,
+            color: Color(0xFF0B2447),
+            size: 16,
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(filename,
-                style: GoogleFonts.inter(
-                    color: Colors.grey[700], fontSize: 12)),
+            child: Text(
+              filename,
+              style: GoogleFonts.inter(color: Colors.grey[700], fontSize: 12),
+            ),
           ),
           GestureDetector(
-            onTap: () =>
-                setState(() => _files = _files.where((f) => f != filename).toList()),
+            onTap: () => setState(
+              () => _files = _files.where((f) => f != filename).toList(),
+            ),
             child: Icon(Icons.close, color: Colors.grey[400], size: 16),
           ),
         ],
@@ -571,7 +640,10 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           border: Border.all(
-              color: const Color(0xFFE5E7EB), style: BorderStyle.solid, width: 2),
+            color: const Color(0xFFE5E7EB),
+            style: BorderStyle.solid,
+            width: 2,
+          ),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -579,9 +651,10 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
           children: [
             Icon(Icons.attach_file, color: Colors.grey[400], size: 16),
             const SizedBox(width: 6),
-            Text('Attach documents (PDF, JPG, PNG)',
-                style: GoogleFonts.inter(
-                    color: Colors.grey[400], fontSize: 13)),
+            Text(
+              'Attach documents (PDF, JPG, PNG)',
+              style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
+            ),
           ],
         ),
       ),
