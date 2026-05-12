@@ -84,6 +84,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       lawyerId: _case.lawyerId,
       title: _case.title,
       description: _case.description,
+      location: _case.location,
+      budgetRange: _case.budgetRange,
       category: _case.category,
       status: _case.status,
       urgency: _case.urgency,
@@ -91,6 +93,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       nextHearing: _case.nextHearing,
       createdAt: _case.createdAt,
       interestedLawyerIds: updatedIds,
+      attachments: _case.attachments,
     );
 
     // Persist into global dummy store
@@ -151,6 +154,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   const SizedBox(height: 20),
                   _buildDetailsCard(),
                   const SizedBox(height: 20),
+                  if (_case.attachments.isNotEmpty) _buildAttachmentsCard(),
+                  if (_case.attachments.isNotEmpty) const SizedBox(height: 20),
                   if (_isLawyer) _buildInterestedLawyersSection(),
                   if (!_isLawyer) _buildInterestedLawyersSection(),
                   const SizedBox(height: 20),
@@ -365,6 +370,18 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
           _detailRow(Icons.person_outline, 'Client', clientUser.name),
           _divider(),
           _detailRow(Icons.label_outline, 'Category', _case.categoryLabel),
+          if (_case.location != null && _case.location!.isNotEmpty) ...[
+            _divider(),
+            _detailRow(Icons.location_on_outlined, 'Location', _case.location!),
+          ],
+          if (_case.budgetRange != null && _case.budgetRange!.isNotEmpty) ...[
+            _divider(),
+            _detailRow(
+              Icons.payments_outlined,
+              'Budget',
+              _case.budgetRange!,
+            ),
+          ],
           _divider(),
           _detailRow(
             Icons.calendar_today_outlined,
@@ -388,6 +405,48 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
               _assignedLawyerLabel(),
               valueColor: const Color(0xFF2E7D32),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttachmentsCard() {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _cardHeader(Icons.attach_file, 'Attachments'),
+          const SizedBox(height: 12),
+          for (final attachment in _case.attachments) ...[
+            Row(
+              children: [
+                const Icon(
+                  Icons.description_outlined,
+                  color: _navy,
+                  size: 16,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    attachment.fileName,
+                    style: GoogleFonts.inter(
+                      color: Colors.grey[700],
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Text(
+                  _formatFileSize(attachment.sizeBytes),
+                  style: GoogleFonts.inter(
+                    color: Colors.grey[400],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            if (attachment != _case.attachments.last) _divider(),
           ],
         ],
       ),
@@ -715,12 +774,15 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
           ),
           const Spacer(),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              color: valueColor ?? _navy,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: GoogleFonts.inter(
+                color: valueColor ?? _navy,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
             ),
           ),
         ],
@@ -730,6 +792,14 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
 
   Widget _divider() =>
       Divider(color: Colors.grey[100], height: 1, thickness: 1);
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    final kb = bytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    final mb = kb / 1024;
+    return '${mb.toStringAsFixed(1)} MB';
+  }
 
   Widget _chip(String label, Color color) {
     return Container(

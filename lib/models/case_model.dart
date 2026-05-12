@@ -9,12 +9,72 @@ enum CaseUrgency { low, medium, high }
 
 enum CaseCategory { property, family, criminal, commercial, employment, other }
 
+class CaseAttachment {
+  final String id;
+  final String fileName;
+  final String downloadUrl;
+  final String storagePath;
+  final int sizeBytes;
+  final String? contentType;
+  final DateTime uploadedAt;
+
+  const CaseAttachment({
+    required this.id,
+    required this.fileName,
+    required this.downloadUrl,
+    required this.storagePath,
+    required this.sizeBytes,
+    this.contentType,
+    required this.uploadedAt,
+  });
+
+  factory CaseAttachment.fromMap(Map<String, dynamic> map) {
+    return CaseAttachment(
+      id: map['id']?.toString() ?? '',
+      fileName: map['fileName']?.toString() ?? '',
+      downloadUrl: map['downloadUrl']?.toString() ?? '',
+      storagePath: map['storagePath']?.toString() ?? '',
+      sizeBytes: (map['sizeBytes'] as num?)?.toInt() ?? 0,
+      contentType: map['contentType']?.toString(),
+      uploadedAt:
+          CaseModel._readDateTime(map['uploadedAt']) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'id': id,
+      'fileName': fileName,
+      'downloadUrl': downloadUrl,
+      'storagePath': storagePath,
+      'sizeBytes': sizeBytes,
+      'contentType': contentType,
+      'uploadedAt': Timestamp.fromDate(uploadedAt),
+    };
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'fileName': fileName,
+      'downloadUrl': downloadUrl,
+      'storagePath': storagePath,
+      'sizeBytes': sizeBytes,
+      'contentType': contentType,
+      'uploadedAt': uploadedAt.toIso8601String(),
+    };
+  }
+}
+
 class CaseModel {
   final String id;
   final String clientId;
   final String? lawyerId;
   final String title;
   final String description;
+  final String? location;
+  final String? budgetRange;
   final CaseCategory category;
   final CaseStatus status;
   final CaseUrgency urgency;
@@ -22,6 +82,7 @@ class CaseModel {
   final DateTime? nextHearing;
   final DateTime createdAt;
   final List<String> interestedLawyerIds;
+  final List<CaseAttachment> attachments;
 
   const CaseModel({
     required this.id,
@@ -29,6 +90,8 @@ class CaseModel {
     this.lawyerId,
     required this.title,
     required this.description,
+    this.location,
+    this.budgetRange,
     required this.category,
     required this.status,
     required this.urgency,
@@ -36,6 +99,7 @@ class CaseModel {
     this.nextHearing,
     required this.createdAt,
     this.interestedLawyerIds = const [],
+    this.attachments = const [],
   });
 
   factory CaseModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -57,6 +121,8 @@ class CaseModel {
       lawyerId: map['lawyerId'] as String?,
       title: map['title']?.toString() ?? '',
       description: map['description']?.toString() ?? '',
+      location: map['location']?.toString(),
+      budgetRange: map['budgetRange']?.toString(),
       category: CaseCategory.values.firstWhere(
         (e) => e.name == map['category']?.toString(),
         orElse: () => CaseCategory.other,
@@ -77,6 +143,7 @@ class CaseModel {
       interestedLawyerIds: List<String>.from(
         map['interestedLawyerIds'] as List? ?? [],
       ),
+      attachments: _readAttachments(map['attachments']),
     );
   }
 
@@ -87,6 +154,8 @@ class CaseModel {
       'lawyerId': lawyerId,
       'title': title,
       'description': description,
+      'location': location,
+      'budgetRange': budgetRange,
       'category': category.name,
       'status': status.name,
       'urgency': urgency.name,
@@ -96,6 +165,7 @@ class CaseModel {
           : Timestamp.fromDate(nextHearing!),
       'createdAt': Timestamp.fromDate(createdAt),
       'interestedLawyerIds': interestedLawyerIds,
+      'attachments': attachments.map((item) => item.toFirestore()).toList(),
     };
   }
 
@@ -106,6 +176,8 @@ class CaseModel {
       'lawyerId': lawyerId,
       'title': title,
       'description': description,
+      'location': location,
+      'budgetRange': budgetRange,
       'category': category.name,
       'status': status.name,
       'urgency': urgency.name,
@@ -113,7 +185,16 @@ class CaseModel {
       'nextHearing': nextHearing?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
       'interestedLawyerIds': interestedLawyerIds,
+      'attachments': attachments.map((item) => item.toMap()).toList(),
     };
+  }
+
+  static List<CaseAttachment> _readAttachments(dynamic value) {
+    if (value is! List) return const [];
+
+    return value.whereType<Map>().map((item) {
+      return CaseAttachment.fromMap(Map<String, dynamic>.from(item));
+    }).toList();
   }
 
   static DateTime? _readDateTime(dynamic value) {

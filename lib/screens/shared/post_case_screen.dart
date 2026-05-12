@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/firebase/firebase_initializer.dart';
@@ -67,7 +68,7 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
   int _locationIdx = -1;
   String _urgency = 'medium'; // low | medium | high
   String _budget = 'RM 200 - 400/hr';
-  List<String> _files = [];
+  List<PlatformFile> _files = [];
   bool _submitting = false;
   final CaseRepository _caseRepository = CaseRepository();
 
@@ -89,23 +90,31 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
     return FirebaseAuth.instance.currentUser?.uid == widget.poster.id;
   }
 
-  void _addFile() {
-    const mockFiles = [
-      'document.pdf',
-      'evidence_photo.jpg',
-      'contract_scan.pdf',
-      'receipt.png',
-      'agreement.docx',
-    ];
-    final f = mockFiles[_files.length % mockFiles.length];
-    if (!_files.contains(f)) setState(() => _files = [..._files, f]);
+  Future<void> _addFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return;
+
+    setState(() {
+      final updated = List<PlatformFile>.from(_files);
+      for (final file in result.files) {
+        final alreadyAdded = updated.any(
+          (item) => item.name == file.name && item.size == file.size,
+        );
+        if (!alreadyAdded) updated.add(file);
+      }
+      _files = updated;
+    });
   }
 
   Future<void> _handleSubmit() async {
     if (!_isValid) return;
     setState(() => _submitting = true);
-
-    await Future.delayed(const Duration(milliseconds: 1500));
 
     // Map string category to CaseCategory enum
     CaseCategory cat;
@@ -133,18 +142,64 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       urg = CaseUrgency.low;
     }
 
+    final caseId = 'case_${DateTime.now().millisecondsSinceEpoch}';
+    final attachmentMetadata = <CaseAttachment>[];
+
+    if (_canUseFirestore) {
+      try {
+        for (final file in _files) {
+          final bytes = file.bytes;
+          if (bytes == null) {
+            throw StateError('Could not read ${file.name}. Please reattach it.');
+          }
+
+          final attachment = await _caseRepository.uploadCaseAttachmentBytes(
+            caseId: caseId,
+            clientId: widget.poster.id,
+            bytes: bytes,
+            fileName: file.name,
+            contentType: _contentTypeFor(file.name),
+          );
+          attachmentMetadata.add(attachment);
+        }
+      } catch (error) {
+        if (mounted) {
+          setState(() => _submitting = false);
+          _showSnack('Attachment upload failed: $error');
+        }
+        return;
+      }
+    } else if (_files.isNotEmpty) {
+      attachmentMetadata.addAll(
+        _files.map(
+          (file) => CaseAttachment(
+            id: '${caseId}_${file.name}_${file.size}',
+            fileName: file.name,
+            downloadUrl: '',
+            storagePath: '',
+            sizeBytes: file.size,
+            contentType: _contentTypeFor(file.name),
+            uploadedAt: DateTime.now(),
+          ),
+        ),
+      );
+    }
+
     final newCase = CaseModel(
-      id: 'case_${DateTime.now().millisecondsSinceEpoch}',
+      id: caseId,
       clientId: widget.poster.id,
       lawyerId: null,
       title: _titleCtrl.text.trim(),
       description: _descCtrl.text.trim(),
+      location: _locations[_locationIdx],
+      budgetRange: _budget,
       category: cat,
       status: CaseStatus.pending,
       urgency: urg,
       progressPercent: 0,
       createdAt: DateTime.now(),
       interestedLawyerIds: [],
+      attachments: attachmentMetadata,
     );
 
     var storedInFirestore = false;
@@ -152,17 +207,25 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       try {
         await _caseRepository.createCase(newCase);
         storedInFirestore = true;
-      } catch (_) {
-        // Keep the demo-friendly local flow when Firestore is unavailable.
+      } catch (error) {
+        for (final attachment in attachmentMetadata) {
+          try {
+            await _caseRepository.deleteCaseAttachment(attachment);
+          } catch (_) {
+            // The submission error is more useful to surface here.
+          }
+        }
+        if (mounted) {
+          setState(() => _submitting = false);
+          _showSnack('Case submission failed: $error');
+        }
+        return;
       }
     }
 
     if (!storedInFirestore) {
       DummyData.openCases.insert(0, newCase);
     }
-
-    // TODO: Persist location, budget, and attachment metadata when the case
-    // model is expanded beyond the low-risk Sprint 1 scope.
 
     if (mounted) {
       setState(() => _submitting = false);
@@ -322,7 +385,9 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
               const SizedBox(height: 16),
 
               _buildFieldLabel('Attachments'),
-              ..._files.map((f) => _buildFileChip(f)),
+              ..._files.asMap().entries.map(
+                (entry) => _buildFileChip(entry.value, entry.key),
+              ),
               if (_files.isNotEmpty) const SizedBox(height: 8),
               _buildAttachButton(),
               const SizedBox(height: 16),
@@ -393,7 +458,9 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                             ),
                             const SizedBox(width: 10),
                             Text(
-                              'Finding best lawyers...',
+                              _files.isEmpty
+                                  ? 'Finding best lawyers...'
+                                  : 'Uploading attachments...',
                               style: GoogleFonts.inter(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -598,7 +665,7 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
     );
   }
 
-  Widget _buildFileChip(String filename) {
+  Widget _buildFileChip(PlatformFile file, int index) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -617,14 +684,19 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              filename,
+              file.name,
               style: GoogleFonts.inter(color: Colors.grey[700], fontSize: 12),
             ),
           ),
+          Text(
+            _formatFileSize(file.size),
+            style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 11),
+          ),
+          const SizedBox(width: 8),
           GestureDetector(
-            onTap: () => setState(
-              () => _files = _files.where((f) => f != filename).toList(),
-            ),
+            onTap: () => setState(() {
+              _files = List<PlatformFile>.from(_files)..removeAt(index);
+            }),
             child: Icon(Icons.close, color: Colors.grey[400], size: 16),
           ),
         ],
@@ -657,6 +729,39 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  String _contentTypeFor(String fileName) {
+    final extension = fileName.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    final kb = bytes / 1024;
+    if (kb < 1024) return '${kb.toStringAsFixed(1)} KB';
+    final mb = kb / 1024;
+    return '${mb.toStringAsFixed(1)} MB';
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.inter(color: Colors.white)),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
