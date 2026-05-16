@@ -342,17 +342,17 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
-      if (syncResult.adapterFailed && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'We could not reach the Malaysian Bar directory. '
-              'Your verification has been queued for manual review.',
+      if (mounted && syncResult.hasIssue) {
+        final message = _syncIssueMessage(syncResult);
+        if (message != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 6),
             ),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 6),
-          ),
-        );
+          );
+        }
       }
     } on FirebaseAuthException catch (e) {
       // Surface Firebase credential errors directly to the user.
@@ -372,6 +372,28 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _isSubmitting = false);
       }
     }
+  }
+
+  String? _syncIssueMessage(SyncSessionResult result) {
+    // Only show issues during registration — login doesn't trigger verification.
+    if (isLogin) return null;
+    if (result.firebaseUnavailable) {
+      return 'Firebase is not configured on this device. Your verification will '
+          'not run until the app is set up with valid Firebase credentials.';
+    }
+    if (result.verificationCallError != null) {
+      return 'Account created, but verification could not start. The Cloud '
+          'Function may not be deployed. Contact support if this persists.';
+    }
+    if (result.adapterFailed) {
+      return 'We could not reach the Malaysian Bar directory. Your verification '
+          'has been queued for manual review.';
+    }
+    if (result.syncError != null) {
+      return 'Account created, but profile sync hit an error. Some details may '
+          'need to be re-entered.';
+    }
+    return null;
   }
 
   String _friendlyAuthError(String code) {

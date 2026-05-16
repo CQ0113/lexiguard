@@ -1,0 +1,68 @@
+{
+  "_comment": "Demo accounts seeded by seed_demo_users.js. Override passwords via env vars LEXIGUARD_DEMO_PASSWORD_* if you don't want them in source control.",
+  "accounts": [
+    {
+      "key": "lawyer_peninsular",
+      "email": "demo.lawyer.peninsular@lexiguard.dev",
+      "password": "LexiDemo!2026",
+      "displayName": "Aishah binti Kamal",
+      "role": "lawyer",
+      "profile": {
+        "name": "Aishah binti Kamal",
+        "phone": "+60198765432",
+        "barNumber": "B/MY/09384",
+        "specialization": "Property Law",
+        "yearsExperience": 8,
+        "barCouncilVerified": true,
+        "verificationStatus": "auto_verified",
+        "verificationProvider": "malaysian_bar",
+        "verificationBadgeVisible": true,
+        "legalFullName": "Aishah binti Kamal",
+        "firmName": "Kamal & Partners",
+        "jurisdiction": "peninsular",
+        "practiceState": "Selangor",
+        "practiceCity": "Shah Alam"
+      }
+    },
+    {
+      "key": "lawyer_sabah",
+      "email": "demo.lawyer.sabah@lexiguard.dev",
+      "password": "LexiDemo!2026",
+      "displayName": "Siti Rahmah Binti Omar",
+      "role": "lawyer",
+      "profile": {
+        "name": "Siti Rahmah Binti Omar",
+        "phone": "+60128887766",
+        "barNumber": "SLS/2019/0421",
+        "specialization": "Family Law",
+        "yearsExperience": 5,
+        "barCouncilVerified": false,
+        "verificationStatus": "manual_review_required",
+        "verificationProvider": "manual_review_sabah",
+        "verificationBadgeVisible": false,
+        "legalFullName": "Siti Rahmah Binti Omar",
+        "firmName": "Rahmah Legal Chambers",
+        "jurisdiction": "sabah",
+        "practiceState": "Sabah",
+        "practiceCity": "Kota Kinabalu"
+      },
+      "verificationRequest": {
+        "queueStatus": "queued",
+        "queueReason": "east_malaysia_manual_review_only",
+        "requestType": "lawyer_registration"
+      }
+    },
+    {
+      "key": "reviewer",
+      "email": "demo.reviewer@lexiguard.dev",
+      "password": "LexiDemo!2026",
+      "displayName": "Reviewer Demo",
+      "role": "client",
+      "customClaims": { "reviewer": true },
+      "profile": {
+        "name": "Reviewer Demo",
+        "phone": "+60100000000"
+      }
+    }
+  ]
+}
