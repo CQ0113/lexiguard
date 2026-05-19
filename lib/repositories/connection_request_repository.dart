@@ -214,14 +214,21 @@ class ConnectionRequestRepository {
     final lawyerId = requestData['lawyerId']?.toString() ?? '';
 
     // Phase 2: query sibling pending requests OUTSIDE the transaction.
+    //
+    // We must filter by `clientId == auth.uid` so the Firestore `list` rule on
+    // connection_requests (which requires the doc's clientId or lawyerId to
+    // equal the auth uid) can be statically satisfied — otherwise Firestore
+    // rejects the listener with permission-denied. We then narrow to the
+    // current case in Dart.
     final siblingsSnap = await _requests
-        .where('caseId', isEqualTo: caseId)
+        .where('clientId', isEqualTo: client.id)
         .where('status', isEqualTo: ConnectionRequestStatus.pending.wireValue)
         .get();
 
     final siblingIds = siblingsSnap.docs
+        .where((d) =>
+            d.id != requestId && d.data()['caseId']?.toString() == caseId)
         .map((d) => d.id)
-        .where((id) => id != requestId)
         .toList();
 
     // Phase 3: transaction — reads first, then writes.
@@ -322,6 +329,18 @@ class ConnectionRequestRepository {
         payload['declineReason'] = reason;
       }
       tx.update(docRef, payload);
+
+      // Mirror withdraw behaviour: drop the lawyer from
+      // `case.interestedLawyerIds` so the public counter stays accurate.
+      final data = snap.data()!;
+      final caseId = data['caseId']?.toString();
+      final lawyerId = data['lawyerId']?.toString();
+      if (caseId != null && lawyerId != null) {
+        final caseRef = _db.collection('cases').doc(caseId);
+        tx.update(caseRef, {
+          'interestedLawyerIds': FieldValue.arrayRemove([lawyerId]),
+        });
+      }
     });
   }
 

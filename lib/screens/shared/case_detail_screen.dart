@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../../repositories/case_repository.dart';
 import '../../repositories/connection_request_repository.dart';
 import '../../widgets/express_interest_sheet.dart';
 
@@ -40,10 +44,27 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   ConnectionRequestRepository get _repo =>
       _repoInstance ??= widget.repository ?? ConnectionRequestRepository();
 
+  // Live case subscription — keeps fields like `interestedLawyerIds`,
+  // `status`, `lawyerId` in sync after withdraw/decline/approve.
+  StreamSubscription<CaseModel?>? _caseSub;
+
   @override
   void initState() {
     super.initState();
     _case = widget.caseModel;
+
+    if (FirebaseInitializer.isReady) {
+      _caseSub = CaseRepository().watchCase(_case.id).listen((updated) {
+        if (!mounted || updated == null) return;
+        setState(() => _case = updated);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _caseSub?.cancel();
+    super.dispose();
   }
 
   bool get _isLawyer => widget.viewer.role == UserRole.lawyer;
