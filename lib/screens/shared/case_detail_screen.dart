@@ -383,15 +383,22 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   }
 
   // ── Details Card ─────────────────────────────────────────────────────────
+
+  /// True when the viewer is a lawyer who has not yet been approved for this case.
+  bool get _isUnconnectedLawyer =>
+      _isLawyer && _case.lawyerId != widget.viewer.id;
+
   Widget _buildDetailsCard() {
-    final clientUser = _resolveClientUser();
+    final displayName = _isUnconnectedLawyer
+        ? 'CLIENT-${_case.id.hashCode.abs() % 10000}'
+        : _resolveClientUser().name;
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _cardHeader(Icons.info_outline, 'Case Information'),
           const SizedBox(height: 16),
-          _detailRow(Icons.person_outline, 'Client', clientUser.name),
+          _detailRow(Icons.person_outline, 'Client', displayName),
           _divider(),
           _detailRow(Icons.label_outline, 'Category', _case.categoryLabel),
           if (_case.location != null && _case.location!.isNotEmpty) ...[
@@ -918,15 +925,19 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(icon, color: Colors.grey[400], size: 16),
           const SizedBox(width: 10),
-          Text(
-            label,
-            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
+            ),
           ),
-          const Spacer(),
-          Flexible(
+          Expanded(
+            flex: 3,
             child: Text(
               value,
               textAlign: TextAlign.right,
