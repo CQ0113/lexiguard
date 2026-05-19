@@ -79,6 +79,22 @@ class CaseRepository {
     });
   }
 
+  Stream<List<CaseModel>> streamOpenCases() {
+    // Single-field filter only — composite index not needed.
+    // lawyerId == null is checked in Dart after the fetch.
+    return _cases
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) {
+          final cases = snapshot.docs
+              .map(CaseModel.fromFirestore)
+              .where((c) => c.lawyerId == null)
+              .toList();
+          cases.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+          return cases;
+        });
+  }
+
   Stream<CaseModel?> watchCase(String caseId) {
     return _cases.doc(caseId).snapshots().map((snapshot) {
       if (!snapshot.exists) return null;

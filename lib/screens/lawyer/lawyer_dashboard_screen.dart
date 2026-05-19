@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../../repositories/case_repository.dart';
+import '../../repositories/connection_request_repository.dart';
 import '../login_screen.dart';
 import '../shared/case_detail_screen.dart';
 import '../shared/profile_screen.dart';
@@ -850,29 +853,38 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   String _activeTab = 'all'; // all | active | pending
   final _searchCtrl = TextEditingController();
 
+  // Null when Firebase is not ready (demo-safe mode).
+  ConnectionRequestRepository? _connRepo;
+  CaseRepository? _caseRepo;
+  // Tracks which pending request cards are expanded (to show full message).
+  final Set<String> _expandedRequests = {};
+
+  @override
+  void initState() {
+    super.initState();
+    if (FirebaseInitializer.isReady) {
+      _connRepo = ConnectionRequestRepository();
+      _caseRepo = CaseRepository();
+    }
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
   }
 
-  List<CaseModel> get _allCases =>
+  List<CaseModel> get _connectedCases =>
       DummyData.cases.where((c) => c.lawyerId == widget.user.id).toList();
 
-  List<CaseModel> get _openCases => DummyData.openCases;
-
-  // Simulate "connected" (active) and "pending" cases
-  List<CaseModel> get _connectedCases => _allCases;
-  List<CaseModel> get _pendingCases => _openCases.take(1).toList();
-
-  List<CaseModel> get _filtered {
+  List<CaseModel> _filteredList(List<CaseModel> openCases) {
     List<CaseModel> list;
     if (_activeTab == 'active') {
       list = _connectedCases;
     } else if (_activeTab == 'pending') {
-      list = _pendingCases;
+      list = [];
     } else {
-      list = [..._connectedCases, ..._pendingCases];
+      list = [..._connectedCases, ...openCases];
     }
     final q = _searchCtrl.text.trim().toLowerCase();
     if (q.isEmpty) return list;
@@ -887,7 +899,24 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
+    final openCasesStream = _caseRepo?.streamOpenCases() ??
+        Stream.value(<CaseModel>[...DummyData.openCases]);
+
+    return StreamBuilder<List<CaseModel>>(
+      stream: openCasesStream,
+      builder: (context, openSnap) {
+        final openCases = openSnap.data ?? DummyData.openCases;
+        final filtered = _filteredList(openCases);
+        return _buildBody(context, openCases, filtered);
+      },
+    );
+  }
+
+  Widget _buildBody(
+    BuildContext context,
+    List<CaseModel> openCases,
+    List<CaseModel> filtered,
+  ) {
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
@@ -942,71 +971,89 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
           const SizedBox(height: 14),
 
           // ── Tab filters ─────────────────────────────────────────────────
-          Row(
-            children: [
-              _filterTab(
-                'all',
-                'All',
-                _connectedCases.length + _pendingCases.length,
-              ),
-              const SizedBox(width: 8),
-              _filterTab('active', 'Connected', _connectedCases.length),
-              const SizedBox(width: 8),
-              _filterTab('pending', 'Pending', _pendingCases.length),
-            ],
+          StreamBuilder<List<ConnectionRequestModel>>(
+            stream: _connRepo?.streamForLawyer(widget.user.id) ??
+                Stream.value(<ConnectionRequestModel>[]),
+            builder: (context, snap) {
+              final livePendingCount = snap.hasData
+                  ? snap.data!
+                        .where(
+                          (r) => r.status == ConnectionRequestStatus.pending,
+                        )
+                        .length
+                  : 0;
+              return Row(
+                children: [
+                  _filterTab(
+                    'all',
+                    'All',
+                    _connectedCases.length + openCases.length,
+                  ),
+                  const SizedBox(width: 8),
+                  _filterTab('active', 'Connected', _connectedCases.length),
+                  const SizedBox(width: 8),
+                  _filterTab('pending', 'Pending', livePendingCount),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
 
-          // ── Browse more cases CTA (from lawyer-my-cases.tsx) ─────────────
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: _gold.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _gold.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: _gold,
-                    borderRadius: BorderRadius.circular(10),
+          // ── Browse more cases CTA ─────────────────────────────────────────
+          GestureDetector(
+            onTap: () => setState(() => _activeTab = 'all'),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _gold.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _gold.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: _gold,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.auto_awesome, color: _navy, size: 16),
                   ),
-                  child: const Icon(Icons.auto_awesome, color: _navy, size: 16),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Browse Open Cases',
-                        style: GoogleFonts.inter(
-                          color: _navy,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Browse Open Cases',
+                          style: GoogleFonts.inter(
+                            color: _navy,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      Text(
-                        'Find new cases and express interest',
-                        style: GoogleFonts.inter(
-                          color: _navy.withValues(alpha: 0.6),
-                          fontSize: 11,
+                        Text(
+                          '${openCases.length} case${openCases.length == 1 ? "" : "s"} available',
+                          style: GoogleFonts.inter(
+                            color: _navy.withValues(alpha: 0.6),
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Icon(Icons.chevron_right, color: _gold, size: 18),
-              ],
+                  Icon(Icons.chevron_right, color: _gold, size: 18),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),
 
           // ── Case list ───────────────────────────────────────────────────
-          if (filtered.isEmpty)
+          if (_activeTab == 'pending')
+            _pendingRequestsList()
+          else if (filtered.isEmpty)
             _emptyState()
           else
             ...filtered.map((c) {
@@ -1016,6 +1063,338 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
         ],
       ),
     );
+  }
+
+  // ── Live pending connection-requests list ─────────────────────────────────
+
+  Widget _pendingRequestsList() {
+    // Demo-safe: Firebase not configured.
+    if (_connRepo == null) {
+      return _pendingEmptyState();
+    }
+
+    return StreamBuilder<List<ConnectionRequestModel>>(
+      stream: _connRepo!.streamForLawyer(widget.user.id),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 48),
+            child: Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFF0B2447),
+              ),
+            ),
+          );
+        }
+
+        if (snap.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 48),
+            child: Center(
+              child: Text(
+                'Could not load requests.',
+                style: GoogleFonts.inter(
+                  color: Colors.grey[500],
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          );
+        }
+
+        final pending = (snap.data ?? [])
+            .where((r) => r.status == ConnectionRequestStatus.pending)
+            .toList();
+
+        if (pending.isEmpty) {
+          return _pendingEmptyState();
+        }
+
+        return Column(
+          children: pending.map((req) => _pendingRequestCard(req)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _pendingEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48),
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.hourglass_empty_outlined,
+                size: 32,
+                color: Colors.grey[300],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No pending requests',
+              style: GoogleFonts.inter(
+                color: Colors.grey[500],
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Express interest in open cases to get started',
+              style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => setState(() => _activeTab = 'all'),
+              child: Text(
+                'Browse open cases',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF0B2447),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pendingRequestCard(ConnectionRequestModel req) {
+    final isExpanded = _expandedRequests.contains(req.id);
+    final sentLabel = DateFormat('d MMM y').format(req.createdAt.toLocal());
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Status bar ─────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFFBEB),
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFFFDE68A)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.access_time,
+                    color: Color(0xFFD97706),
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'AWAITING CLIENT APPROVAL',
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFFD97706),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Card body ──────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Case reference + sent date
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Case #${req.caseId.length >= 8 ? req.caseId.substring(0, 8) : req.caseId}',
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF0B2447),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Sent $sentLabel',
+                        style: GoogleFonts.inter(
+                          color: Colors.grey[400],
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Message preview
+                  Text(
+                    req.message,
+                    style: GoogleFonts.inter(
+                      color: Colors.grey[700],
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    maxLines: isExpanded ? null : 2,
+                    overflow: isExpanded ? null : TextOverflow.ellipsis,
+                  ),
+                  if (!isExpanded && req.message.length > 100) ...[
+                    const SizedBox(height: 2),
+                    GestureDetector(
+                      onTap: () => setState(
+                        () => _expandedRequests.add(req.id),
+                      ),
+                      child: Text(
+                        'Read more',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF0B2447),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ] else if (isExpanded) ...[
+                    const SizedBox(height: 2),
+                    GestureDetector(
+                      onTap: () => setState(
+                        () => _expandedRequests.remove(req.id),
+                      ),
+                      child: Text(
+                        'Show less',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF0B2447),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+
+                  // Footer: Withdraw button
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => _confirmWithdraw(req),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey[700],
+                          side: BorderSide(color: Colors.grey[300]!),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'Withdraw',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmWithdraw(ConnectionRequestModel req) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Withdraw request?',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+        content: Text(
+          'You can re-send an expression of interest later if you change your mind.',
+          style: GoogleFonts.inter(fontSize: 14, color: Colors.grey[700]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.grey[600]),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Withdraw',
+              style: GoogleFonts.inter(
+                color: const Color(0xFFB91C1C),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    try {
+      await _connRepo?.withdrawRequest(req.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Request withdrawn.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFF0B2447),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not withdraw request. Please try again.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: const Color(0xFFB91C1C),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _filterTab(String key, String label, int count) {
@@ -1149,7 +1528,13 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
+      child: GestureDetector(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CaseDetailScreen(caseModel: c, viewer: widget.user),
+          ),
+        ),
+        child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -1426,6 +1811,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
