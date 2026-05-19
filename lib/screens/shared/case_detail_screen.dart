@@ -174,7 +174,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   const SizedBox(height: 20),
                   if (_case.attachments.isNotEmpty) _buildAttachmentsCard(),
                   if (_case.attachments.isNotEmpty) const SizedBox(height: 20),
-                  _buildInterestedLawyersSection(),
+                  if (!_isLawyer) _buildInterestedLawyersSection(),
                   const SizedBox(height: 20),
                   if (_case.progressPercent > 0) _buildProgressCard(),
                   if (_case.progressPercent > 0) const SizedBox(height: 20),

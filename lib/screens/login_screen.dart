@@ -35,7 +35,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final Color primaryBlue = const Color(0xFF0C1D36);
   final Color goldAccent = const Color(0xFFCFA92A);
   final FirebaseAuthSyncService _authSyncService = FirebaseAuthSyncService();
-  final AuthService _authService = AuthService();
+  // Lazy — defers FirebaseAuth.instance until Firebase is confirmed ready.
+  AuthService? _authServiceInstance;
+  AuthService get _authService => _authServiceInstance ??= AuthService();
   bool _isSubmitting = false;
   bool _isGoogleSubmitting = false;
 

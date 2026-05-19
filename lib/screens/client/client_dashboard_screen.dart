@@ -376,6 +376,9 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     return StreamBuilder<List<ConnectionRequestModel>>(
       stream: _pendingStream,
       builder: (context, pendingSnap) {
+        if (pendingSnap.hasError) {
+          debugPrint('[ClientDashboard] pendingStream error: ${pendingSnap.error}');
+        }
         final pendingRequests = pendingSnap.data ?? const [];
         return _buildWithPending(pendingRequests);
       },

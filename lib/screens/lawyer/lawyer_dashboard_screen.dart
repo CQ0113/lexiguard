@@ -874,8 +874,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     super.dispose();
   }
 
-  List<CaseModel> get _connectedCases =>
-      DummyData.cases.where((c) => c.lawyerId == widget.user.id).toList();
+  List<CaseModel> _connectedCases = [];
 
   List<CaseModel> _filteredList(List<CaseModel> openCases) {
     List<CaseModel> list;
@@ -901,13 +900,21 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   Widget build(BuildContext context) {
     final openCasesStream = _caseRepo?.streamOpenCases() ??
         Stream.value(<CaseModel>[...DummyData.openCases]);
+    final connectedStream = _caseRepo?.streamConnectedCasesForLawyer(widget.user.id) ??
+        Stream.value(<CaseModel>[]);
 
     return StreamBuilder<List<CaseModel>>(
-      stream: openCasesStream,
-      builder: (context, openSnap) {
-        final openCases = openSnap.data ?? DummyData.openCases;
-        final filtered = _filteredList(openCases);
-        return _buildBody(context, openCases, filtered);
+      stream: connectedStream,
+      builder: (context, connectedSnap) {
+        _connectedCases = connectedSnap.data ?? [];
+        return StreamBuilder<List<CaseModel>>(
+          stream: openCasesStream,
+          builder: (context, openSnap) {
+            final openCases = openSnap.data ?? DummyData.openCases;
+            final filtered = _filteredList(openCases);
+            return _buildBody(context, openCases, filtered);
+          },
+        );
       },
     );
   }
@@ -970,96 +977,105 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
           ),
           const SizedBox(height: 14),
 
-          // ── Tab filters ─────────────────────────────────────────────────
+          // ── Tab filters + case list (share the live requests stream) ────────
           StreamBuilder<List<ConnectionRequestModel>>(
             stream: _connRepo?.streamForLawyer(widget.user.id) ??
                 Stream.value(<ConnectionRequestModel>[]),
             builder: (context, snap) {
-              final livePendingCount = snap.hasData
-                  ? snap.data!
-                        .where(
-                          (r) => r.status == ConnectionRequestStatus.pending,
-                        )
-                        .length
-                  : 0;
-              return Row(
+              final allRequests = snap.data ?? [];
+              final pendingCaseIds = allRequests
+                  .where((r) => r.status == ConnectionRequestStatus.pending)
+                  .map((r) => r.caseId)
+                  .toSet();
+              final livePendingCount = pendingCaseIds.length;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _filterTab(
-                    'all',
-                    'All',
-                    _connectedCases.length + openCases.length,
+                  Row(
+                    children: [
+                      _filterTab(
+                        'all',
+                        'All',
+                        _connectedCases.length + openCases.length,
+                      ),
+                      const SizedBox(width: 8),
+                      _filterTab('active', 'Connected', _connectedCases.length),
+                      const SizedBox(width: 8),
+                      _filterTab('pending', 'Pending', livePendingCount),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  _filterTab('active', 'Connected', _connectedCases.length),
-                  const SizedBox(width: 8),
-                  _filterTab('pending', 'Pending', livePendingCount),
+                  const SizedBox(height: 16),
+
+                  // ── Browse more cases CTA ───────────────────────────────
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      _activeTab = 'all';
+                      _searchCtrl.clear();
+                    }),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: _gold.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _gold.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: _gold,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.auto_awesome, color: _navy, size: 16),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Browse Open Cases',
+                                  style: GoogleFonts.inter(
+                                    color: _navy,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  '${openCases.length} case${openCases.length == 1 ? "" : "s"} available',
+                                  style: GoogleFonts.inter(
+                                    color: _navy.withValues(alpha: 0.6),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right, color: _gold, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── Case list ───────────────────────────────────────────
+                  if (_activeTab == 'pending')
+                    _pendingRequestsList()
+                  else if (filtered.isEmpty)
+                    _emptyState()
+                  else
+                    ...filtered.map((c) {
+                      final isConnected = _connectedCases.any((cc) => cc.id == c.id);
+                      final hasApplied = pendingCaseIds.contains(c.id);
+                      return _myCaseCard(context, c, isConnected, hasApplied: hasApplied);
+                    }),
                 ],
               );
             },
           ),
-          const SizedBox(height: 16),
-
-          // ── Browse more cases CTA ─────────────────────────────────────────
-          GestureDetector(
-            onTap: () => setState(() => _activeTab = 'all'),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: _gold.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _gold.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: _gold,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.auto_awesome, color: _navy, size: 16),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Browse Open Cases',
-                          style: GoogleFonts.inter(
-                            color: _navy,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          '${openCases.length} case${openCases.length == 1 ? "" : "s"} available',
-                          style: GoogleFonts.inter(
-                            color: _navy.withValues(alpha: 0.6),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, color: _gold, size: 18),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // ── Case list ───────────────────────────────────────────────────
-          if (_activeTab == 'pending')
-            _pendingRequestsList()
-          else if (filtered.isEmpty)
-            _emptyState()
-          else
-            ...filtered.map((c) {
-              final isConnected = _connectedCases.contains(c);
-              return _myCaseCard(context, c, isConnected);
-            }),
         ],
       ),
     );
@@ -1489,21 +1505,33 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     );
   }
 
-  Widget _myCaseCard(BuildContext context, CaseModel c, bool isConnected) {
+  Widget _myCaseCard(BuildContext context, CaseModel c, bool isConnected, {bool hasApplied = false}) {
     // Status bar config (from lawyer-my-cases.tsx)
     final statusBg = isConnected
         ? const Color(0xFFF0FDF4)
-        : const Color(0xFFFFFBEB);
+        : hasApplied
+            ? const Color(0xFFFFFBEB)
+            : const Color(0xFFF8FAFC);
     final statusBorder = isConnected
         ? const Color(0xFFBBF7D0)
-        : const Color(0xFFFDE68A);
+        : hasApplied
+            ? const Color(0xFFFDE68A)
+            : const Color(0xFFE2E8F0);
     final statusText = isConnected
         ? const Color(0xFF16A34A)
-        : const Color(0xFFD97706);
-    final statusLabel = isConnected ? 'CONNECTED' : 'AWAITING';
+        : hasApplied
+            ? const Color(0xFFD97706)
+            : const Color(0xFF64748B);
+    final statusLabel = isConnected
+        ? 'CONNECTED'
+        : hasApplied
+            ? 'AWAITING'
+            : 'OPEN';
     final statusIcon = isConnected
         ? Icons.lock_open_outlined
-        : Icons.access_time;
+        : hasApplied
+            ? Icons.access_time
+            : Icons.search_outlined;
 
     // Urgency
     Color urgencyBg, urgencyFg;
@@ -1773,7 +1801,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                             ),
                           ),
                         ),
-                      ] else
+                      ] else if (hasApplied)
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 11),
@@ -1802,6 +1830,45 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => CaseDetailScreen(
+                                  caseModel: c,
+                                  viewer: widget.user,
+                                ),
+                              ),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                              decoration: BoxDecoration(
+                                color: _navy,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.open_in_new,
+                                    color: Colors.white,
+                                    size: 15,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'View Case',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

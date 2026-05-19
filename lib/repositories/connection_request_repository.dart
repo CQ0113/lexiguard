@@ -127,9 +127,13 @@ class ConnectionRequestRepository {
       };
 
       tx.set(docRef, payload);
-      tx.update(caseRef, {
-        'interestedLawyerIds': FieldValue.arrayUnion([lawyer.id]),
-      });
+      // On re-send the lawyer is already in interestedLawyerIds; arrayUnion
+      // would be a no-op and the Firestore rule requires size+1, so skip.
+      if (!existingSnap.exists) {
+        tx.update(caseRef, {
+          'interestedLawyerIds': FieldValue.arrayUnion([lawyer.id]),
+        });
+      }
     });
   }
 
@@ -143,8 +147,9 @@ class ConnectionRequestRepository {
         throw StateError('Request $requestId does not exist.');
       }
 
+      final data = snap.data()!;
       final current = ConnectionRequestStatusWire.fromWire(
-        snap.data()!['status']?.toString(),
+        data['status']?.toString(),
       );
 
       if (current != ConnectionRequestStatus.pending) {
@@ -158,6 +163,16 @@ class ConnectionRequestRepository {
         'status': ConnectionRequestStatus.withdrawn.wireValue,
         'updatedAt': Timestamp.fromDate(DateTime.now()),
       });
+
+      // Remove lawyer from case's interestedLawyerIds so the count stays accurate.
+      final caseId = data['caseId']?.toString();
+      final lawyerId = data['lawyerId']?.toString();
+      if (caseId != null && lawyerId != null) {
+        final caseRef = _db.collection('cases').doc(caseId);
+        tx.update(caseRef, {
+          'interestedLawyerIds': FieldValue.arrayRemove([lawyerId]),
+        });
+      }
     });
   }
 

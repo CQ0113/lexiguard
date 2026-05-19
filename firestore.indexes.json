@@ -36,6 +36,14 @@
       "collectionGroup": "connection_requests",
       "queryScope": "COLLECTION",
       "fields": [
+        {"fieldPath": "lawyerId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "connection_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
         {"fieldPath": "caseId", "order": "ASCENDING"},
         {"fieldPath": "status", "order": "ASCENDING"}
       ]

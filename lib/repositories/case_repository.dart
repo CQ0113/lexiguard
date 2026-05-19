@@ -69,6 +69,18 @@ class CaseRepository {
     }
   }
 
+  Stream<List<CaseModel>> streamConnectedCasesForLawyer(String lawyerId) {
+    return _cases
+        .where('lawyerId', isEqualTo: lawyerId)
+        .where('status', isEqualTo: 'active')
+        .snapshots()
+        .map((snapshot) {
+          final cases = snapshot.docs.map(CaseModel.fromFirestore).toList();
+          cases.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return cases;
+        });
+  }
+
   Stream<List<CaseModel>> streamClientCases({required String clientId}) {
     return _cases.where('clientId', isEqualTo: clientId).snapshots().map((
       snapshot,

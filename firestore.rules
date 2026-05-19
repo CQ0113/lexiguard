@@ -77,6 +77,12 @@ service cloud.firestore {
                 resource.data.lawyerId == null &&
                 request.resource.data.interestedLawyerIds.hasAll(resource.data.interestedLawyerIds) &&
                 request.resource.data.interestedLawyerIds.size() == resource.data.interestedLawyerIds.size() + 1) ||
+            // Verified lawyer removing self from interestedLawyerIds (withdraw)
+            (isVerifiedLawyer() &&
+                resource.data.lawyerId == null &&
+                resource.data.interestedLawyerIds.hasAll(request.resource.data.interestedLawyerIds) &&
+                request.resource.data.interestedLawyerIds.size() == resource.data.interestedLawyerIds.size() - 1 &&
+                !request.resource.data.interestedLawyerIds.hasAny([request.auth.uid])) ||
             // Client setting lawyerId on their own case (approve connection)
             (resource.data.clientId == request.auth.uid &&
                 resource.data.lawyerId == null &&
@@ -100,7 +106,15 @@ service cloud.firestore {
         && request.resource.data.message.size() <= 500
         && request.resource.data.lawyerSnapshot is map;
 
-      allow read: if isSignedIn() && (
+      // Single-doc GET: also allows reading a non-existent doc so the
+      // sendRequest() transaction can check for a prior request.
+      allow get: if isSignedIn() && (
+        (resource == null && reqId.matches('.*_' + request.auth.uid)) ||
+        request.auth.uid == resource.data.clientId ||
+        request.auth.uid == resource.data.lawyerId
+      );
+      // Collection queries (streamPendingForClient, streamForLawyer, etc.)
+      allow list: if isSignedIn() && (
         request.auth.uid == resource.data.clientId ||
         request.auth.uid == resource.data.lawyerId
       );

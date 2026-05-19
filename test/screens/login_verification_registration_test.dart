@@ -65,6 +65,7 @@ void main() {
 
     final submitButton = find.text('Register & Start Verification');
     await tester.ensureVisible(submitButton);
+    await tester.pumpAndSettle(); // let scroll animation finish before tap
     await tester.tap(submitButton);
     await tester.pumpAndSettle();
 
