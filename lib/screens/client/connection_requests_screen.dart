@@ -96,7 +96,7 @@ class _ConnectionRequestsScreenState extends State<ConnectionRequestsScreen> {
 // PENDING TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PendingTab extends StatelessWidget {
+class _PendingTab extends StatefulWidget {
   const _PendingTab({
     required this.clientId,
     required this.client,
@@ -108,14 +108,23 @@ class _PendingTab extends StatelessWidget {
   final ConnectionRequestRepository repo;
 
   @override
+  State<_PendingTab> createState() => _PendingTabState();
+}
+
+class _PendingTabState extends State<_PendingTab> {
+  // Incrementing this key forces StreamBuilder to re-subscribe on retry.
+  int _streamKey = 0;
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<ConnectionRequestModel>>(
-      stream: repo.streamPendingForClient(clientId),
+      key: ValueKey(_streamKey),
+      stream: widget.repo.streamPendingForClient(widget.clientId),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _ErrorState(
             message: snapshot.error.toString(),
-            onRetry: () => setState(context),
+            onRetry: () => setState(() => _streamKey++),
           );
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -139,16 +148,13 @@ class _PendingTab extends StatelessWidget {
           itemCount: requests.length,
           itemBuilder: (context, i) => _PendingRequestCard(
             request: requests[i],
-            client: client,
-            repo: repo,
+            client: widget.client,
+            repo: widget.repo,
           ),
         );
       },
     );
   }
-
-  // ignore: avoid_returning_null_for_void
-  void setState(BuildContext context) {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

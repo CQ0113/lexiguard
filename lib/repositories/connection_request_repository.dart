@@ -84,6 +84,7 @@ class ConnectionRequestRepository {
     await _db.runTransaction((tx) async {
       // Read phase — all reads must happen before writes.
       final existingSnap = await tx.get(docRef);
+      final caseSnap = await tx.get(caseRef);
 
       if (existingSnap.exists) {
         final data = existingSnap.data()!;
@@ -127,9 +128,17 @@ class ConnectionRequestRepository {
       };
 
       tx.set(docRef, payload);
-      // On re-send the lawyer is already in interestedLawyerIds; arrayUnion
-      // would be a no-op and the Firestore rule requires size+1, so skip.
-      if (!existingSnap.exists) {
+
+      // Always ensure the lawyer is in interestedLawyerIds.
+      // After withdraw/decline the lawyer was removed, so re-adding is required.
+      // The Firestore rule requires size+1 only when the ID is absent,
+      // so we check the case doc (read above) before deciding to update.
+      final currentIds = caseSnap.exists
+          ? List<String>.from(
+              (caseSnap.data()?['interestedLawyerIds'] as List?) ?? [],
+            )
+          : <String>[];
+      if (!currentIds.contains(lawyer.id)) {
         tx.update(caseRef, {
           'interestedLawyerIds': FieldValue.arrayUnion([lawyer.id]),
         });
