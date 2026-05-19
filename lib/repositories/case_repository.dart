@@ -69,6 +69,18 @@ class CaseRepository {
     }
   }
 
+  Stream<List<CaseModel>> streamConnectedCasesForLawyer(String lawyerId) {
+    return _cases
+        .where('lawyerId', isEqualTo: lawyerId)
+        .where('status', isEqualTo: 'active')
+        .snapshots()
+        .map((snapshot) {
+          final cases = snapshot.docs.map(CaseModel.fromFirestore).toList();
+          cases.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return cases;
+        });
+  }
+
   Stream<List<CaseModel>> streamClientCases({required String clientId}) {
     return _cases.where('clientId', isEqualTo: clientId).snapshots().map((
       snapshot,
@@ -77,6 +89,22 @@ class CaseRepository {
       cases.sort((left, right) => right.createdAt.compareTo(left.createdAt));
       return cases;
     });
+  }
+
+  Stream<List<CaseModel>> streamOpenCases() {
+    // Single-field filter only — composite index not needed.
+    // lawyerId == null is checked in Dart after the fetch.
+    return _cases
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) {
+          final cases = snapshot.docs
+              .map(CaseModel.fromFirestore)
+              .where((c) => c.lawyerId == null)
+              .toList();
+          cases.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+          return cases;
+        });
   }
 
   Stream<CaseModel?> watchCase(String caseId) {
