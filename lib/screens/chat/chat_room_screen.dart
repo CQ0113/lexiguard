@@ -231,6 +231,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ),
             const SizedBox(height: 12),
             ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
               leading: const Icon(Icons.image_rounded, color: Color(0xFF0C1D36)),
               title: Text(
                 'Photo',
@@ -242,6 +243,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               onTap: () => Navigator.of(ctx).pop(_AttachChoice.photo),
             ),
             ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
               leading: const Icon(
                 Icons.insert_drive_file_rounded,
                 color: Color(0xFF0C1D36),

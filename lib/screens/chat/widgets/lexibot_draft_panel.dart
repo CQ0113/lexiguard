@@ -88,7 +88,6 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
   Future<void> _submit() async {
     final question = _questionCtrl.text.trim();
 
-    // Client-side guard — avoids a network round-trip for the trivial case.
     if (question.isEmpty) {
       setState(() {
         _errorMessage = 'Please type a question first.';
@@ -179,8 +178,6 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
     }
   }
 
-  // ── Source chip URL opener (url_launcher with clipboard fallback) ─────────
-
   Future<void> _openSource(String url) async {
     if (url.isEmpty) return;
     final uri = Uri.tryParse(url);
@@ -214,7 +211,6 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 0),
       padding: EdgeInsets.only(bottom: bottomInset),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -238,53 +234,109 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-            // ── Header ─────────────────────────────────────────────────────
+            // ── AI Header card ─────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.smart_toy_outlined,
-                        color: _gold,
-                        size: 20,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0C1D36), Color(0xFF163354)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: _gold.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _gold.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.smart_toy_rounded,
+                            color: _gold,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'LexiBot',
+                              style: GoogleFonts.inter(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'AI Malaysian Law Assistant',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: Colors.white54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Ask LexiBot',
-                        style: GoogleFonts.inter(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: _navy,
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.amber.withValues(alpha: 0.25),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'General information, not formal legal advice. '
-                    'Consult a qualified lawyer.',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.grey[500],
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: Colors.amber[400],
+                            size: 13,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'General information only — not formal legal advice. '
+                              'Consult a qualified lawyer.',
+                              style: GoogleFonts.inter(
+                                fontSize: 10.5,
+                                fontStyle: FontStyle.italic,
+                                color: Colors.amber[300],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
             const SizedBox(height: 16),
-            const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F5)),
-            const SizedBox(height: 16),
 
             // ── Question input row ─────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -321,17 +373,16 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // Submit button
+                  const SizedBox(width: 10),
                   Material(
                     color: _loading ? Colors.grey[200] : _navy,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       onTap: _loading ? null : _submit,
                       child: Container(
-                        width: 44,
-                        height: 44,
+                        width: 48,
+                        height: 48,
                         alignment: Alignment.center,
                         child: _loading
                             ? const SizedBox(
@@ -354,18 +405,12 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
               ),
             ),
 
-            // ── Loading label ──────────────────────────────────────────────
+            // ── Thinking indicator ─────────────────────────────────────────
             if (_loading) ...[
-              const SizedBox(height: 12),
-              Center(
-                child: Text(
-                  'Searching Malaysian law…',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
+              const SizedBox(height: 14),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: _ThinkingIndicator(),
               ),
             ],
 
@@ -373,7 +418,7 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
             if (_errorMessage != null) ...[
               const SizedBox(height: 12),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -383,7 +428,11 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.error_outline, color: Colors.red[600], size: 16),
+                      Icon(
+                        Icons.error_outline,
+                        color: Colors.red[600],
+                        size: 16,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -405,7 +454,7 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
               const SizedBox(height: 12),
               Flexible(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
                     constraints: const BoxConstraints(maxHeight: 220),
                     decoration: BoxDecoration(
@@ -413,26 +462,44 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFE8EDF2)),
                     ),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(14),
-                      child: Text(
-                        _answer!,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: _navy,
-                          height: 1.5,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Gold accent bar
+                        Container(
+                          width: 3,
+                          decoration: const BoxDecoration(
+                            color: _gold,
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              bottomLeft: Radius.circular(12),
+                            ),
+                          ),
                         ),
-                      ),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(14),
+                            child: Text(
+                              _answer!,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: _navy,
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
 
-              // ── Sources ────────────────────────────────────────────────
+              // ── Sources ──────────────────────────────────────────────────
               if (_sources.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -469,10 +536,9 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
                               vertical: 0,
                             ),
                             visualDensity: VisualDensity.compact,
-                            onPressed:
-                                s.sourceUrl.isNotEmpty
-                                    ? () => _openSource(s.sourceUrl)
-                                    : null,
+                            onPressed: s.sourceUrl.isNotEmpty
+                                ? () => _openSource(s.sourceUrl)
+                                : null,
                           );
                         }).toList(),
                       ),
@@ -487,10 +553,9 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
 
             // ── Action buttons ─────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
               child: Row(
                 children: [
-                  // Cancel button (always visible)
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(null),
                     child: Text(
@@ -502,7 +567,6 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
                     ),
                   ),
                   const Spacer(),
-                  // Copy + Insert only after a successful response
                   if (_answer != null) ...[
                     OutlinedButton.icon(
                       icon: const Icon(Icons.copy_rounded, size: 16),
@@ -574,6 +638,84 @@ class _LexiBotPanelState extends State<_LexiBotPanel> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANIMATED THINKING INDICATOR
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ThinkingIndicator extends StatefulWidget {
+  const _ThinkingIndicator();
+
+  @override
+  State<_ThinkingIndicator> createState() => _ThinkingIndicatorState();
+}
+
+class _ThinkingIndicatorState extends State<_ThinkingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.smart_toy_rounded, color: Color(0xFFCFA92A), size: 14),
+        const SizedBox(width: 8),
+        Text(
+          'Searching Malaysian law',
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: Colors.grey[500],
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        const SizedBox(width: 2),
+        AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, child) {
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(3, (i) {
+                // Each dot peaks 0.33s apart
+                final phase = ((_ctrl.value - i / 3.0) % 1.0);
+                final opacity = (1.0 - (phase * 2 - 1.0).abs()).clamp(0.2, 1.0);
+                return Opacity(
+                  opacity: opacity,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Text(
+                      '.',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        color: const Color(0xFFCFA92A),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            );
+          },
+        ),
+      ],
     );
   }
 }

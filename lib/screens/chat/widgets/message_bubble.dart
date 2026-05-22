@@ -289,7 +289,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     final isOwn = widget.isOwn;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
       child: Column(
         crossAxisAlignment:
             isOwn ? CrossAxisAlignment.end : CrossAxisAlignment.start,
