@@ -587,6 +587,62 @@ void main() {
         throwsA(isA<InvalidStatusTransitionException>()),
       );
     });
+
+    test('creates a chat_rooms doc in the same approval batch', () async {
+      final lawyer = _verifiedLawyer();
+      final openCase = _openCase();
+      final client = _clientUser();
+      await _seedCase(fakeDb, openCase);
+      const msg = 'I can assist with your property dispute in detail.';
+
+      await repo.sendRequest(
+        targetCase: openCase,
+        lawyer: lawyer,
+        message: msg,
+      );
+
+      final docId = ConnectionRequestRepository.docIdFor(
+        caseId: openCase.id,
+        lawyerId: lawyer.id,
+      );
+
+      await repo.approveRequest(requestId: docId, client: client);
+
+      // chat_rooms/{roomId} should now exist (roomId == docId).
+      final chatSnap =
+          await fakeDb.collection('chat_rooms').doc(docId).get();
+      expect(chatSnap.exists, isTrue);
+
+      final chatData = chatSnap.data()!;
+      expect(chatData['caseId'], openCase.id);
+      expect(chatData['clientId'], client.id);
+      expect(chatData['lawyerId'], lawyer.id);
+
+      // Participants array contains both parties.
+      final participants = List<String>.from(
+        chatData['participants'] as List? ?? [],
+      );
+      expect(participants, containsAll([client.id, lawyer.id]));
+
+      // Client name comes from the ClientReveal built from client.
+      expect(chatData['clientName'], client.name);
+
+      // Lawyer name comes from the LawyerSnapshot.
+      expect(
+        chatData['lawyerName'],
+        isNotEmpty,
+      );
+
+      // Case title is populated from the case doc.
+      expect(chatData['caseTitle'], openCase.title);
+
+      // Unread counts start at zero.
+      final counts = Map<String, dynamic>.from(
+        chatData['unreadCounts'] as Map? ?? {},
+      );
+      expect(counts[client.id], 0);
+      expect(counts[lawyer.id], 0);
+    });
   });
 
   // ── declineRequest ──────────────────────────────────────────────────────────

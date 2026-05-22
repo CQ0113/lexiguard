@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/user_model.dart';
+import '../../repositories/chat_repository.dart';
 import '../../repositories/connection_request_repository.dart';
 import '../../widgets/lawyer_snapshot_card.dart';
 import '../../widgets/lawyer_profile_sheet.dart';
+import '../chat/chat_room_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONNECTION REQUESTS SCREEN — SCRUM-23
@@ -84,7 +86,7 @@ class _ConnectionRequestsScreenState extends State<ConnectionRequestsScreen> {
               client: widget.client,
               repo: _repo,
             ),
-            _HistoryTab(clientId: widget.client.id, repo: _repo),
+            _HistoryTab(clientId: widget.client.id, client: widget.client, repo: _repo),
           ],
         ),
       ),
@@ -162,9 +164,14 @@ class _PendingTabState extends State<_PendingTab> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _HistoryTab extends StatelessWidget {
-  const _HistoryTab({required this.clientId, required this.repo});
+  const _HistoryTab({
+    required this.clientId,
+    required this.client,
+    required this.repo,
+  });
 
   final String clientId;
+  final UserModel client;
   final ConnectionRequestRepository repo;
 
   @override
@@ -194,8 +201,10 @@ class _HistoryTab extends StatelessWidget {
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           itemCount: requests.length,
-          itemBuilder: (context, i) =>
-              _HistoryRequestCard(request: requests[i]),
+          itemBuilder: (context, i) => _HistoryRequestCard(
+            request: requests[i],
+            client: client,
+          ),
         );
       },
     );
@@ -702,9 +711,13 @@ class _DeclineSheetState extends State<_DeclineSheet> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _HistoryRequestCard extends StatelessWidget {
-  const _HistoryRequestCard({required this.request});
+  const _HistoryRequestCard({
+    required this.request,
+    required this.client,
+  });
 
   final ConnectionRequestModel request;
+  final UserModel client;
 
   @override
   Widget build(BuildContext context) {
@@ -759,17 +772,77 @@ class _HistoryRequestCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             // Status pill (replaces action buttons)
-            _buildStatusPill(req),
+            _buildStatusPill(context, req),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusPill(ConnectionRequestModel req) {
+  Future<void> _openChat(BuildContext context) async {
+    // Room ID == connection request ID == "${caseId}_${lawyerId}"
+    final repo = ChatRepository();
+    final room = await repo.fetchRoom(request.id);
+    if (!context.mounted) return;
+    if (room == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Chat room not found. It may have been created before chat was enabled.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: Colors.grey[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatRoomScreen(
+          currentUser: client,
+          room: room,
+          repository: repo,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusPill(BuildContext context, ConnectionRequestModel req) {
     switch (req.status) {
       case ConnectionRequestStatus.approved:
-        return _pill('Connected', Colors.green[700]!, Colors.green[50]!);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _pill('Connected', Colors.green[700]!, Colors.green[50]!),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _openChat(context),
+                icon: const Icon(Icons.chat_bubble_outline, size: 15),
+                label: Text(
+                  'Open Chat',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0C1D36),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+          ],
+        );
 
       case ConnectionRequestStatus.declined:
         return Column(

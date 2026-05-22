@@ -9,6 +9,12 @@ const {
 const {
   buildVerificationDecision,
 } = require("./verification/verification_decision");
+const {
+  generateLegalChatResponse,
+} = require("./chat/lexibot");
+const {
+  seedLawCorpus,
+} = require("./chat/corpus_seed");
 
 initializeApp();
 
@@ -242,3 +248,6 @@ exports.reviewVerificationRequest = onCall({ invoker: 'public' }, async (request
     verificationStatus,
   };
 });
+
+exports.generateLegalChatResponse = generateLegalChatResponse;
+exports.seedLawCorpus = seedLawCorpus;

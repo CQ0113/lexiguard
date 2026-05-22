@@ -1,0 +1,17 @@
+SOURCE: https://lom.agc.gov.my/ilims/upload/portal/akta/outputp/act_136/Act%20136.pdf
+ACT: Contracts Act 1950
+ACT_NO: Act 136
+LANGUAGE: English
+RETRIEVED: 2026-05
+
+## s10 — What agreements are contracts
+Section 10 defines the conditions under which an agreement becomes a legally binding contract in Malaysia. All agreements are contracts if they are made by the free consent of parties who are competent to contract, for a lawful consideration and with a lawful object, and are not expressly declared to be void by the Act. The section preserves any existing Malaysian law that requires a contract to be made in writing, attested by witnesses, or registered.
+
+## s14 — Free consent defined
+Section 14 defines "free consent" as consent that is not caused by coercion, undue influence, fraud, misrepresentation, or mistake. Consent is said to be "so caused" when it would not have been given but for the existence of those vitiating factors. The section cross-references sections 15 to 23 for the detailed definitions of each factor.
+
+## s74 — Compensation for breach of contract where penalty stipulated
+Section 74 governs liquidated damages and penalty clauses in Malaysian contracts. When a contract contains a sum named as the amount to be paid in case of breach, the party suffering from the breach is entitled to receive reasonable compensation, which shall not exceed the sum so named. The court has discretion to award a sum it considers reasonable, regardless of whether the stipulated sum is characterised as a penalty or as liquidated damages.
+
+## sXX — [TODO: Title]
+[TODO: paste from https://lom.agc.gov.my/]

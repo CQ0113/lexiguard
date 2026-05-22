@@ -302,6 +302,47 @@ class ConnectionRequestRepository {
           }
         }
       }
+
+      // 4. Create (or merge) the chat room so messaging is available
+      //    immediately after approval.
+      //
+      //    roomId == requestId == docIdFor(caseId, lawyerId).
+      //    SetOptions(merge: true) makes re-approval idempotent — if the room
+      //    already has messages, the denormalized fields are refreshed but the
+      //    lastMessage* / unreadCounts written here only take effect if they
+      //    are absent (they are omitted via merge on a pre-existing doc).
+      final lawyerSnapshotMap =
+          requestData['lawyerSnapshot'] as Map<String, dynamic>? ?? {};
+      String caseTitle = '';
+      if (caseSnap.exists) {
+        caseTitle = caseSnap.data()?['title']?.toString() ?? '';
+      }
+
+      final chatRoomRef = _db.collection('chat_rooms').doc(requestId);
+      tx.set(
+        chatRoomRef,
+        {
+          'id': requestId,
+          'caseId': caseId,
+          'clientId': client.id,
+          'lawyerId': lawyerId,
+          'participants': [client.id, lawyerId],
+          'clientName': reveal.name,
+          'lawyerName':
+              lawyerSnapshotMap['name']?.toString() ?? '',
+          if (lawyerSnapshotMap['avatarUrl'] != null)
+            'lawyerAvatarUrl':
+                lawyerSnapshotMap['avatarUrl'].toString(),
+          'caseTitle': caseTitle,
+          'lastMessageText': '',
+          'lastMessageType': 'text',
+          'lastSenderId': '',
+          'lastMessageAt': now,
+          'createdAt': now,
+          'unreadCounts': {client.id: 0, lawyerId: 0},
+        },
+        SetOptions(merge: true),
+      );
     });
   }
 

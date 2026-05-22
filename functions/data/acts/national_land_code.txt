@@ -1,0 +1,17 @@
+SOURCE: https://lom.agc.gov.my/ilims/upload/portal/akta/outputp/act_828/Act%20828.pdf
+ACT: National Land Code
+ACT_NO: Act 828
+LANGUAGE: English
+RETRIEVED: 2026-05
+
+## s340 — Indefeasibility of title and interests
+Section 340 is the cornerstone of the Torrens system in Peninsular Malaysia. It provides that the title or interest of any person, or of any body corporate, registered as proprietor of any land, or in whose name any lease, charge, or easement is registered, shall be indefeasible except in specific circumstances. Those exceptions include registration obtained by fraud, misrepresentation, forgery, or an insufficient or void instrument, as well as cases where the title is acquired by a party who is not a bona fide purchaser for value.
+
+## s206 — Dealings in land
+Section 206 provides that, subject to the provisions of the Code, any person may deal with land or any undivided share of land or any lease or charge or any undivided share of a lease or charge, and the dealing shall be valid and effectual only if it is effected in the manner provided by and registered in accordance with the Code. Dealings not in compliance with the Code are void. The section underpins the requirement for formal execution of instruments and their registration in the land register.
+
+## s433A — Restriction in interest
+Section 433A governs the endorsement of restrictions in interest on a document of title. A restriction may prohibit or regulate the transfer, lease, charge, or other dealings with the land or interest without the prior consent of the State Authority or another specified party. Dealings in breach of a registered restriction in interest are void, and the Registrar shall not register any such instrument unless the required consent has been obtained.
+
+## sXX — [TODO: Title]
+[TODO: paste from https://lom.agc.gov.my/]

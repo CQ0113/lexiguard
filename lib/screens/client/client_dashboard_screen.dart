@@ -15,6 +15,7 @@ import '../shared/case_detail_screen.dart';
 import '../shared/profile_screen.dart';
 import '../shared/vault_tab_router_screen.dart';
 import 'connection_requests_screen.dart';
+import '../chat/chat_list_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT SHELL — matches MobileShell + all client screens from Figma
@@ -168,10 +169,7 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
         index: _currentTab <= 1 ? 0 : _currentTab - 1,
         children: [
           _ClientHomeTab(user: widget.user), // Maps to index 0 (Home)
-          _PlaceholderTab(
-            'Chat',
-            Icons.chat_bubble_outline_rounded,
-          ), // Maps to index 2 (Chat)
+          ChatListScreen(currentUser: widget.user), // Maps to index 2 (Chat)
           VaultTabRouterScreen(user: widget.user), // Maps to index 3 (Vault)
           _PlaceholderTab(
             'Sign',

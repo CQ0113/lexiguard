@@ -1,0 +1,17 @@
+SOURCE: https://lom.agc.gov.my/ilims/upload/portal/akta/outputp/act_254/Act%20254.pdf
+ACT: Limitation Act 1953
+ACT_NO: Act 254
+LANGUAGE: English
+RETRIEVED: 2026-05
+
+## s6 — Limitation of actions in contract, tort, etc.
+Section 6 sets the primary limitation periods for civil actions in Malaysia. Actions founded on a contract or on tort shall not be brought after the expiration of six years from the date on which the cause of action accrued. Actions to recover a sum recoverable by virtue of any written law shall also be subject to a six-year limitation period unless the written law prescribes a shorter period. The section does not apply to specialty contracts or to actions to recover land.
+
+## s9 — Limitation of actions to recover land
+Section 9 provides that no action shall be brought by any person to recover any land after the expiration of twelve years from the date on which the right of action accrued. Where the land is vested in a person under a disability (such as a minor or a person of unsound mind), time does not run until the disability ceases or the person dies, whichever is the earlier.
+
+## s29 — Postponement of limitation in case of fraud or mistake
+Section 29 provides a saving provision that postpones the running of the limitation period in cases of fraud or mistake. Where a cause of action is based on the fraud of the defendant or any person through whom he claims, or the action is for relief from the consequences of a mistake, the limitation period shall not begin to run until the plaintiff has discovered the fraud or mistake, or could with reasonable diligence have discovered it.
+
+## sXX — [TODO: Title]
+[TODO: paste from https://lom.agc.gov.my/]

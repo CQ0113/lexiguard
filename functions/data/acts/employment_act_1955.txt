@@ -1,0 +1,17 @@
+SOURCE: https://lom.agc.gov.my/ilims/upload/portal/akta/outputp/act_265/Act%20265.pdf
+ACT: Employment Act 1955
+ACT_NO: Act 265
+LANGUAGE: English
+RETRIEVED: 2026-05
+
+## s12 — Termination of contract by employer or employee
+Section 12 provides that either party to a contract of service may at any time terminate the contract by giving written notice of the period specified in the contract or, where no period is specified, by giving notice in accordance with the minimum periods prescribed by the Act based on the length of service. The section also allows for termination by either party without notice in cases of wilful breach of a condition of the contract by the other party.
+
+## s60A — Hours of work
+Section 60A sets out the maximum hours of work for employees covered by the Act. An employee shall not be required to work more than five consecutive hours without a period of leisure of not less than thirty minutes, more than eight hours in one day, or more than forty-eight hours in one week. The section provides exceptions for certain categories of work and for cases where the employer and employee agree to an averaging arrangement approved by the Director General.
+
+## s69 — Power of Director General to inquire into complaints
+Section 69 confers jurisdiction on the Director General of Labour to inquire into and decide complaints of non-payment of wages, termination benefits, or other sums due under the Act. The Director General may make an order directing the employer to pay any sum found to be due to the employee, and such order is enforceable as a judgment of a civil court. Claims must generally be brought within one year of the date the sum became due.
+
+## sXX — [TODO: Title]
+[TODO: paste from https://lom.agc.gov.my/]
