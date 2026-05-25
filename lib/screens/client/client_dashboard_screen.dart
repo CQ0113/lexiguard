@@ -8,11 +8,13 @@ import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../../repositories/case_repository.dart';
+import '../../repositories/connection_request_repository.dart';
 import '../login_screen.dart';
 import '../shared/post_case_screen.dart';
 import '../shared/case_detail_screen.dart';
 import '../shared/profile_screen.dart';
 import '../shared/vault_tab_router_screen.dart';
+import 'connection_requests_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT SHELL — matches MobileShell + all client screens from Figma
@@ -253,9 +255,15 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
   static const _navy = Color(0xFF0B2447);
   static const _gold = Color(0xFFD4AF37);
   final CaseRepository _caseRepository = CaseRepository();
+  late final ConnectionRequestRepository _connRepo;
+  late final Stream<List<ConnectionRequestModel>> _pendingStream;
 
-  // Pending requests count (simulated from connection-context)
-  final int _pendingCount = 2;
+  @override
+  void initState() {
+    super.initState();
+    _connRepo = ConnectionRequestRepository();
+    _pendingStream = _connRepo.streamPendingForClient(widget.user.id);
+  }
 
   // Quick actions (from client-dashboard.tsx exactly)
   static const _quickActions = [
@@ -365,15 +373,36 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<List<ConnectionRequestModel>>(
+      stream: _pendingStream,
+      builder: (context, pendingSnap) {
+        if (pendingSnap.hasError) {
+          debugPrint('[ClientDashboard] pendingStream error: ${pendingSnap.error}');
+        }
+        final pendingRequests = pendingSnap.data ?? const [];
+        return _buildWithPending(pendingRequests);
+      },
+    );
+  }
+
+  Widget _buildWithPending(List<ConnectionRequestModel> pendingRequests) {
     if (!_canUseFirestoreCases) {
-      return _buildContent(myCases: _myCases, activeCase: _activeCase);
+      return _buildContent(
+        myCases: _myCases,
+        activeCase: _activeCase,
+        pendingRequests: pendingRequests,
+      );
     }
 
     return StreamBuilder<List<CaseModel>>(
       stream: _caseRepository.streamClientCases(clientId: widget.user.id),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return _buildContent(myCases: _myCases, activeCase: _activeCase);
+          return _buildContent(
+            myCases: _myCases,
+            activeCase: _activeCase,
+            pendingRequests: pendingRequests,
+          );
         }
 
         final myCases = _mergeCases(
@@ -381,7 +410,11 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           _myCases,
         );
         final activeCase = _activeCaseFrom(myCases);
-        return _buildContent(myCases: myCases, activeCase: activeCase);
+        return _buildContent(
+          myCases: myCases,
+          activeCase: activeCase,
+          pendingRequests: pendingRequests,
+        );
       },
     );
   }
@@ -389,7 +422,9 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
   Widget _buildContent({
     required List<CaseModel> myCases,
     required CaseModel? activeCase,
+    required List<ConnectionRequestModel> pendingRequests,
   }) {
+    final pendingCount = pendingRequests.length;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
       child: Column(
@@ -428,7 +463,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                       color: Colors.grey[500],
                       size: 24,
                     ),
-                    if (_pendingCount > 0)
+                    if (pendingCount > 0)
                       Positioned(
                         top: 0,
                         right: 0,
@@ -441,7 +476,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                           ),
                           child: Center(
                             child: Text(
-                              '$_pendingCount',
+                              '$pendingCount',
                               style: GoogleFonts.inter(
                                 color: Colors.white,
                                 fontSize: 9,
@@ -459,9 +494,16 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           const SizedBox(height: 16),
 
           // ── Pending lawyers banner (gold gradient, from client-dashboard.tsx) ─
-          if (_pendingCount > 0) ...[
+          if (pendingCount > 0) ...[
             GestureDetector(
-              onTap: () {},
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ConnectionRequestsScreen(
+                    client: widget.user,
+                    repository: _connRepo,
+                  ),
+                ),
+              ),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -493,7 +535,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '$_pendingCount Lawyer${_pendingCount > 1 ? "s" : ""} Interested!',
+                                '$pendingCount Lawyer${pendingCount > 1 ? "s" : ""} Interested!',
                                 style: GoogleFonts.inter(
                                   color: _navy,
                                   fontSize: 14,
@@ -517,13 +559,16 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                         ),
                       ],
                     ),
-                    // Avatar stack (from client-dashboard.tsx)
+                    // Avatar stack — up to 3 real avatars from pending requests
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        // Simulated avatar circles
-                        ...['AK', 'FI'].map(
-                          (init) => Container(
+                        ...pendingRequests.take(3).map((req) {
+                          final snap = req.lawyerSnapshot;
+                          final initial = snap.name.isNotEmpty
+                              ? snap.name[0].toUpperCase()
+                              : '?';
+                          return Container(
                             width: 28,
                             height: 28,
                             margin: const EdgeInsets.only(right: 4),
@@ -531,25 +576,40 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                               color: _navy,
                               shape: BoxShape.circle,
                               border: Border.all(color: _gold, width: 2),
+                              image: snap.avatarUrl != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(snap.avatarUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
                             ),
-                            child: Center(
-                              child: Text(
-                                init,
-                                style: GoogleFonts.inter(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+                            child: snap.avatarUrl == null
+                                ? Center(
+                                    child: Text(
+                                      initial,
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          );
+                        }),
                         const SizedBox(width: 4),
-                        Text(
-                          'Aishah, Faizal',
-                          style: GoogleFonts.inter(
-                            color: _navy.withValues(alpha: 0.8),
-                            fontSize: 11,
+                        Expanded(
+                          child: Text(
+                            pendingRequests
+                                .take(3)
+                                .map((r) => r.lawyerSnapshot.name.split(' ').first)
+                                .join(', '),
+                            style: GoogleFonts.inter(
+                              color: _navy.withValues(alpha: 0.8),
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

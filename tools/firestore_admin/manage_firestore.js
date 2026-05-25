@@ -384,7 +384,15 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+module.exports = {
+  parseArgs,
+  resolveServiceAccountPath,
+  requireFirebaseApp,
+};
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });
+}

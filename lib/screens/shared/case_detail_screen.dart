@@ -1,19 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../../repositories/case_repository.dart';
+import '../../repositories/connection_request_repository.dart';
+import '../../widgets/express_interest_sheet.dart';
 
 class CaseDetailScreen extends StatefulWidget {
   final CaseModel caseModel;
   final UserModel viewer; // the logged-in user viewing the case
 
+  /// Optional: inject a [ConnectionRequestRepository] (e.g. for testing
+  /// without a live Firebase). Defaults to a new instance for lawyer viewers.
+  final ConnectionRequestRepository? repository;
+
   const CaseDetailScreen({
     super.key,
     required this.caseModel,
     required this.viewer,
+    this.repository,
   });
 
   @override
@@ -26,19 +37,37 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   static const Color _bg = Color(0xFFF8FAFC);
 
   late CaseModel _case;
-  bool _isLoadingInterest = false;
+
+  // Lazily created only for lawyer viewers so the widget can be constructed
+  // in tests without a live Firebase connection.
+  ConnectionRequestRepository? _repoInstance;
+  ConnectionRequestRepository get _repo =>
+      _repoInstance ??= widget.repository ?? ConnectionRequestRepository();
+
+  // Live case subscription — keeps fields like `interestedLawyerIds`,
+  // `status`, `lawyerId` in sync after withdraw/decline/approve.
+  StreamSubscription<CaseModel?>? _caseSub;
 
   @override
   void initState() {
     super.initState();
     _case = widget.caseModel;
+
+    if (FirebaseInitializer.isReady) {
+      _caseSub = CaseRepository().watchCase(_case.id).listen((updated) {
+        if (!mounted || updated == null) return;
+        setState(() => _case = updated);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _caseSub?.cancel();
+    super.dispose();
   }
 
   bool get _isLawyer => widget.viewer.role == UserRole.lawyer;
-  bool get _canLawyerExpressInterest =>
-      _isLawyer && widget.viewer.canAccessMarketplace;
-  bool get _hasExpressedInterest =>
-      _case.interestedLawyerIds.contains(widget.viewer.id);
 
   UserModel _resolveClientUser() {
     try {
@@ -65,59 +94,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     }
   }
 
-  // ── Express / withdraw interest ──────────────────────────────────────────
-  Future<void> _toggleInterest() async {
-    setState(() => _isLoadingInterest = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-
-    final updatedIds = List<String>.from(_case.interestedLawyerIds);
-    if (_hasExpressedInterest) {
-      updatedIds.remove(widget.viewer.id);
-    } else {
-      updatedIds.add(widget.viewer.id);
-    }
-
-    // Rebuild the case with the updated list
-    final updated = CaseModel(
-      id: _case.id,
-      clientId: _case.clientId,
-      lawyerId: _case.lawyerId,
-      title: _case.title,
-      description: _case.description,
-      location: _case.location,
-      budgetRange: _case.budgetRange,
-      category: _case.category,
-      status: _case.status,
-      urgency: _case.urgency,
-      progressPercent: _case.progressPercent,
-      nextHearing: _case.nextHearing,
-      createdAt: _case.createdAt,
-      interestedLawyerIds: updatedIds,
-      attachments: _case.attachments,
-    );
-
-    // Persist into global dummy store
-    final idx = DummyData.openCases.indexWhere((c) => c.id == _case.id);
-    if (idx != -1) DummyData.openCases[idx] = updated;
-
-    if (mounted) {
-      setState(() {
-        _case = updated;
-        _isLoadingInterest = false;
-      });
-      if (!_hasExpressedInterest) {
-        // hasExpressedInterest is checked BEFORE re-assignment above,
-        // so if we just expressed interest, show confirmation
-      }
-      _showSnack(
-        _hasExpressedInterest
-            ? 'Interest withdrawn.'
-            : '✓ Interest expressed! The client will be notified.',
-        _hasExpressedInterest ? Colors.grey : const Color(0xFF2E7D32),
-      );
-    }
-  }
-
+  // ── Snackbar helper ──────────────────────────────────────────────────────
   void _showSnack(String msg, Color bg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -130,9 +107,71 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     );
   }
 
+  // ── Withdraw confirmation dialog ─────────────────────────────────────────
+  Future<void> _confirmWithdraw(String requestId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Withdraw interest?',
+          style: GoogleFonts.inter(
+            color: const Color(0xFF0C1D36),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          'Withdraw your expression of interest? You can re-send later if you change your mind.',
+          style: GoogleFonts.inter(color: Colors.grey[700], fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.grey[600]),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Withdraw',
+              style: GoogleFonts.inter(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        await _repo.withdrawRequest(requestId);
+        if (mounted) {
+          _showSnack('Interest withdrawn.', Colors.grey[700]!);
+        }
+      } catch (e) {
+        if (mounted) {
+          _showSnack('Could not withdraw. Please try again.', Colors.redAccent);
+        }
+      }
+    }
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // Only subscribe to the request stream for verified lawyers — clients and
+    // unverified lawyers don't need it (unverified see a disabled button,
+    // clients have no EOI surface at all).
+    final requestStream = (_isLawyer && widget.viewer.canAccessMarketplace)
+        ? _repo.watchRequest(
+            caseId: _case.id,
+            lawyerId: widget.viewer.id,
+          )
+        : null;
+
     return Scaffold(
       backgroundColor: _bg,
       body: CustomScrollView(
@@ -156,7 +195,6 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   const SizedBox(height: 20),
                   if (_case.attachments.isNotEmpty) _buildAttachmentsCard(),
                   if (_case.attachments.isNotEmpty) const SizedBox(height: 20),
-                  if (_isLawyer) _buildInterestedLawyersSection(),
                   if (!_isLawyer) _buildInterestedLawyersSection(),
                   const SizedBox(height: 20),
                   if (_case.progressPercent > 0) _buildProgressCard(),
@@ -169,9 +207,16 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton:
-          _canLawyerExpressInterest && _case.status == CaseStatus.pending
-          ? _buildInterestFAB()
+      floatingActionButton: _isLawyer
+          ? (requestStream != null
+              ? StreamBuilder<ConnectionRequestModel?>(
+                  stream: requestStream,
+                  builder: (ctx, snapshot) {
+                    final request = snapshot.data;
+                    return _buildLawyerFAB(request);
+                  },
+                )
+              : _buildLawyerFAB(null))
           : null,
     );
   }
@@ -359,15 +404,22 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   }
 
   // ── Details Card ─────────────────────────────────────────────────────────
+
+  /// True when the viewer is a lawyer who has not yet been approved for this case.
+  bool get _isUnconnectedLawyer =>
+      _isLawyer && _case.lawyerId != widget.viewer.id;
+
   Widget _buildDetailsCard() {
-    final clientUser = _resolveClientUser();
+    final displayName = _isUnconnectedLawyer
+        ? 'CLIENT-${_case.id.hashCode.abs() % 10000}'
+        : _resolveClientUser().name;
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _cardHeader(Icons.info_outline, 'Case Information'),
           const SizedBox(height: 16),
-          _detailRow(Icons.person_outline, 'Client', clientUser.name),
+          _detailRow(Icons.person_outline, 'Client', displayName),
           _divider(),
           _detailRow(Icons.label_outline, 'Category', _case.categoryLabel),
           if (_case.location != null && _case.location!.isNotEmpty) ...[
@@ -676,43 +728,171 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     );
   }
 
-  // ── Express Interest FAB ─────────────────────────────────────────────────
-  Widget _buildInterestFAB() {
-    final expressed = _hasExpressedInterest;
+  // ── Lawyer EOI FAB — state machine ───────────────────────────────────────
+  //
+  // State table (viewer is always a lawyer here):
+  //
+  //  Lawyer not verified               → disabled "Verify to send requests"
+  //  Case assigned to another lawyer   → disabled "Case assigned to another lawyer"
+  //  Case assigned to THIS lawyer      → "Connected" pill (green, no-op)
+  //  No request OR withdrawn/expired   → gold "Express Interest" → opens sheet
+  //  Pending request                   → "Pending review" + "Withdraw" secondary
+  //  Declined request                  → disabled "Request declined"
+  //  Approved request                  → "Connected" pill (treat same as assigned)
+  //
+  Widget _buildLawyerFAB(ConnectionRequestModel? request) {
+    // Guard: not verified
+    if (!widget.viewer.canAccessMarketplace) {
+      return _fab(
+        label: 'Verify to send requests',
+        icon: Icons.lock_outline,
+        bg: Colors.grey[300]!,
+        fg: Colors.grey[600]!,
+        onPressed: null,
+      );
+    }
+
+    // Guard: case assigned to another lawyer
+    final assignedLawyerId = _case.lawyerId;
+    if (assignedLawyerId != null &&
+        assignedLawyerId.isNotEmpty &&
+        assignedLawyerId != widget.viewer.id) {
+      return _fab(
+        label: 'Case assigned to another lawyer',
+        icon: Icons.info_outline,
+        bg: Colors.grey[200]!,
+        fg: Colors.grey[500]!,
+        onPressed: null,
+      );
+    }
+
+    // Connected (assigned to self OR request approved)
+    if ((assignedLawyerId != null && assignedLawyerId == widget.viewer.id) ||
+        request?.status == ConnectionRequestStatus.approved) {
+      return _fab(
+        label: 'Connected',
+        icon: Icons.check_circle_outline,
+        bg: const Color(0xFF2E7D32),
+        fg: Colors.white,
+        onPressed: null, // future: open chat
+      );
+    }
+
+    // Declined — terminal, no re-send
+    if (request?.status == ConnectionRequestStatus.declined) {
+      return _fab(
+        label: 'Request declined',
+        icon: Icons.cancel_outlined,
+        bg: Colors.grey[200]!,
+        fg: Colors.grey[500]!,
+        onPressed: null,
+      );
+    }
+
+    // Pending — show "Pending review" + Withdraw secondary
+    if (request?.status == ConnectionRequestStatus.pending) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: null, // no primary action while pending
+                icon: const Icon(Icons.hourglass_empty, size: 18),
+                label: Text(
+                  'Pending review',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey[200],
+                  foregroundColor: Colors.grey[600],
+                  disabledBackgroundColor: Colors.grey[200],
+                  disabledForegroundColor: Colors.grey[600],
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: () => _confirmWithdraw(request!.id),
+              child: Text(
+                'Withdraw',
+                style: GoogleFonts.inter(
+                  color: Colors.redAccent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // No request, or withdrawn/expired — show primary "Express Interest" CTA
+    // Also only show for pending cases (seeking lawyer)
+    if (_case.status != CaseStatus.pending) {
+      return const SizedBox.shrink();
+    }
+
+    return _fab(
+      label: 'Express Interest',
+      icon: Icons.handshake_outlined,
+      bg: _gold,
+      fg: _navy,
+      onPressed: () async {
+        await ExpressInterestSheet.show(
+          context,
+          targetCase: _case,
+          lawyer: widget.viewer,
+          repository: _repo,
+        );
+        // Stream automatically updates FAB state — no setState needed.
+      },
+    );
+  }
+
+  Widget _fab({
+    required String label,
+    required IconData icon,
+    required Color bg,
+    required Color fg,
+    required VoidCallback? onPressed,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: SizedBox(
         width: double.infinity,
-        height: 56,
+        height: 48,
         child: ElevatedButton.icon(
-          onPressed: _isLoadingInterest ? null : _toggleInterest,
-          icon: _isLoadingInterest
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2.5,
-                  ),
-                )
-              : Icon(
-                  expressed
-                      ? Icons.handshake_outlined
-                      : Icons.handshake_outlined,
-                  size: 20,
-                ),
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
           label: Text(
-            expressed ? 'Withdraw Interest' : 'Express Interest',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15),
+            label,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: expressed ? Colors.grey[700] : _navy,
-            foregroundColor: Colors.white,
+            backgroundColor: bg,
+            foregroundColor: fg,
+            disabledBackgroundColor: bg,
+            disabledForegroundColor: fg,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
             ),
-            elevation: expressed ? 0 : 4,
-            shadowColor: _navy.withValues(alpha: 0.4),
+            elevation: onPressed != null ? 2 : 0,
+            shadowColor: _navy.withValues(alpha: 0.2),
           ),
         ),
       ),
@@ -766,15 +946,19 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(icon, color: Colors.grey[400], size: 16),
           const SizedBox(width: 10),
-          Text(
-            label,
-            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
+            ),
           ),
-          const Spacer(),
-          Flexible(
+          Expanded(
+            flex: 3,
             child: Text(
               value,
               textAlign: TextAlign.right,
