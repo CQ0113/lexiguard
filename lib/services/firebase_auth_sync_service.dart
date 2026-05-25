@@ -41,7 +41,7 @@ class FirebaseAuthSyncService {
   VerificationReviewRepository get _resolvedVerificationReviewRepository =>
       _verificationReviewRepository ?? VerificationReviewRepository();
 
-  Future<({bool adapterFailed})> syncSession({
+  Future<SyncSessionResult> syncSession({
     required bool isLogin,
     required String email,
     required String password,
@@ -49,7 +49,7 @@ class FirebaseAuthSyncService {
     UserModel? lawyerProfile,
   }) async {
     if (!FirebaseInitializer.isReady) {
-      return (adapterFailed: false);
+      return const SyncSessionResult(firebaseUnavailable: true);
     }
 
     try {
@@ -61,7 +61,7 @@ class FirebaseAuthSyncService {
 
       final user = credential.user;
       if (user == null) {
-        return (adapterFailed: false);
+        return const SyncSessionResult();
       }
 
       if (!isLogin) {
@@ -72,11 +72,15 @@ class FirebaseAuthSyncService {
           lawyerProfile: lawyerProfile,
         );
       }
+    } on FirebaseAuthException {
+      // Always re-throw auth credential errors (wrong password, invalid email,
+      // user-not-found, etc.) so the UI can show the correct error message.
+      rethrow;
     } catch (error) {
-      // Keep UX uninterrupted while backend wiring is being finalized.
       debugPrint('Firebase sync skipped: $error');
+      return SyncSessionResult(syncError: error.toString());
     }
-    return (adapterFailed: false);
+    return const SyncSessionResult();
   }
 
   Future<UserCredential> _resolveCredential({
@@ -107,7 +111,7 @@ class FirebaseAuthSyncService {
     }
   }
 
-  Future<({bool adapterFailed})> _persistInitialProfile({
+  Future<SyncSessionResult> _persistInitialProfile({
     required String uid,
     required String email,
     required UserRole role,
@@ -155,10 +159,10 @@ class FirebaseAuthSyncService {
         'createdAt': now,
       },
     );
-    return (adapterFailed: false);
+    return const SyncSessionResult();
   }
 
-  Future<({bool adapterFailed})> _triggerVerificationScaffold({
+  Future<SyncSessionResult> _triggerVerificationScaffold({
     required String uid,
     required UserModel profile,
   }) async {
@@ -181,12 +185,48 @@ class FirebaseAuthSyncService {
         debugPrint(
           'Verification adapter failed for $uid — queued for manual review.',
         );
-        return (adapterFailed: true);
+        return const SyncSessionResult(adapterFailed: true);
       }
-      return (adapterFailed: false);
+      return const SyncSessionResult();
     } catch (error) {
       debugPrint('Verification callable trigger skipped: $error');
-      return (adapterFailed: false);
+      return SyncSessionResult(verificationCallError: error.toString());
     }
   }
+}
+
+/// Outcome of [FirebaseAuthSyncService.syncSession].
+///
+/// The flags are not mutually exclusive: e.g. an authenticated user may still
+/// hit `adapterFailed` if the Cloud Function ran but the Bar API request
+/// failed downstream.
+class SyncSessionResult {
+  const SyncSessionResult({
+    this.adapterFailed = false,
+    this.firebaseUnavailable = false,
+    this.syncError,
+    this.verificationCallError,
+  });
+
+  /// `startVerification` reported `adapterStatus == 'request_failed'`. The
+  /// account is still queued for manual review.
+  final bool adapterFailed;
+
+  /// Firebase isn't configured locally (no firebase_options.dart). Nothing was
+  /// written to Firestore and `startVerification` did not run.
+  final bool firebaseUnavailable;
+
+  /// Non-auth failure during Firestore writes or Cloud Function setup.
+  final String? syncError;
+
+  /// `startVerification` callable threw (e.g. function not deployed,
+  /// permission-denied, network error). Profile was written with the initial
+  /// `pending`/`manualReviewRequired` status but the Bar lookup did not run.
+  final String? verificationCallError;
+
+  bool get hasIssue =>
+      adapterFailed ||
+      firebaseUnavailable ||
+      syncError != null ||
+      verificationCallError != null;
 }

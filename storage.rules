@@ -1,0 +1,25 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /vault/{ownerUserId}/{fileName=**} {
+      allow read: if isSignedIn() &&
+          request.auth.uid == ownerUserId;
+      allow write: if isSignedIn() &&
+          request.auth.uid == ownerUserId;
+    }
+
+    match /case_attachments/{clientUserId}/{caseId}/{fileName=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() &&
+          request.auth.uid == clientUserId;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -13,6 +13,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.reviewer == true;
     }
 
+    function isVerifiedLawyer() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'auto_verified';
+    }
+
     match /users/{uid} {
       allow read: if isOwner(uid) || isReviewer();
       allow create: if isOwner(uid);
@@ -32,6 +37,138 @@ service cloud.firestore {
       allow read: if isOwner(uid) || isReviewer();
       allow update: if isReviewer();
       allow delete: if false;
+    }
+
+    match /cases/{caseId} {
+      allow read: if isSignedIn() &&
+          (resource.data.clientId == request.auth.uid ||
+              resource.data.lawyerId == request.auth.uid ||
+              // Verified lawyers may browse any pending case.
+              // status='pending' implies lawyerId==null by our data model.
+              (isVerifiedLawyer() &&
+                resource.data.status == 'pending'));
+
+      allow create: if isSignedIn() &&
+          request.resource.data.clientId == request.auth.uid &&
+          request.resource.data.title is string &&
+          request.resource.data.description is string &&
+          request.resource.data.category is string &&
+          request.resource.data.status is string &&
+          request.resource.data.status in ['pending', 'active', 'closed'] &&
+          request.resource.data.urgency is string &&
+          request.resource.data.progressPercent is number &&
+          request.resource.data.createdAt is timestamp &&
+          request.resource.data.interestedLawyerIds is list &&
+          (!('lawyerId' in request.resource.data) ||
+              request.resource.data.lawyerId == null ||
+              request.resource.data.lawyerId is string) &&
+          (!('nextHearing' in request.resource.data) ||
+              request.resource.data.nextHearing == null ||
+              request.resource.data.nextHearing is timestamp);
+
+      allow update: if isSignedIn() &&
+          request.resource.data.clientId == resource.data.clientId &&
+          request.resource.data.createdAt == resource.data.createdAt && (
+            // Original: case owner or assigned lawyer may update freely
+            (resource.data.clientId == request.auth.uid ||
+                resource.data.lawyerId == request.auth.uid) ||
+            // Verified lawyer appending self to interestedLawyerIds (EOI send)
+            (isVerifiedLawyer() &&
+                resource.data.lawyerId == null &&
+                request.resource.data.interestedLawyerIds.hasAll(resource.data.interestedLawyerIds) &&
+                request.resource.data.interestedLawyerIds.size() == resource.data.interestedLawyerIds.size() + 1) ||
+            // Verified lawyer removing self from interestedLawyerIds (withdraw)
+            (isVerifiedLawyer() &&
+                resource.data.lawyerId == null &&
+                resource.data.interestedLawyerIds.hasAll(request.resource.data.interestedLawyerIds) &&
+                request.resource.data.interestedLawyerIds.size() == resource.data.interestedLawyerIds.size() - 1 &&
+                !request.resource.data.interestedLawyerIds.hasAny([request.auth.uid])) ||
+            // Client setting lawyerId on their own case (approve connection)
+            (resource.data.clientId == request.auth.uid &&
+                resource.data.lawyerId == null &&
+                request.resource.data.lawyerId is string)
+          );
+
+      allow delete: if false;
+    }
+
+    match /connection_requests/{reqId} {
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.lawyerId
+        && isVerifiedLawyer()
+        && request.resource.data.status == 'pending'
+        && reqId == request.resource.data.caseId + '_' + request.auth.uid
+        // Required fields present
+        && request.resource.data.caseId is string
+        && request.resource.data.clientId is string
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 50
+        && request.resource.data.message.size() <= 500
+        && request.resource.data.lawyerSnapshot is map;
+
+      // Single-doc GET: also allows reading a non-existent doc so the
+      // sendRequest() transaction can check for a prior request.
+      allow get: if isSignedIn() && (
+        (resource == null && reqId.matches('.*_' + request.auth.uid)) ||
+        request.auth.uid == resource.data.clientId ||
+        request.auth.uid == resource.data.lawyerId
+      );
+      // Collection queries (streamPendingForClient, streamForLawyer, etc.)
+      allow list: if isSignedIn() && (
+        request.auth.uid == resource.data.clientId ||
+        request.auth.uid == resource.data.lawyerId
+      );
+
+      allow update: if isSignedIn() && (
+        // Client approves
+        (request.auth.uid == resource.data.clientId
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'approved'
+          && request.resource.data.clientReveal is map) ||
+        // Client declines
+        (request.auth.uid == resource.data.clientId
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'declined') ||
+        // Lawyer withdraws
+        (request.auth.uid == resource.data.lawyerId
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'withdrawn') ||
+        // Lawyer re-sends after withdraw/expire (resets to pending from withdrawn or expired)
+        (request.auth.uid == resource.data.lawyerId
+          && resource.data.lawyerId == request.resource.data.lawyerId
+          && resource.data.status in ['withdrawn', 'expired']
+          && request.resource.data.status == 'pending'
+          && isVerifiedLawyer()) ||
+        // System auto-expire: client flips sibling pending requests to expired
+        // when a client approves one request, the client also writes 'expired' to siblings
+        (request.auth.uid == resource.data.clientId
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'expired')
+      );
+
+      allow delete: if false;
+    }
+
+    match /vault_documents/{docId} {
+      allow read: if isSignedIn() &&
+          (resource.data.ownerUserId == request.auth.uid ||
+              (resource.data.allowedUserIds is list &&
+                  request.auth.uid in resource.data.allowedUserIds));
+
+      allow create: if isSignedIn() &&
+          request.resource.data.ownerUserId == request.auth.uid &&
+          request.resource.data.fileName is string &&
+          request.resource.data.downloadUrl is string &&
+          request.resource.data.storagePath is string &&
+          request.resource.data.allowedUserIds is list &&
+          request.auth.uid in request.resource.data.allowedUserIds;
+
+      allow update: if isSignedIn() &&
+          resource.data.ownerUserId == request.auth.uid &&
+          request.resource.data.ownerUserId == resource.data.ownerUserId;
+
+      allow delete: if isSignedIn() &&
+          resource.data.ownerUserId == request.auth.uid;
     }
 
     match /{document=**} {

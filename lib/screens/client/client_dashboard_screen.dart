@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
+import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../../repositories/case_repository.dart';
+import '../../repositories/connection_request_repository.dart';
 import '../login_screen.dart';
 import '../shared/post_case_screen.dart';
 import '../shared/case_detail_screen.dart';
+import '../shared/profile_screen.dart';
+import '../shared/vault_tab_router_screen.dart';
+import 'connection_requests_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT SHELL — matches MobileShell + all client screens from Figma
@@ -27,7 +34,7 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
 
   int _currentTab = 0;
 
-  // Bottom nav tabs (from mobile-shell.tsx clientTabs)
+  // Bottom nav tabs (following your exact 6 tabs)
   static const _tabs = [
     _Tab(Icons.grid_view_rounded, 'Home'),
     _Tab(Icons.add_circle_outline_rounded, 'Post Case'),
@@ -41,13 +48,13 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
     if (idx == 1) {
       // Post Case — navigate as full screen
       final result = await Navigator.of(context).push<CaseModel>(
-        MaterialPageRoute(
-          builder: (_) => PostCaseScreen(poster: widget.user),
-        ),
+        MaterialPageRoute(builder: (_) => PostCaseScreen(poster: widget.user)),
       );
       if (result != null) setState(() {});
       return;
     }
+
+    // Switched to internal tab navigation instead of Navigator.push
     setState(() => _currentTab = idx);
   }
 
@@ -99,22 +106,31 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: const Center(
-                      child: Icon(Icons.shield_outlined,
-                          color: _navy, size: 18),
+                      child: Icon(
+                        Icons.shield_outlined,
+                        color: _navy,
+                        size: 18,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text('LexiGuard',
-                      style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600)),
+                  Text(
+                    'LexiGuard',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const Spacer(),
                   // Notification bell
                   Stack(
                     children: [
-                      const Icon(Icons.notifications_none_outlined,
-                          color: Colors.white70, size: 22),
+                      const Icon(
+                        Icons.notifications_none_outlined,
+                        color: Colors.white70,
+                        size: 22,
+                      ),
                       Positioned(
                         top: 0,
                         right: 0,
@@ -122,7 +138,9 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
                           width: 8,
                           height: 8,
                           decoration: const BoxDecoration(
-                              color: Colors.red, shape: BoxShape.circle),
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
                     ],
@@ -131,8 +149,11 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
                   // Logout
                   GestureDetector(
                     onTap: _logout,
-                    child: const Icon(Icons.logout_outlined,
-                        color: Colors.white70, size: 20),
+                    child: const Icon(
+                      Icons.logout_outlined,
+                      color: Colors.white70,
+                      size: 20,
+                    ),
                   ),
                 ],
               ),
@@ -142,13 +163,24 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       ),
       // ── Body ─────────────────────────────────────────────────────────────
       body: IndexedStack(
+        // The math maps the bottom nav index to the list of 5 screens below
+        // (skipping index 1 because Post Case is a push overlay)
         index: _currentTab <= 1 ? 0 : _currentTab - 1,
         children: [
-          _ClientHomeTab(user: widget.user),
-          _PlaceholderTab('Chat', Icons.chat_bubble_outline_rounded),
-          _PlaceholderTab('Vault', Icons.folder_outlined),
-          _PlaceholderTab('Sign', Icons.edit_document),
-          _ClientProfileTab(user: widget.user),
+          _ClientHomeTab(user: widget.user), // Maps to index 0 (Home)
+          _PlaceholderTab(
+            'Chat',
+            Icons.chat_bubble_outline_rounded,
+          ), // Maps to index 2 (Chat)
+          VaultTabRouterScreen(user: widget.user), // Maps to index 3 (Vault)
+          _PlaceholderTab(
+            'Sign',
+            Icons.edit_document,
+          ), // Maps to index 4 (Sign)
+          ProfileScreen(
+            user: widget.user,
+            embedded: true,
+          ), // Maps to index 5 (Profile)
         ],
       ),
       // ── Bottom nav (from mobile-shell.tsx) ───────────────────────────────
@@ -222,9 +254,16 @@ class _ClientHomeTab extends StatefulWidget {
 class _ClientHomeTabState extends State<_ClientHomeTab> {
   static const _navy = Color(0xFF0B2447);
   static const _gold = Color(0xFFD4AF37);
+  final CaseRepository _caseRepository = CaseRepository();
+  late final ConnectionRequestRepository _connRepo;
+  late final Stream<List<ConnectionRequestModel>> _pendingStream;
 
-  // Pending requests count (simulated from connection-context)
-  final int _pendingCount = 2;
+  @override
+  void initState() {
+    super.initState();
+    _connRepo = ConnectionRequestRepository();
+    _pendingStream = _connRepo.streamPendingForClient(widget.user.id);
+  }
 
   // Quick actions (from client-dashboard.tsx exactly)
   static const _quickActions = [
@@ -236,12 +275,24 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
 
   // Recent activity (from client-dashboard.tsx)
   static const _activities = [
-    _ActivityItem(Icons.edit_document, 'Contract reviewed by AI',
-        'Tenancy Agreement — 2 risks found', '2h ago'),
-    _ActivityItem(Icons.chat_bubble_outline_rounded, 'New message from Pn. Aishah',
-        'Regarding property dispute case', '5h ago'),
-    _ActivityItem(Icons.folder_outlined, 'Document shared',
-        'IC Copy — expires in 24h', '1d ago'),
+    _ActivityItem(
+      Icons.edit_document,
+      'Contract reviewed by AI',
+      'Tenancy Agreement — 2 risks found',
+      '2h ago',
+    ),
+    _ActivityItem(
+      Icons.chat_bubble_outline_rounded,
+      'New message from Pn. Aishah',
+      'Regarding property dispute case',
+      '5h ago',
+    ),
+    _ActivityItem(
+      Icons.folder_outlined,
+      'Document shared',
+      'IC Copy — expires in 24h',
+      '1d ago',
+    ),
   ];
 
   CaseModel? get _activeCase {
@@ -253,9 +304,65 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
   }
 
   List<CaseModel> get _myCases => [
-        ...DummyData.cases.where((c) => c.clientId == widget.user.id),
-        ...DummyData.openCases.where((c) => c.clientId == widget.user.id),
-      ];
+    ...DummyData.cases.where((c) => c.clientId == widget.user.id),
+    ...DummyData.openCases.where((c) => c.clientId == widget.user.id),
+  ];
+
+  List<CaseModel> _mergeCases(
+    List<CaseModel> primaryCases,
+    List<CaseModel> fallbackCases,
+  ) {
+    final merged = <String, CaseModel>{};
+
+    for (final caseModel in fallbackCases) {
+      merged[caseModel.id] = caseModel;
+    }
+
+    for (final caseModel in primaryCases) {
+      merged[caseModel.id] = caseModel;
+    }
+
+    final cases = merged.values.toList();
+    cases.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    return cases;
+  }
+
+  bool get _canUseFirestoreCases {
+    if (!FirebaseInitializer.isReady) return false;
+    return FirebaseAuth.instance.currentUser?.uid == widget.user.id;
+  }
+
+  CaseModel? _activeCaseFrom(List<CaseModel> cases) {
+    for (final caseModel in cases) {
+      if (caseModel.status == CaseStatus.active) {
+        return caseModel;
+      }
+    }
+    return null;
+  }
+
+  String _lawyerLabelFor(CaseModel caseModel) {
+    if (caseModel.lawyerId == null || caseModel.lawyerId!.isEmpty) {
+      return 'Lawyer: Awaiting assignment';
+    }
+
+    try {
+      final lawyer = DummyData.users.firstWhere(
+        (u) => u.id == caseModel.lawyerId,
+      );
+      return 'Lawyer: ${lawyer.name}';
+    } catch (_) {
+      return 'Lawyer assigned';
+    }
+  }
+
+  String _hearingLabelFor(CaseModel caseModel) {
+    if (caseModel.nextHearing == null) {
+      return 'Next hearing: To be scheduled';
+    }
+
+    return 'Next hearing: ${DateFormat('d MMMM yyyy').format(caseModel.nextHearing!)}';
+  }
 
   Future<void> _openPostCase() async {
     final result = await Navigator.of(context).push<CaseModel>(
@@ -266,8 +373,58 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    final activeCase = _activeCase;
+    return StreamBuilder<List<ConnectionRequestModel>>(
+      stream: _pendingStream,
+      builder: (context, pendingSnap) {
+        if (pendingSnap.hasError) {
+          debugPrint('[ClientDashboard] pendingStream error: ${pendingSnap.error}');
+        }
+        final pendingRequests = pendingSnap.data ?? const [];
+        return _buildWithPending(pendingRequests);
+      },
+    );
+  }
 
+  Widget _buildWithPending(List<ConnectionRequestModel> pendingRequests) {
+    if (!_canUseFirestoreCases) {
+      return _buildContent(
+        myCases: _myCases,
+        activeCase: _activeCase,
+        pendingRequests: pendingRequests,
+      );
+    }
+
+    return StreamBuilder<List<CaseModel>>(
+      stream: _caseRepository.streamClientCases(clientId: widget.user.id),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _buildContent(
+            myCases: _myCases,
+            activeCase: _activeCase,
+            pendingRequests: pendingRequests,
+          );
+        }
+
+        final myCases = _mergeCases(
+          snapshot.data ?? const <CaseModel>[],
+          _myCases,
+        );
+        final activeCase = _activeCaseFrom(myCases);
+        return _buildContent(
+          myCases: myCases,
+          activeCase: activeCase,
+          pendingRequests: pendingRequests,
+        );
+      },
+    );
+  }
+
+  Widget _buildContent({
+    required List<CaseModel> myCases,
+    required CaseModel? activeCase,
+    required List<ConnectionRequestModel> pendingRequests,
+  }) {
+    final pendingCount = pendingRequests.length;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
       child: Column(
@@ -280,23 +437,33 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Selamat Pagi',
-                      style: GoogleFonts.inter(
-                          color: Colors.grey[500], fontSize: 13)),
-                  Text(widget.user.name,
-                      style: GoogleFonts.inter(
-                          color: _navy,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700)),
+                  Text(
+                    'Selamat Pagi',
+                    style: GoogleFonts.inter(
+                      color: Colors.grey[500],
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    widget.user.name,
+                    style: GoogleFonts.inter(
+                      color: _navy,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
               GestureDetector(
                 onTap: () {},
                 child: Stack(
                   children: [
-                    Icon(Icons.notifications_none_outlined,
-                        color: Colors.grey[500], size: 24),
-                    if (_pendingCount > 0)
+                    Icon(
+                      Icons.notifications_none_outlined,
+                      color: Colors.grey[500],
+                      size: 24,
+                    ),
+                    if (pendingCount > 0)
                       Positioned(
                         top: 0,
                         right: 0,
@@ -304,13 +471,18 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                           width: 16,
                           height: 16,
                           decoration: const BoxDecoration(
-                              color: Colors.red, shape: BoxShape.circle),
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
                           child: Center(
-                            child: Text('$_pendingCount',
-                                style: GoogleFonts.inter(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700)),
+                            child: Text(
+                              '$pendingCount',
+                              style: GoogleFonts.inter(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -322,14 +494,22 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           const SizedBox(height: 16),
 
           // ── Pending lawyers banner (gold gradient, from client-dashboard.tsx) ─
-          if (_pendingCount > 0) ...[
+          if (pendingCount > 0) ...[
             GestureDetector(
-              onTap: () {},
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ConnectionRequestsScreen(
+                    client: widget.user,
+                    repository: _connRepo,
+                  ),
+                ),
+              ),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                      colors: [Color(0xFFD4AF37), Color(0xFFE8C84A)]),
+                    colors: [Color(0xFFD4AF37), Color(0xFFE8C84A)],
+                  ),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
@@ -343,8 +523,11 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                             color: _navy,
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.how_to_reg_outlined,
-                              color: _gold, size: 16),
+                          child: const Icon(
+                            Icons.how_to_reg_outlined,
+                            color: _gold,
+                            size: 16,
+                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -352,30 +535,40 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '$_pendingCount Lawyer${_pendingCount > 1 ? "s" : ""} Interested!',
+                                '$pendingCount Lawyer${pendingCount > 1 ? "s" : ""} Interested!',
                                 style: GoogleFonts.inter(
-                                    color: _navy,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700),
+                                  color: _navy,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                              Text('Tap to review and approve',
-                                  style: GoogleFonts.inter(
-                                      color: _navy.withValues(alpha: 0.7),
-                                      fontSize: 11)),
+                              Text(
+                                'Tap to review and approve',
+                                style: GoogleFonts.inter(
+                                  color: _navy.withValues(alpha: 0.7),
+                                  fontSize: 11,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        Icon(Icons.chevron_right,
-                            color: _navy.withValues(alpha: 0.6), size: 20),
+                        Icon(
+                          Icons.chevron_right,
+                          color: _navy.withValues(alpha: 0.6),
+                          size: 20,
+                        ),
                       ],
                     ),
-                    // Avatar stack (from client-dashboard.tsx)
+                    // Avatar stack — up to 3 real avatars from pending requests
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        // Simulated avatar circles
-                        ...['AK', 'FI'].map(
-                          (init) => Container(
+                        ...pendingRequests.take(3).map((req) {
+                          final snap = req.lawyerSnapshot;
+                          final initial = snap.name.isNotEmpty
+                              ? snap.name[0].toUpperCase()
+                              : '?';
+                          return Container(
                             width: 28,
                             height: 28,
                             margin: const EdgeInsets.only(right: 4),
@@ -383,21 +576,42 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                               color: _navy,
                               shape: BoxShape.circle,
                               border: Border.all(color: _gold, width: 2),
+                              image: snap.avatarUrl != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(snap.avatarUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
                             ),
-                            child: Center(
-                              child: Text(init,
-                                  style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700)),
+                            child: snap.avatarUrl == null
+                                ? Center(
+                                    child: Text(
+                                      initial,
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          );
+                        }),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            pendingRequests
+                                .take(3)
+                                .map((r) => r.lawyerSnapshot.name.split(' ').first)
+                                .join(', '),
+                            style: GoogleFonts.inter(
+                              color: _navy.withValues(alpha: 0.8),
+                              fontSize: 11,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        Text('Aishah, Faizal',
-                            style: GoogleFonts.inter(
-                                color: _navy.withValues(alpha: 0.8),
-                                fontSize: 11)),
                       ],
                     ),
                   ],
@@ -422,22 +636,32 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                     children: [
                       const Icon(Icons.balance, color: _gold, size: 16),
                       const SizedBox(width: 6),
-                      Text('ACTIVE CASE',
-                          style: GoogleFonts.inter(
-                              color: _gold,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600)),
+                      Text(
+                        'ACTIVE CASE',
+                        style: GoogleFonts.inter(
+                          color: _gold,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text(activeCase.title,
-                      style: GoogleFonts.inter(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600)),
-                  Text('Lawyer: Pn. Aishah binti Kamal',
-                      style: GoogleFonts.inter(
-                          color: Colors.white60, fontSize: 12)),
+                  Text(
+                    activeCase.title,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    _lawyerLabelFor(activeCase),
+                    style: GoogleFonts.inter(
+                      color: Colors.white60,
+                      fontSize: 12,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -446,24 +670,34 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
                             value: activeCase.progressPercent / 100,
-                            backgroundColor:
-                                Colors.white.withValues(alpha: 0.2),
-                            valueColor:
-                                const AlwaysStoppedAnimation<Color>(_gold),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.2,
+                            ),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              _gold,
+                            ),
                             minHeight: 6,
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text('${activeCase.progressPercent.toInt()}%',
-                          style: GoogleFonts.inter(
-                              color: Colors.white70, fontSize: 11)),
+                      Text(
+                        '${activeCase.progressPercent.toInt()}%',
+                        style: GoogleFonts.inter(
+                          color: Colors.white70,
+                          fontSize: 11,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text('Next hearing: 15 April 2026',
-                      style: GoogleFonts.inter(
-                          color: Colors.white38, fontSize: 11)),
+                  Text(
+                    _hearingLabelFor(activeCase),
+                    style: GoogleFonts.inter(
+                      color: Colors.white38,
+                      fontSize: 11,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -471,11 +705,14 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           ],
 
           // ── Quick Actions (grid-cols-4, from client-dashboard.tsx) ───────
-          Text('Quick Actions',
-              style: GoogleFonts.inter(
-                  color: _navy,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600)),
+          Text(
+            'Quick Actions',
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -494,9 +731,13 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                       child: Icon(a.icon, color: a.color, size: 24),
                     ),
                     const SizedBox(height: 6),
-                    Text(a.label,
-                        style: GoogleFonts.inter(
-                            color: Colors.grey[600], fontSize: 11)),
+                    Text(
+                      a.label,
+                      style: GoogleFonts.inter(
+                        color: Colors.grey[600],
+                        fontSize: 11,
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -508,41 +749,53 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Recent Activity',
-                  style: GoogleFonts.inter(
-                      color: _navy,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600)),
-              Text('View All',
-                  style: GoogleFonts.inter(
-                      color: _gold,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500)),
+              Text(
+                'Recent Activity',
+                style: GoogleFonts.inter(
+                  color: _navy,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                'View All',
+                style: GoogleFonts.inter(
+                  color: _gold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
           ..._activities.map((item) => _activityCard(item)),
 
           // ── My Cases ─────────────────────────────────────────────────────
-          if (_myCases.isNotEmpty) ...[
+          if (myCases.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('My Cases',
-                    style: GoogleFonts.inter(
-                        color: _navy,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600)),
-                Text('View All',
-                    style: GoogleFonts.inter(
-                        color: _gold,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500)),
+                Text(
+                  'My Cases',
+                  style: GoogleFonts.inter(
+                    color: _navy,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'View All',
+                  style: GoogleFonts.inter(
+                    color: _gold,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
-            ..._myCases.take(3).map((c) => _caseCard(c)),
+            ...myCases.take(3).map((c) => _caseCard(c)),
           ],
         ],
       ),
@@ -559,9 +812,10 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2))
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
           ],
         ),
         child: Row(
@@ -580,15 +834,22 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.title,
-                      style: GoogleFonts.inter(
-                          color: _navy,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
-                  Text(item.subtitle,
-                      style: GoogleFonts.inter(
-                          color: Colors.grey[500], fontSize: 12),
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    item.title,
+                    style: GoogleFonts.inter(
+                      color: _navy,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    item.subtitle,
+                    style: GoogleFonts.inter(
+                      color: Colors.grey[500],
+                      fontSize: 12,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
@@ -596,9 +857,13 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
               children: [
                 Icon(Icons.access_time, size: 12, color: Colors.grey[400]),
                 const SizedBox(width: 3),
-                Text(item.time,
-                    style: GoogleFonts.inter(
-                        color: Colors.grey[400], fontSize: 11)),
+                Text(
+                  item.time,
+                  style: GoogleFonts.inter(
+                    color: Colors.grey[400],
+                    fontSize: 11,
+                  ),
+                ),
               ],
             ),
           ],
@@ -611,10 +876,11 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: GestureDetector(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) =>
-              CaseDetailScreen(caseModel: c, viewer: widget.user),
-        )),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CaseDetailScreen(caseModel: c, viewer: widget.user),
+          ),
+        ),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -622,9 +888,10 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2))
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
             ],
           ),
           child: Row(
@@ -636,29 +903,34 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                   color: _navy.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.gavel_outlined,
-                    color: _navy, size: 18),
+                child: const Icon(Icons.gavel_outlined, color: _navy, size: 18),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(c.title,
-                        style: GoogleFonts.inter(
-                            color: _navy,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis),
-                    Text(c.categoryLabel,
-                        style: GoogleFonts.inter(
-                            color: Colors.grey[500], fontSize: 11)),
+                    Text(
+                      c.title,
+                      style: GoogleFonts.inter(
+                        color: _navy,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      c.categoryLabel,
+                      style: GoogleFonts.inter(
+                        color: Colors.grey[500],
+                        fontSize: 11,
+                      ),
+                    ),
                   ],
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: c.status == CaseStatus.active
                       ? _navy.withValues(alpha: 0.08)
@@ -682,9 +954,9 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
       ),
     );
   }
-
 }
 
+// ignore: unused_element
 class _ClientProfileTab extends StatelessWidget {
   final UserModel user;
   const _ClientProfileTab({required this.user});
@@ -808,11 +1080,23 @@ class _ClientProfileTab extends StatelessWidget {
           _sectionCard(
             title: 'Security',
             children: [
-              _settingRow(Icons.lock_outline, 'Change Password', 'Recommended monthly'),
+              _settingRow(
+                Icons.lock_outline,
+                'Change Password',
+                'Recommended monthly',
+              ),
               const SizedBox(height: 8),
-              _settingRow(Icons.verified_user_outlined, 'Two-Factor Authentication', 'Not enabled'),
+              _settingRow(
+                Icons.verified_user_outlined,
+                'Two-Factor Authentication',
+                'Not enabled',
+              ),
               const SizedBox(height: 8),
-              _settingRow(Icons.notifications_none, 'Notification Preferences', 'Push and email alerts'),
+              _settingRow(
+                Icons.notifications_none,
+                'Notification Preferences',
+                'Push and email alerts',
+              ),
             ],
           ),
         ],
@@ -904,10 +1188,7 @@ class _ClientProfileTab extends StatelessWidget {
               ),
               Text(
                 subtitle,
-                style: GoogleFonts.inter(
-                  color: Colors.grey[500],
-                  fontSize: 11,
-                ),
+                style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 11),
               ),
             ],
           ),
@@ -942,14 +1223,18 @@ class _PlaceholderTab extends StatelessWidget {
         children: [
           Icon(icon, size: 48, color: Colors.grey[300]),
           const SizedBox(height: 12),
-          Text(label,
-              style: GoogleFonts.inter(
-                  color: Colors.grey[400],
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500)),
-          Text('Coming soon',
-              style:
-                  GoogleFonts.inter(color: Colors.grey[300], fontSize: 12)),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: Colors.grey[400],
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            'Coming soon',
+            style: GoogleFonts.inter(color: Colors.grey[300], fontSize: 12),
+          ),
         ],
       ),
     );

@@ -62,3 +62,6 @@ tools/firestore_admin/backups/
 .env
 .env.*
 !.env.example
+
+/design-ref
+/mk

@@ -39,7 +39,7 @@ function validateStartPayload(data) {
   };
 }
 
-exports.startVerification = onCall(async (request) => {
+exports.startVerification = onCall({ invoker: 'public' }, async (request) => {
   const db = getFirestore();
   const profile = validateStartPayload(request.data);
 
@@ -170,7 +170,7 @@ exports.startVerification = onCall(async (request) => {
   };
 });
 
-exports.reviewVerificationRequest = onCall(async (request) => {
+exports.reviewVerificationRequest = onCall({ invoker: 'public' }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication is required.");
   }
