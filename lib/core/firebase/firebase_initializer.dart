@@ -18,6 +18,12 @@ class FirebaseInitializer {
 
   static Future<void> _initializeInternal() async {
     try {
+      if (Firebase.apps.isNotEmpty) {
+        _isReady = true;
+        _initializationError = null;
+        return;
+      }
+
       final options = DefaultFirebaseOptions.currentPlatform;
       if (_hasPlaceholderValues(options)) {
         throw StateError(
@@ -29,6 +35,18 @@ class FirebaseInitializer {
       await Firebase.initializeApp(options: options);
       _isReady = true;
       _initializationError = null;
+    } on FirebaseException catch (error) {
+      if (error.code == 'duplicate-app') {
+        _isReady = true;
+        _initializationError = null;
+        return;
+      }
+
+      _isReady = false;
+      _initializationError = error.toString();
+
+      // Keep the app usable in demo mode when Firebase config is not added yet.
+      debugPrint('Firebase init skipped: $_initializationError');
     } catch (error) {
       _isReady = false;
       _initializationError = error.toString();
