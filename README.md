@@ -7,6 +7,7 @@ This README is written for teammates, reviewers, and anyone who wants to run or 
 
 - Flutter UI flows for authentication and role-based screens.
 - Firebase integration points with safe startup behavior.
+- Gemini 2.5 Flash REST client groundwork for upcoming AI flows.
 - Local Firestore admin tooling for backup, cleanup, and reseeding test data.
 
 ## Current behavior
@@ -19,6 +20,8 @@ This README is written for teammates, reviewers, and anyone who wants to run or 
 
 - `lib/main.dart`: app startup and root widget.
 - `lib/core/firebase/firebase_initializer.dart`: Firebase initialization and placeholder guard.
+- `lib/core/ai/gemini_config.dart`: Gemini configuration loaded from `.env`.
+- `lib/services/gemini_service.dart`: Gemini 2.5 Flash text generation client.
 - `lib/firebase_options.dart`: generated FlutterFire config.
 - `lib/services/firebase_auth_sync_service.dart`: auth/profile sync scaffolding.
 - `lib/repositories/verification_review_repository.dart`: manual review queue writes.
@@ -44,6 +47,42 @@ flutter run -d chrome
 ```
 
 If Firebase is not configured yet, the app should still launch in demo-safe mode.
+
+## Gemini 2.5 Flash setup
+
+The connection layer is ready for future AI screens through
+`lib/services/gemini_service.dart`. It uses the Gemini REST
+`generateContent` endpoint and defaults to `gemini-2.5-flash`.
+
+1. Create a Gemini API key in Google AI Studio.
+2. Add the key to the ignored local `.env` file:
+
+```dotenv
+GEMINI_API_KEY=YOUR_REAL_GEMINI_API_KEY
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+```
+
+3. Call the connection check from the feature being developed:
+
+```dart
+import 'package:lei_guard/services/gemini_service.dart';
+
+final gemini = GeminiService();
+final reply = await gemini.testConnection();
+gemini.close();
+```
+
+`testConnection()` makes a real billable/API-quota request only when it is
+called; app startup does not call Gemini.
+
+Important: this direct setup is for local development only. Flutter includes
+`.env` in the built app assets, so a Gemini API key placed there can be
+extracted from a web or mobile build. Before release, route Gemini requests
+through a trusted backend such as Firebase Cloud Functions and store the key
+with backend secret management.
+
+Reference: [Gemini text generation documentation](https://ai.google.dev/gemini-api/docs/text-generation).
 
 ## Firebase setup
 
