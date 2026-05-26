@@ -84,6 +84,44 @@ const outOfScopeResponse = LexiBotResponse(
   citations: [],
 );
 
+const malayResponse = LexiBotResponse(
+  status: 'answered',
+  scopeStatus: 'in_scope',
+  riskLevel: 'low',
+  responseLanguage: 'ms',
+  auditId: 'audit-ms',
+  groundingChunkCount: 1,
+  answer: LexiBotAnswer(
+    shortAnswer: 'Simpan perjanjian sewa dan resit.',
+    whatTheSourceSays: 'Sumber yang diluluskan telah dirujuk.',
+    whatThisMeans: 'Hak anda bergantung pada perjanjian.',
+    evidenceToKeep: ['Perjanjian sewa'],
+    whatYouCanDoNext: ['Simpan rekod pembayaran'],
+    sourcesUsed: ['Contracts Act 1950'],
+    needALawyer: 'Pertimbangkan peguam jika pertikaian berterusan.',
+  ),
+  citations: [],
+);
+
+const chineseResponse = LexiBotResponse(
+  status: 'urgent_escalation',
+  scopeStatus: 'urgent_escalation',
+  riskLevel: 'high',
+  responseLanguage: 'zh',
+  auditId: 'audit-zh',
+  groundingChunkCount: 0,
+  answer: LexiBotAnswer(
+    shortAnswer: '此情况可能需要尽快向律师寻求帮助。',
+    whatTheSourceSays: '',
+    whatThisMeans: '此问题可能涉及紧急风险。',
+    evidenceToKeep: [],
+    whatYouCanDoNext: ['请尽快联系律师。'],
+    sourcesUsed: [],
+    needALawyer: '是。',
+  ),
+  citations: [],
+);
+
 Widget wrap(LexiBotClient client, {VoidCallback? onRequestLawyer}) {
   return MaterialApp(
     home: Scaffold(
@@ -180,6 +218,34 @@ void main() {
       find.text('LexiBot cannot answer this within its tenancy-law scope.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('renders Malay answer labels for a Malay response', (
+    tester,
+  ) async {
+    final client = _FakeLexiBotClient(handler: (_) async => malayResponse);
+    await tester.pumpWidget(wrap(client));
+
+    await submitQuestion(tester, 'Tuan rumah enggan pulangkan deposit sewa.');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jawapan Ringkas'), findsOneWidget);
+    expect(find.text('Langkah Seterusnya'), findsOneWidget);
+    expect(find.text('Perlukan Peguam?'), findsOneWidget);
+  });
+
+  testWidgets('renders Chinese escalation labels for a Chinese response', (
+    tester,
+  ) async {
+    final client = _FakeLexiBotClient(handler: (_) async => chineseResponse);
+    await tester.pumpWidget(wrap(client, onRequestLawyer: () {}));
+
+    await submitQuestion(tester, '房东换锁了。');
+    await tester.pumpAndSettle();
+
+    expect(find.text('需要审查'), findsOneWidget);
+    expect(find.text('简短回答'), findsOneWidget);
+    expect(find.text('提交案件以寻求律师协助'), findsOneWidget);
   });
 
   testWidgets('shows a safe failure message when the callable fails', (

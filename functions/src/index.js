@@ -10,7 +10,11 @@ const {
 const {
   buildVerificationDecision,
 } = require("./verification/verification_decision");
-const { assessQuestion, escalationResponse } = require("./lexibot/safety");
+const {
+  assessQuestion,
+  escalationResponse,
+  insufficientSourcesResponse,
+} = require("./lexibot/safety");
 const { generateGroundedAnswer } = require("./lexibot/gemini_file_search");
 const { resolveApprovedCitations } = require("./lexibot/citation_resolver");
 const { writeAuditLog } = require("./lexibot/audit_log");
@@ -316,6 +320,7 @@ exports.askLexiBot = onCall(
       grounded = await generateGroundedAnswer({
         apiKey: geminiApiKey.value(),
         question,
+        responseLanguage: assessment.responseLanguage,
         model: config.answerModel,
         fileSearchStoreName: config.fileSearchStoreName,
       });
@@ -341,30 +346,12 @@ exports.askLexiBot = onCall(
             status: "answered",
             scopeStatus: assessment.scopeStatus,
             riskLevel: assessment.riskLevel,
+            responseLanguage: assessment.responseLanguage,
             answer: grounded.answer,
             citations: grounded.citations,
             groundingChunkCount: grounded.groundingChunkCount,
           }
-        : {
-            status: "insufficient_sources",
-            scopeStatus: assessment.scopeStatus,
-            riskLevel: "medium",
-            answer: {
-              shortAnswer:
-                "I cannot answer this reliably from the approved tenancy sources available.",
-              whatTheSourceSays: "",
-              whatThisMeans:
-                "LexiBot did not retrieve enough approved evidence for a supported answer.",
-              evidenceToKeep: [],
-              whatYouCanDoNext: [
-                "Speak with a qualified Malaysian lawyer about your circumstances.",
-              ],
-              sourcesUsed: [],
-              needALawyer: "Yes, if you need guidance for your situation.",
-            },
-            citations: [],
-            groundingChunkCount: 0,
-          };
+        : insufficientSourcesResponse(assessment);
 
     const auditId = await writeAuditLog(db, {
       uid: request.auth.uid,

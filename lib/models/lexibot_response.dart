@@ -59,6 +59,7 @@ class LexiBotResponse {
   final String status;
   final String scopeStatus;
   final String riskLevel;
+  final String responseLanguage;
   final LexiBotAnswer answer;
   final List<LexiBotCitation> citations;
   final int groundingChunkCount;
@@ -68,6 +69,7 @@ class LexiBotResponse {
     required this.status,
     required this.scopeStatus,
     required this.riskLevel,
+    this.responseLanguage = 'en',
     required this.answer,
     required this.citations,
     required this.groundingChunkCount,
@@ -93,6 +95,7 @@ class LexiBotResponse {
       status: map['status']?.toString() ?? '',
       scopeStatus: map['scopeStatus']?.toString() ?? '',
       riskLevel: map['riskLevel']?.toString() ?? '',
+      responseLanguage: map['responseLanguage']?.toString() ?? 'en',
       answer: LexiBotAnswer.fromMap(Map<String, dynamic>.from(answerData)),
       citations: citationsData is List
           ? citationsData

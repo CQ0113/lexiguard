@@ -36,7 +36,7 @@ class _LexiBotChatScreenState extends State<LexiBotChatScreen> {
       'I answer general Peninsular Malaysia residential tenancy questions '
       'using approved legal sources. I cannot replace a lawyer or advise on '
       'urgent situations. For lockouts, violence, police or court deadlines, '
-      'contact a lawyer promptly.',
+      'contact a lawyer promptly. You may ask in English, Bahasa Melayu or 中文.',
     ),
   ].toList();
   bool _isSending = false;
@@ -357,6 +357,7 @@ class _AnswerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final answer = response.answer;
+    final labels = _AnswerLabels.forLanguage(response.responseLanguage);
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
@@ -388,23 +389,26 @@ class _AnswerCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _AnswerSection(title: 'Short Answer', text: answer.shortAnswer),
+          _AnswerSection(title: labels.shortAnswer, text: answer.shortAnswer),
           _AnswerSection(
-            title: 'What the Source Says',
+            title: labels.whatTheSourceSays,
             text: answer.whatTheSourceSays,
           ),
-          _AnswerSection(title: 'What This Means', text: answer.whatThisMeans),
+          _AnswerSection(
+            title: labels.whatThisMeans,
+            text: answer.whatThisMeans,
+          ),
           _AnswerListSection(
-            title: 'Evidence to Keep',
+            title: labels.evidenceToKeep,
             values: answer.evidenceToKeep,
           ),
           _AnswerListSection(
-            title: 'What You Can Do Next',
+            title: labels.whatYouCanDoNext,
             values: answer.whatYouCanDoNext,
           ),
           if (response.citations.isNotEmpty) ...[
             Text(
-              'Sources Used',
+              labels.sourcesUsed,
               style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -443,7 +447,7 @@ class _AnswerCard extends StatelessWidget {
                                 minimumSize: const Size(0, 28),
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              child: const Text('Open official source'),
+                              child: Text(labels.openOfficialSource),
                             ),
                         ],
                       ),
@@ -454,12 +458,12 @@ class _AnswerCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          _AnswerSection(title: 'Need a Lawyer?', text: answer.needALawyer),
+          _AnswerSection(title: labels.needALawyer, text: answer.needALawyer),
           if (response.needsLawyer && onRequestLawyer != null)
             FilledButton.tonalIcon(
               onPressed: onRequestLawyer,
               icon: const Icon(Icons.person_search_outlined),
-              label: const Text('Post a case for lawyer support'),
+              label: Text(labels.postCaseForLawyer),
               style: FilledButton.styleFrom(
                 foregroundColor: _navy,
                 textStyle: GoogleFonts.inter(
@@ -482,7 +486,8 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final escalated = response.needsLawyer;
-    final label = escalated ? 'Review needed' : 'Grounded';
+    final labels = _AnswerLabels.forLanguage(response.responseLanguage);
+    final label = escalated ? labels.reviewNeeded : labels.grounded;
     final color = escalated ? const Color(0xFFB91C1C) : const Color(0xFF15803D);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -499,6 +504,81 @@ class _StatusBadge extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _AnswerLabels {
+  const _AnswerLabels({
+    required this.shortAnswer,
+    required this.whatTheSourceSays,
+    required this.whatThisMeans,
+    required this.evidenceToKeep,
+    required this.whatYouCanDoNext,
+    required this.sourcesUsed,
+    required this.needALawyer,
+    required this.openOfficialSource,
+    required this.postCaseForLawyer,
+    required this.reviewNeeded,
+    required this.grounded,
+  });
+
+  final String shortAnswer;
+  final String whatTheSourceSays;
+  final String whatThisMeans;
+  final String evidenceToKeep;
+  final String whatYouCanDoNext;
+  final String sourcesUsed;
+  final String needALawyer;
+  final String openOfficialSource;
+  final String postCaseForLawyer;
+  final String reviewNeeded;
+  final String grounded;
+
+  static _AnswerLabels forLanguage(String language) {
+    switch (language) {
+      case 'ms':
+        return const _AnswerLabels(
+          shortAnswer: 'Jawapan Ringkas',
+          whatTheSourceSays: 'Apa Yang Dinyatakan Oleh Sumber',
+          whatThisMeans: 'Apa Maksudnya',
+          evidenceToKeep: 'Bukti Untuk Disimpan',
+          whatYouCanDoNext: 'Langkah Seterusnya',
+          sourcesUsed: 'Sumber Digunakan',
+          needALawyer: 'Perlukan Peguam?',
+          openOfficialSource: 'Buka sumber rasmi',
+          postCaseForLawyer: 'Hantar kes untuk bantuan peguam',
+          reviewNeeded: 'Semakan diperlukan',
+          grounded: 'Bersumber',
+        );
+      case 'zh':
+        return const _AnswerLabels(
+          shortAnswer: '简短回答',
+          whatTheSourceSays: '来源内容',
+          whatThisMeans: '这意味着什么',
+          evidenceToKeep: '应保留的证据',
+          whatYouCanDoNext: '下一步可以做什么',
+          sourcesUsed: '使用的来源',
+          needALawyer: '需要律师吗？',
+          openOfficialSource: '打开官方来源',
+          postCaseForLawyer: '提交案件以寻求律师协助',
+          reviewNeeded: '需要审查',
+          grounded: '有来源支持',
+        );
+      default:
+        return const _AnswerLabels(
+          shortAnswer: 'Short Answer',
+          whatTheSourceSays: 'What the Source Says',
+          whatThisMeans: 'What This Means',
+          evidenceToKeep: 'Evidence to Keep',
+          whatYouCanDoNext: 'What You Can Do Next',
+          sourcesUsed: 'Sources Used',
+          needALawyer: 'Need a Lawyer?',
+          openOfficialSource: 'Open official source',
+          postCaseForLawyer: 'Post a case for lawyer support',
+          reviewNeeded: 'Review needed',
+          grounded: 'Grounded',
+        );
+    }
   }
 }
 

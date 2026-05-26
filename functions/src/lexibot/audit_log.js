@@ -13,6 +13,7 @@ async function writeAuditLog(db, {
     uid,
     conversationId: conversationId || null,
     question,
+    responseLanguage: assessment.responseLanguage || "en",
     scopeStatus: assessment.scopeStatus,
     riskLevel: assessment.riskLevel,
     answerStatus: result.status,

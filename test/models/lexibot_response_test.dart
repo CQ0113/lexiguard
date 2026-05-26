@@ -7,6 +7,7 @@ void main() {
       'status': 'answered',
       'scopeStatus': 'in_scope',
       'riskLevel': 'low',
+      'responseLanguage': 'ms',
       'groundingChunkCount': 3,
       'auditId': 'audit-1',
       'answer': {
@@ -30,6 +31,7 @@ void main() {
     expect(response.status, 'answered');
     expect(response.needsLawyer, isFalse);
     expect(response.groundingChunkCount, 3);
+    expect(response.responseLanguage, 'ms');
     expect(response.citations.single.sourceId, 'distress_act_1951');
     expect(response.answer.whatYouCanDoNext.single, 'Keep rent receipts');
   });
@@ -52,5 +54,6 @@ void main() {
     });
 
     expect(response.needsLawyer, isTrue);
+    expect(response.responseLanguage, 'en');
   });
 }

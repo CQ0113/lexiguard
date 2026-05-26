@@ -36,13 +36,14 @@ function extractCitations(groundingChunks) {
 async function generateGroundedAnswer({
   apiKey,
   question,
+  responseLanguage,
   model,
   fileSearchStoreName,
 }) {
   const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model,
-    contents: questionPrompt(question),
+    contents: questionPrompt(question, responseLanguage),
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: "application/json",

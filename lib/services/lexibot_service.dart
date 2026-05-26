@@ -37,7 +37,7 @@ class LexiBotService implements LexiBotClient {
             'conversationId': conversationId,
         })
         .timeout(
-          const Duration(seconds: 90),
+          const Duration(seconds: 180),
           onTimeout: () => throw TimeoutException(
             'LexiBot did not answer within the client timeout.',
           ),
