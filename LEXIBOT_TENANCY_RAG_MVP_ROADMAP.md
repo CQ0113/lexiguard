@@ -285,7 +285,8 @@ Create the first legally reviewed tenancy source archive.
 - [ ] Check that document text is retrievable from the PDF.
 - [ ] Upload approved originals to Firebase Storage under
       `legal_sources/tenancy/...`.
-- [ ] Create `legal_sources` Firestore metadata records.
+- [x] Create `legal_sources` Firestore metadata records in pending/inactive
+      status for the collected official sources.
 - [ ] Mark only reviewed versions as `reviewStatus: "approved"`.
 
 ### Completion Gate
@@ -365,9 +366,9 @@ lexiguard-tenancy-law-store
 
 - [x] Choose an embedding model supported by current File Search docs, for
       example `models/gemini-embedding-2`.
-- [ ] Save the returned resource name, for example
+- [x] Save the returned resource name, for example
       `fileSearchStores/...`, to `lexibot_config/tenancy_mvp`.
-- [ ] Never identify the store by display name alone at runtime; use its
+- [x] Never identify the store by display name alone at runtime; use its
       returned resource name.
 
 Created store resource name:
@@ -376,9 +377,8 @@ Created store resource name:
 fileSearchStores/lexiguardtenancylawstore-4ntlw6pha9w8
 ```
 
-The resource name is also saved locally in the ignored tool receipt. Writing
-it to Firestore is pending setup of the existing admin tool's service-account
-credential or implementation of the backend configuration function.
+The resource name is saved locally in the ignored tool receipt and in the
+disabled Firestore document `lexibot_config/tenancy_mvp`.
 
 ### Important File Search Facts
 
@@ -389,7 +389,7 @@ credential or implementation of the backend configuration function.
 
 ### Completion Gate
 
-- [ ] Firestore configuration includes a valid `fileSearchStoreName` and
+- [x] Firestore configuration includes a valid `fileSearchStoreName` and
       `answerModel: "gemini-3.5-flash"`.
 
 ## Phase 4: Ingest Approved PDFs Once
@@ -722,6 +722,7 @@ Update this section when completing a milestone.
 | 2026-05-26 | Firebase backend secured | Selected `lexiguard-32c63` locally and created Functions secret `GEMINI_API_KEY` version 1. |
 | 2026-05-26 | File Search store created | Created `fileSearchStores/lexiguardtenancylawstore-4ntlw6pha9w8` with `models/gemini-embedding-2`. |
 | 2026-05-26 | Ingestion tool added | Admin tool enforces approved/active manifest status, SHA-256 matching, citation metadata, and rejects ungrounded verification responses. |
+| 2026-05-26 | Firestore metadata seeded | Created disabled `lexibot_config/tenancy_mvp` and pending/inactive records for three official AGC source PDFs; indexing remains blocked until review approval. |
 
 ## Reference Links
 

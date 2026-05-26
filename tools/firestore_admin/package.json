@@ -14,7 +14,9 @@
     "flush-and-seed": "node manage_firestore.js flush-and-seed --seed-file ./seed_data.json --yes",
     "demo:setup": "node seed_demo_users.js setup",
     "demo:teardown": "node seed_demo_users.js teardown --yes",
-    "demo:reviewer": "node seed_demo_users.js set-reviewer"
+    "demo:reviewer": "node seed_demo_users.js set-reviewer",
+    "lexibot:seed-pending": "node seed_lexibot_metadata.js seed-pending",
+    "lexibot:verify": "node seed_lexibot_metadata.js verify"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0"

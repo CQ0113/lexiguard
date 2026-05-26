@@ -57,3 +57,23 @@ npm run backup
 npm run seed
 npm run flush-and-seed     # destructive — wipes users + lawyer_profiles, then seeds from seed_data.json
 ```
+
+## LexiBot metadata setup
+
+The LexiBot seed command uses the ignored source manifest and Gemini File
+Search store receipt from `../lexibot_ingest/`. It creates:
+
+- `lexibot_config/tenancy_mvp`
+- `legal_sources/{sourceId}`
+- `legal_sources/{sourceId}/versions/{versionId}`
+
+It stores downloaded legal sources as `pending` / `inactive` only. It does not
+approve documents and does not index them into Gemini File Search.
+
+```bash
+npm run lexibot:seed-pending
+npm run lexibot:verify
+```
+
+The command is idempotent and skips an existing version record, so re-running
+it cannot downgrade a later approved version back to pending.
