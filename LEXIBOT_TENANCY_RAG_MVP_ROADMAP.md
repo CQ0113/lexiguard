@@ -642,6 +642,18 @@ approved sources have been indexed:
 npm --prefix tools/firestore_admin run lexibot:enable-ui-testing
 ```
 
+Launch Flutter web from an OAuth-authorized local domain:
+
+```bash
+flutter run -d chrome --web-hostname localhost --web-port 7357
+```
+
+Do not use `127.0.0.1` for Google sign-in testing unless it has been added in
+Firebase Console under Authentication -> Settings -> Authorized domains.
+Chrome may still display a Firebase popup `Cross-Origin-Opener-Policy`
+warning while popup authentication succeeds; investigate only if Firebase
+also reports an authentication failure.
+
 Confirm whether LexiBot is currently open for client testing:
 
 ```bash
