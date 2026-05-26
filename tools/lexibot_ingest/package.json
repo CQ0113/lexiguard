@@ -1,0 +1,16 @@
+{
+  "name": "lexiguard-lexibot-ingest",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Admin-only Gemini File Search ingestion tools for LexiBot tenancy sources",
+  "type": "commonjs",
+  "scripts": {
+    "store:create": "node src/create_store.js",
+    "source:ingest": "node src/ingest_sources.js",
+    "store:verify": "node src/verify_store.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.6.0",
+    "dotenv": "^16.4.7"
+  }
+}

@@ -1,6 +1,6 @@
 # LexiBot Malaysian Residential Tenancy RAG MVP Roadmap
 
-Last reviewed: 2026-05-25
+Last reviewed: 2026-05-26
 Project: LexiGuard
 Purpose: Single progress tracker from initial setup to a usable, audited
 Malaysian residential tenancy-law chatbot MVP.
@@ -16,7 +16,7 @@ Use the checkboxes in this file as the source of truth for current progress.
 - [x] Resolve the current repository merge conflict in `pubspec.yaml` before
       implementing further backend or Flutter dependencies.
 - [ ] Collect and approve the first tenancy source documents.
-- [ ] Create the Gemini File Search store.
+- [x] Create the Gemini File Search store.
 - [ ] Ingest approved source files into File Search.
 - [ ] Build and deploy `askLexiBot`.
 - [ ] Build the Flutter LexiBot chat UI.
@@ -111,9 +111,9 @@ available, keep the official source URL, and preserve the original PDF.
 
 | Document | Reason Needed | Status |
 | --- | --- | --- |
-| Contracts Act 1950 | Contractual obligations and agreement issues | [ ] Collected [ ] Approved |
-| Specific Relief Act 1950 | Possession and self-help/relief issues | [ ] Collected [ ] Approved |
-| Distress Act 1951 | Unpaid rent and distress process | [ ] Collected [ ] Approved |
+| Contracts Act 1950 | Contractual obligations and agreement issues | [x] Collected [ ] Approved |
+| Specific Relief Act 1950 | Possession and self-help/relief issues | [x] Collected [ ] Approved |
+| Distress Act 1951 | Unpaid rent and distress process | [x] Collected [ ] Approved |
 | National Land Code | Relevant land framework background | [ ] Collected [ ] Approved |
 | Strata Management Act 2013 | Condominium/strata matters | [ ] Collected [ ] Approved |
 | Strata Management Regulations 2015 | Operational strata rules | [ ] Collected [ ] Approved |
@@ -128,6 +128,18 @@ available, keep the official source URL, and preserve the original PDF.
 - [ ] Calculate a SHA-256 content hash before indexing.
 - [ ] Mark a document `approved` only after a legal-content review.
 - [ ] Do not index drafts, unverified web downloads, or inactive versions.
+
+### Pending Source Collection Log
+
+The following official AGC PDFs were downloaded locally on 2026-05-26 into
+the ignored ingestion workspace. They remain `pending` and `inactive` until
+reviewed; they have not been indexed.
+
+| Document | Official Source URL | SHA-256 |
+| --- | --- | --- |
+| Contracts Act 1950 | <https://lom.agc.gov.my/ilims/upload/portal/akta/LOM/EN/Act%20136.pdf> | `2f419d27513969f67281e18ea2d17e72c6344fc19ac148cc92bf79c0d8f6fe98` |
+| Specific Relief Act 1950 | <https://lom.agc.gov.my/ilims/upload/portal/akta/LOM/EN/Act%20137.pdf> | `68ef751ff7206093c29c9b9b405e619da28ab1bff303bc92194cadcf3a770e6b` |
+| Distress Act 1951 | <https://lom.agc.gov.my/ilims/upload/portal/akta/LOM/EN/Act%20255.pdf> | `535f38160a1cf10a53629458a5d3759578b2effe4243673c2da3b0ee5c4eaf39` |
 
 ## Data Design
 
@@ -240,22 +252,22 @@ the Flutter chatbot feature.
 ### Checklist
 
 - [x] Resolve the existing `pubspec.yaml` merge conflict.
-- [ ] Confirm the branch to use for LexiBot implementation.
-- [ ] Run `flutter pub get`.
-- [ ] Run existing Flutter tests and record any pre-existing failures.
-- [ ] Run `npm --prefix functions install`.
-- [ ] Confirm Firebase CLI authentication and active project:
+- [x] Confirm the branch to use for LexiBot implementation: `AIchatbot`.
+- [x] Run `flutter pub get`.
+- [x] Run existing Flutter tests and record any pre-existing failures.
+- [x] Run `npm --prefix functions install`.
+- [x] Confirm Firebase CLI authentication and active project:
 
 ```bash
 firebase use
 ```
 
-- [ ] Confirm the intended project is `lexiguard-32c63` or select the correct
+- [x] Confirm the intended project is `lexiguard-32c63` or select the correct
       environment before writing production data.
 
 ### Completion Gate
 
-- [ ] The working branch has no unresolved merge conflicts and baseline
+- [x] The working branch has no unresolved merge conflicts and baseline
       failures are documented.
 
 ## Phase 1: Collect And Approve Source Documents
@@ -291,8 +303,8 @@ Ensure that production LexiBot calls do not expose the Gemini key to Flutter.
 
 ### Checklist
 
-- [ ] Create or choose the Gemini API key used by the backend.
-- [ ] Store it as a Firebase Functions secret:
+- [x] Create or choose the Gemini API key used by the backend.
+- [x] Store it as a Firebase Functions secret:
 
 ```bash
 firebase functions:secrets:set GEMINI_API_KEY
@@ -330,32 +342,43 @@ exports.askLexiBot = onCall(
 
 Create one persistent RAG store that will hold approved tenancy sources.
 
-### Planned Repository Addition
+### Repository Addition
 
 ```text
 tools/lexibot_ingest/
   package.json
-  create_store.js
-  ingest_approved_sources.js
-  verify_store.js
+  manifest.example.json
+  src/create_store.js
+  src/ingest_sources.js
+  src/verify_store.js
 ```
 
 ### Checklist
 
-- [ ] Add the official Google Gen AI JavaScript SDK to the admin ingestion
+- [x] Add the official Google Gen AI JavaScript SDK to the admin ingestion
       tool, not to Flutter.
-- [ ] Create the File Search store once with display name:
+- [x] Create the File Search store once with display name:
 
 ```text
 lexiguard-tenancy-law-store
 ```
 
-- [ ] Choose an embedding model supported by current File Search docs, for
+- [x] Choose an embedding model supported by current File Search docs, for
       example `models/gemini-embedding-2`.
 - [ ] Save the returned resource name, for example
       `fileSearchStores/...`, to `lexibot_config/tenancy_mvp`.
 - [ ] Never identify the store by display name alone at runtime; use its
       returned resource name.
+
+Created store resource name:
+
+```text
+fileSearchStores/lexiguardtenancylawstore-4ntlw6pha9w8
+```
+
+The resource name is also saved locally in the ignored tool receipt. Writing
+it to Firestore is pending setup of the existing admin tool's service-account
+credential or implementation of the backend configuration function.
 
 ### Important File Search Facts
 
@@ -696,6 +719,9 @@ Update this section when completing a milestone.
 | 2026-05-25 | MVP plan defined | Restricted scope to Peninsular Malaysia residential tenancy RAG. |
 | 2026-05-25 | Development connectivity verified | Direct Gemini request succeeded; production chatbot must use backend secrets. |
 | 2026-05-25 | Roadmap created | File Search model recommendation updated to `gemini-3.5-flash` from current official docs. |
+| 2026-05-26 | Firebase backend secured | Selected `lexiguard-32c63` locally and created Functions secret `GEMINI_API_KEY` version 1. |
+| 2026-05-26 | File Search store created | Created `fileSearchStores/lexiguardtenancylawstore-4ntlw6pha9w8` with `models/gemini-embedding-2`. |
+| 2026-05-26 | Ingestion tool added | Admin tool enforces approved/active manifest status, SHA-256 matching, citation metadata, and rejects ungrounded verification responses. |
 
 ## Reference Links
 
