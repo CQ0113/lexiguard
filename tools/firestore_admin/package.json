@@ -18,6 +18,8 @@
     "lexibot:seed-pending": "node seed_lexibot_metadata.js seed-pending",
     "lexibot:approve": "node seed_lexibot_metadata.js approve-sources --yes",
     "lexibot:record-indexing": "node seed_lexibot_metadata.js record-indexing --yes",
+    "lexibot:enable-ui-testing": "node seed_lexibot_metadata.js enable-ui-testing --yes",
+    "lexibot:disable": "node seed_lexibot_metadata.js disable --yes",
     "lexibot:verify": "node seed_lexibot_metadata.js verify"
   },
   "dependencies": {

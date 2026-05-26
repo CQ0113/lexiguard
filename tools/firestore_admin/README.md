@@ -91,3 +91,31 @@ After the separate Gemini ingestion command completes, record its receipts:
 ```bash
 npm run lexibot:record-indexing
 ```
+
+## LexiBot frontend testing switch
+
+The callable backend reads `enabled` from the Firestore document
+`lexibot_config/tenancy_mvp`. Normal tenancy answers are blocked when that
+field is `false`; urgent and out-of-scope safety responses can still be
+audited.
+
+After sources are approved and indexed, enable authenticated UI testing:
+
+```bash
+npm run lexibot:enable-ui-testing
+```
+
+Check the saved configuration:
+
+```bash
+npm run lexibot:verify
+```
+
+Disable normal client answers again after the test session:
+
+```bash
+npm run lexibot:disable
+```
+
+Keep this disabled for a public release until the roadmap release gates,
+including client-key removal, rate limiting, and legal review, are complete.

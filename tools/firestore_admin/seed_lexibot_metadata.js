@@ -24,6 +24,10 @@ Commands:
                      Archive locally reviewed PDFs in Storage and activate metadata.
   record-indexing --yes
                      Record Gemini indexing receipts against approved source versions.
+  enable-ui-testing --yes
+                     Enable normal LexiBot answers for authenticated frontend testing.
+  disable --yes
+                     Disable normal LexiBot answers after testing or before release.
   verify             Read and print LexiBot config/source metadata status.
 
 Optional flags:
@@ -337,6 +341,55 @@ async function verifyMetadata(db) {
   );
 }
 
+async function setClientAnswering(db, enabled) {
+  const configRef = db.doc(CONFIG_PATH);
+  const config = await configRef.get();
+  if (!config.exists) {
+    throw new Error(`Missing ${CONFIG_PATH}. Run seed-pending first.`);
+  }
+
+  if (enabled) {
+    const data = config.data();
+    if (!data.answerModel || !data.fileSearchStoreName) {
+      throw new Error('LexiBot cannot be enabled without an answer model and File Search store.');
+    }
+
+    const sources = await db.collection('legal_sources').where('status', '==', 'active').get();
+    const indexedApprovedVersions = [];
+    for (const source of sources.docs) {
+      const versions = await source.ref
+        .collection('versions')
+        .where('status', '==', 'active')
+        .where('reviewStatus', '==', 'approved')
+        .get();
+      indexedApprovedVersions.push(
+        ...versions.docs.filter((version) => version.data().indexedStatus === 'indexed')
+      );
+    }
+    if (indexedApprovedVersions.length === 0) {
+      throw new Error('LexiBot cannot be enabled without an approved indexed source version.');
+    }
+  }
+
+  const configurationStatus = enabled
+    ? 'ui_testing_enabled'
+    : 'ui_testing_disabled_pending_release';
+  await configRef.set(
+    {
+      enabled,
+      configurationStatus,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  console.log(
+    enabled
+      ? 'LexiBot normal answers are ENABLED for authenticated frontend testing.'
+      : 'LexiBot normal answers are DISABLED for clients.'
+  );
+  console.log(`Configuration status: ${configurationStatus}`);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const command = args._[0];
@@ -389,6 +442,20 @@ async function main() {
         readJson(storeStatePath, 'File Search store receipt')
       );
       await recordIndexing(db, manifest.sources || [], storeState);
+      break;
+    }
+    case 'enable-ui-testing': {
+      if (!args.yes) {
+        throw new Error('Refusing to enable client answers without --yes.');
+      }
+      await setClientAnswering(db, true);
+      break;
+    }
+    case 'disable': {
+      if (!args.yes) {
+        throw new Error('Refusing to change client availability without --yes.');
+      }
+      await setClientAnswering(db, false);
       break;
     }
     case 'verify':
