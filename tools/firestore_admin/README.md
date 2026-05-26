@@ -77,3 +77,17 @@ npm run lexibot:verify
 
 The command is idempotent and skips an existing version record, so re-running
 it cannot downgrade a later approved version back to pending.
+
+After reviewing the locally collected source PDFs, archive and activate them:
+
+```bash
+npm run lexibot:approve
+```
+
+This verifies each PDF's SHA-256 hash before uploading it to Firebase Storage
+under `legal_sources/tenancy/...` and marking its Firestore version approved.
+After the separate Gemini ingestion command completes, record its receipts:
+
+```bash
+npm run lexibot:record-indexing
+```

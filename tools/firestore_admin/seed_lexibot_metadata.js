@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const admin = require('firebase-admin');
 
 const { parseArgs, requireFirebaseApp } = require('./manage_firestore');
@@ -19,6 +20,10 @@ LexiBot Firestore Metadata Seeder
 
 Commands:
   seed-pending       Create/update LexiBot config and pending legal-source metadata.
+  approve-sources --yes
+                     Archive locally reviewed PDFs in Storage and activate metadata.
+  record-indexing --yes
+                     Record Gemini indexing receipts against approved source versions.
   verify             Read and print LexiBot config/source metadata status.
 
 Optional flags:
@@ -28,7 +33,7 @@ Optional flags:
   --service-account <path/to/service-account.json>
 
 This command does not approve or index legal sources. Pending source versions
-must be reviewed and activated separately before File Search ingestion.
+must be explicitly approved before File Search ingestion.
 `);
 }
 
@@ -83,6 +88,14 @@ function validateStoreState(storeState) {
     );
   }
   return storeState;
+}
+
+function sha256(filePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function storagePathFor(source) {
+  return `legal_sources/tenancy/${source.sourceId}/${source.versionId}/original.pdf`;
 }
 
 async function seedPendingMetadata(db, manifest, storeState) {
@@ -166,6 +179,122 @@ async function seedPendingMetadata(db, manifest, storeState) {
   }
 }
 
+async function approveSources(db, manifest, projectId) {
+  const bucketName = `${projectId}.firebasestorage.app`;
+  const bucket = admin.storage().bucket(bucketName);
+
+  for (const source of manifest) {
+    const localPath = path.resolve(INGEST_DIR, source.localPath || '');
+    if (!fs.existsSync(localPath)) {
+      throw new Error(`Missing PDF for approval: ${localPath}`);
+    }
+
+    const digest = sha256(localPath);
+    if (digest !== String(source.contentHash).toLowerCase()) {
+      throw new Error(`SHA-256 mismatch for ${source.sourceId}; approval aborted.`);
+    }
+
+    const sourceRef = db.collection('legal_sources').doc(source.sourceId);
+    const versionRef = sourceRef.collection('versions').doc(source.versionId);
+    const version = await versionRef.get();
+    if (!version.exists) {
+      throw new Error(
+        `Missing pending metadata for ${source.sourceId}/${source.versionId}. Run seed-pending first.`
+      );
+    }
+    if (version.data().contentHash !== digest) {
+      throw new Error(`Firestore hash mismatch for ${source.sourceId}; approval aborted.`);
+    }
+
+    const storagePath = storagePathFor(source);
+    await bucket.upload(localPath, {
+      destination: storagePath,
+      metadata: {
+        contentType: 'application/pdf',
+        metadata: {
+          sourceId: source.sourceId,
+          versionId: source.versionId,
+          contentHash: digest,
+          reviewStatus: 'approved',
+        },
+      },
+    });
+
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const batch = db.batch();
+    batch.set(
+      versionRef,
+      {
+        storageBucket: bucketName,
+        storagePath,
+        reviewStatus: 'approved',
+        status: 'active',
+        reviewedAt: now,
+        reviewedBy: 'manual_user_approval_2026-05-26',
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+    batch.set(
+      sourceRef,
+      {
+        status: 'active',
+        activeVersionId: source.versionId,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
+    await batch.commit();
+    console.log(`Archived and approved: ${source.title} -> ${storagePath}`);
+  }
+
+  await db.doc(CONFIG_PATH).set(
+    {
+      configurationStatus: 'sources_approved_pending_index',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+async function recordIndexing(db, manifest, storeState) {
+  const receipts = storeState.imports || {};
+  for (const source of manifest) {
+    const receiptKey = `${source.sourceId}:${source.versionId}:${String(source.contentHash).toLowerCase()}`;
+    const receipt = receipts[receiptKey];
+    if (!receipt || !receipt.indexedAt) {
+      throw new Error(`No completed Gemini indexing receipt for ${source.sourceId}.`);
+    }
+
+    const sourceRef = db.collection('legal_sources').doc(source.sourceId);
+    const versionRef = sourceRef.collection('versions').doc(source.versionId);
+    const version = await versionRef.get();
+    if (!version.exists || version.data().reviewStatus !== 'approved') {
+      throw new Error(`Refusing to record indexing for unapproved source ${source.sourceId}.`);
+    }
+
+    await versionRef.set(
+      {
+        indexedStatus: 'indexed',
+        geminiFileSearchStoreName: receipt.fileSearchStoreName,
+        geminiDocumentName: receipt.geminiDocumentName || null,
+        indexedAt: admin.firestore.Timestamp.fromDate(new Date(receipt.indexedAt)),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    console.log(`Recorded indexed source: ${source.title}.`);
+  }
+
+  await db.doc(CONFIG_PATH).set(
+    {
+      configurationStatus: 'sources_indexed_pending_backend',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
 async function verifyMetadata(db) {
   const config = await db.doc(CONFIG_PATH).get();
   if (!config.exists) {
@@ -185,6 +314,8 @@ async function verifyMetadata(db) {
           reviewStatus: version.data().reviewStatus,
           status: version.data().status,
           contentHash: version.data().contentHash,
+          storagePath: version.data().storagePath,
+          indexedStatus: version.data().indexedStatus,
           geminiDocumentName: version.data().geminiDocumentName,
         })),
       };
@@ -233,6 +364,31 @@ async function main() {
         readJson(storeStatePath, 'File Search store receipt')
       );
       await seedPendingMetadata(db, sources, storeState);
+      break;
+    }
+    case 'approve-sources': {
+      if (!args.yes) {
+        throw new Error('Refusing approval without --yes. Usage: approve-sources --yes');
+      }
+      const manifestPath = resolveInputPath(args, 'manifest', DEFAULT_MANIFEST);
+      const manifest = readJson(manifestPath, 'Pending source manifest');
+      if (!Array.isArray(manifest.sources) || manifest.sources.length === 0) {
+        throw new Error('The LexiBot manifest must contain sources to approve.');
+      }
+      await approveSources(db, manifest.sources, projectId);
+      break;
+    }
+    case 'record-indexing': {
+      if (!args.yes) {
+        throw new Error('Refusing to record indexing without --yes.');
+      }
+      const manifestPath = resolveInputPath(args, 'manifest', DEFAULT_MANIFEST);
+      const storeStatePath = resolveInputPath(args, 'store-state', DEFAULT_STORE_STATE);
+      const manifest = readJson(manifestPath, 'Source manifest');
+      const storeState = validateStoreState(
+        readJson(storeStatePath, 'File Search store receipt')
+      );
+      await recordIndexing(db, manifest.sources || [], storeState);
       break;
     }
     case 'verify':

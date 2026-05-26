@@ -25,10 +25,8 @@ function customMetadata(source) {
     ["authority_level", source.authorityLevel],
     ["jurisdiction", source.jurisdiction],
     ["review_status", source.reviewStatus],
+    ["categories", (source.categories || []).join(",")],
   ];
-  for (const category of source.categories || []) {
-    metadata.push(["category", category]);
-  }
   return metadata
     .filter(([, value]) => value)
     .map(([key, value]) => ({ key, stringValue: String(value) }));
@@ -96,7 +94,10 @@ async function run() {
         customMetadata: customMetadata(source),
       },
     });
-    await waitForOperation(ai, operation);
+    const completedOperation = await waitForOperation(ai, operation);
+    const response = completedOperation.response || {};
+    const geminiDocumentName =
+      response.documentName || response.document?.name || response.name || null;
 
     imports[receiptKey] = {
       sourceId: source.sourceId,
@@ -104,6 +105,7 @@ async function run() {
       contentHash: digest,
       title: source.title,
       fileSearchStoreName: storeName,
+      geminiDocumentName,
       indexedAt: new Date().toISOString(),
     };
     writeState({ imports });

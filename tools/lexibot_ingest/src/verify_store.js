@@ -38,6 +38,14 @@ async function run() {
     process.exitCode = 2;
     return;
   }
+  const citedTitles = [
+    ...new Set(
+      grounding
+        .map((chunk) => chunk.retrievedContext?.title)
+        .filter((title) => typeof title === "string" && title.length > 0),
+    ),
+  ];
+  console.log(`Cited sources: ${citedTitles.join(", ") || "title not supplied"}`);
   console.log(response.text || "No answer text returned.");
 }
 

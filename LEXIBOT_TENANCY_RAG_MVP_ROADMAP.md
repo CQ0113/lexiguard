@@ -111,9 +111,9 @@ available, keep the official source URL, and preserve the original PDF.
 
 | Document | Reason Needed | Status |
 | --- | --- | --- |
-| Contracts Act 1950 | Contractual obligations and agreement issues | [x] Collected [ ] Approved |
-| Specific Relief Act 1950 | Possession and self-help/relief issues | [x] Collected [ ] Approved |
-| Distress Act 1951 | Unpaid rent and distress process | [x] Collected [ ] Approved |
+| Contracts Act 1950 | Contractual obligations and agreement issues | [x] Collected [x] Approved |
+| Specific Relief Act 1950 | Possession and self-help/relief issues | [x] Collected [x] Approved |
+| Distress Act 1951 | Unpaid rent and distress process | [x] Collected [x] Approved |
 | National Land Code | Relevant land framework background | [ ] Collected [ ] Approved |
 | Strata Management Act 2013 | Condominium/strata matters | [ ] Collected [ ] Approved |
 | Strata Management Regulations 2015 | Operational strata rules | [ ] Collected [ ] Approved |
@@ -132,8 +132,8 @@ available, keep the official source URL, and preserve the original PDF.
 ### Pending Source Collection Log
 
 The following official AGC PDFs were downloaded locally on 2026-05-26 into
-the ignored ingestion workspace. They remain `pending` and `inactive` until
-reviewed; they have not been indexed.
+the ignored ingestion workspace, approved by the project owner, archived in
+Firebase Storage, and indexed in Gemini File Search.
 
 | Document | Official Source URL | SHA-256 |
 | --- | --- | --- |
@@ -283,17 +283,17 @@ Create the first legally reviewed tenancy source archive.
 - [ ] Record each official source URL and download/access date.
 - [ ] Calculate SHA-256 hashes.
 - [ ] Check that document text is retrievable from the PDF.
-- [ ] Upload approved originals to Firebase Storage under
+- [x] Upload the three currently approved originals to Firebase Storage under
       `legal_sources/tenancy/...`.
 - [x] Create `legal_sources` Firestore metadata records in pending/inactive
       status for the collected official sources.
-- [ ] Mark only reviewed versions as `reviewStatus: "approved"`.
+- [x] Mark only the three reviewed versions as `reviewStatus: "approved"`.
 
 ### Completion Gate
 
-- [ ] At least Contracts Act 1950, Specific Relief Act 1950, and Distress Act
+- [x] At least Contracts Act 1950, Specific Relief Act 1950, and Distress Act
       1951 have approved versions stored and metadata recorded.
-- [ ] Strata topics remain disabled until strata documents are approved and
+- [x] Strata topics remain disabled until strata documents are approved and
       indexed.
 
 ## Phase 2: Protect Secrets And Backend Configuration
@@ -429,17 +429,18 @@ unapproved or wrong-jurisdiction material if the store grows later.
 
 ### Checklist
 
-- [ ] Index only documents with `reviewStatus: "approved"` and
+- [x] Index only documents with `reviewStatus: "approved"` and
       `status: "active"`.
-- [ ] Store Gemini document resource IDs in the corresponding version records.
+- [x] Store Gemini document resource IDs in the corresponding version records.
 - [ ] Mark failed operations with an error status; do not silently treat them
       as indexed.
-- [ ] Run a retrieval smoke test for each major category.
-- [ ] Verify returned grounding metadata names the expected approved sources.
+- [x] Run retrieval smoke tests for deposit/contract and rent/distress
+      categories.
+- [x] Verify returned grounding metadata names the expected approved sources.
 
 ### Completion Gate
 
-- [ ] At least one deposit/contract question and one rent/distress question
+- [x] At least one deposit/contract question and one rent/distress question
       retrieve the expected approved source chunks and grounding metadata.
 
 ## Phase 5: Build The Backend Safety Layer
@@ -723,6 +724,7 @@ Update this section when completing a milestone.
 | 2026-05-26 | File Search store created | Created `fileSearchStores/lexiguardtenancylawstore-4ntlw6pha9w8` with `models/gemini-embedding-2`. |
 | 2026-05-26 | Ingestion tool added | Admin tool enforces approved/active manifest status, SHA-256 matching, citation metadata, and rejects ungrounded verification responses. |
 | 2026-05-26 | Firestore metadata seeded | Created disabled `lexibot_config/tenancy_mvp` and pending/inactive records for three official AGC source PDFs; indexing remains blocked until review approval. |
+| 2026-05-26 | First sources indexed | Approved, archived, and indexed Contracts Act 1950, Specific Relief Act 1950, and Distress Act 1951; grounded contract/deposit and rent/distress retrieval checks succeeded. |
 
 ## Reference Links
 

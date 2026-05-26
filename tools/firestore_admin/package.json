@@ -16,6 +16,8 @@
     "demo:teardown": "node seed_demo_users.js teardown --yes",
     "demo:reviewer": "node seed_demo_users.js set-reviewer",
     "lexibot:seed-pending": "node seed_lexibot_metadata.js seed-pending",
+    "lexibot:approve": "node seed_lexibot_metadata.js approve-sources --yes",
+    "lexibot:record-indexing": "node seed_lexibot_metadata.js record-indexing --yes",
     "lexibot:verify": "node seed_lexibot_metadata.js verify"
   },
   "dependencies": {
