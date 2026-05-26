@@ -18,8 +18,9 @@ Use the checkboxes in this file as the source of truth for current progress.
 - [x] Collect and approve the first tenancy source documents.
 - [x] Create the Gemini File Search store.
 - [x] Ingest the three approved source files into File Search.
-- [x] Build and deploy `askLexiBot` (Flutter chat UI still pending).
-- [ ] Build the Flutter LexiBot chat UI.
+- [x] Build and deploy `askLexiBot`.
+- [x] Build the Flutter LexiBot chat UI (client answering remains disabled
+      pending release gates).
 - [ ] Complete safety, citation, and lawyer-review testing.
 
 ## MVP Success Definition
@@ -568,18 +569,19 @@ Protect legal-source administration and sensitive chat/audit data.
 
 ### Checklist
 
-- [ ] Deny Flutter writes to `legal_sources` and `lexibot_config` unless a
+- [x] Deny Flutter writes to `legal_sources` and `lexibot_config` unless a
       future admin role is deliberately implemented.
-- [ ] Deny client access to raw `lexibot_audit_logs`.
+- [x] Deny client access to raw `lexibot_audit_logs`.
 - [ ] Allow users to read only their own chat messages if conversation history
       is shown in the app.
-- [ ] Ensure Cloud Functions Admin SDK writes remain possible.
-- [ ] Keep `legal_sources/` Storage archive server/admin managed.
-- [ ] Deploy and test rules with unauthorised/read-own/admin scenarios.
+- [x] Ensure Cloud Functions Admin SDK writes remain possible.
+- [x] Keep `legal_sources/` Storage archive server/admin managed.
+- [x] Deploy and test current LexiBot denial rules with an authenticated
+      client probe and a server-written audit record.
 
 ### Completion Gate
 
-- [ ] A normal signed-in client cannot modify sources, configuration, or audit
+- [x] A normal signed-in client cannot modify sources, configuration, or audit
       records.
 
 ## Phase 8: Build The Flutter Chat Experience
@@ -593,7 +595,7 @@ Let clients ask tenancy questions and clearly see cited, bounded answers.
 ```text
 lib/models/lexibot_response.dart
 lib/services/lexibot_service.dart
-lib/screens/client/lexibot_screen.dart
+lib/screens/client/lexibot_chat_screen.dart
 ```
 
 ### Flutter Call Pattern
@@ -605,18 +607,18 @@ final result = await callable.call({'question': question});
 
 ### UI Checklist
 
-- [ ] Provide a clear heading: Malaysian Residential Tenancy Information.
-- [ ] Show that LexiBot is not a lawyer before first use.
-- [ ] Display supported scope and urgent escalation warning.
-- [ ] Send only to `askLexiBot`, never directly to Gemini.
-- [ ] Render answer sections:
+- [x] Provide a clear heading: Malaysian Residential Tenancy Information.
+- [x] Show that LexiBot is not a lawyer before first use.
+- [x] Display supported scope and urgent escalation warning.
+- [x] Send only to `askLexiBot`, never directly to Gemini.
+- [x] Render answer sections:
       `Short Answer`, `What the Source Says`, `What This Means`,
       `Evidence to Keep`, `What You Can Do Next`, `Sources Used`,
       `Need a Lawyer?`.
-- [ ] Make cited titles/source links visible.
-- [ ] Render refusal/escalation states distinctly from normal answers.
-- [ ] Offer a path to connect with a lawyer in LexiGuard.
-- [ ] Handle loading, timeout, callable failure, and unauthenticated states.
+- [x] Make cited titles/source links visible.
+- [x] Render refusal/escalation states distinctly from normal answers.
+- [x] Offer a path to connect with a lawyer in LexiGuard.
+- [x] Handle loading, timeout, callable failure, and unauthenticated states.
 
 ### Completion Gate
 
@@ -635,7 +637,8 @@ Prove that the chatbot is useful when supported and restrained when unsafe.
 - [ ] Backend tests for each deterministic risk trigger.
 - [ ] Backend tests for `insufficient_sources` when grounding is empty.
 - [ ] Backend tests for audit-log writes.
-- [ ] Flutter tests for answer, refusal, escalation, loading, and error UI.
+- [x] Flutter tests for answer, refusal, escalation, loading, timeout, and
+      error UI.
 - [ ] Firebase rules tests for restricted source/config/audit access.
 
 ### Lawyer-Reviewed Evaluation Set
@@ -666,7 +669,7 @@ Prepare questions and expected behavior before release:
 
 ### Deployment Checklist
 
-- [ ] Deploy Firestore and Storage rules.
+- [x] Deploy Firestore and Storage rules.
 
 ```bash
 firebase deploy --only firestore:rules,storage
@@ -736,6 +739,8 @@ Update this section when completing a milestone.
 | 2026-05-26 | Firestore metadata seeded | Created disabled `lexibot_config/tenancy_mvp` and pending/inactive records for three official AGC source PDFs; indexing remains blocked until review approval. |
 | 2026-05-26 | First sources indexed | Approved, archived, and indexed Contracts Act 1950, Specific Relief Act 1950, and Distress Act 1951; grounded contract/deposit and rent/distress retrieval checks succeeded. |
 | 2026-05-26 | Backend callable deployed | Deployed authenticated `askLexiBot` with secret binding, safety screening, citation resolution, and audit logging; grounded-answer and urgent-escalation production smoke tests passed. Client answering remains disabled pending Flutter UI and release gates. |
+| 2026-05-26 | Flutter LexiBot chat built | Replaced the client Chat placeholder with a callable-backed LexiBot experience, visible official-source citations, escalation/lawyer routing, and widget coverage for answer/refusal/loading/error states. Client answering remains disabled until release gates pass. |
+| 2026-05-26 | LexiBot rules verified | Deployed Firestore and Storage rules, then confirmed an authenticated client is denied config/source/audit/PDF access while callable audit logging remains server-managed. |
 
 ## Reference Links
 
