@@ -15,10 +15,10 @@ Use the checkboxes in this file as the source of truth for current progress.
 - [x] Cloud Functions scaffold already exists under `functions/`.
 - [x] Resolve the current repository merge conflict in `pubspec.yaml` before
       implementing further backend or Flutter dependencies.
-- [ ] Collect and approve the first tenancy source documents.
+- [x] Collect and approve the first tenancy source documents.
 - [x] Create the Gemini File Search store.
-- [ ] Ingest approved source files into File Search.
-- [ ] Build and deploy `askLexiBot`.
+- [x] Ingest the three approved source files into File Search.
+- [x] Build and deploy `askLexiBot` (Flutter chat UI still pending).
 - [ ] Build the Flutter LexiBot chat UI.
 - [ ] Complete safety, citation, and lawyer-review testing.
 
@@ -278,11 +278,11 @@ Create the first legally reviewed tenancy source archive.
 
 ### Checklist
 
-- [ ] Download the initial source pack PDFs.
-- [ ] Save each original PDF locally in a temporary admin workspace.
-- [ ] Record each official source URL and download/access date.
-- [ ] Calculate SHA-256 hashes.
-- [ ] Check that document text is retrievable from the PDF.
+- [x] Download the first approved source pack PDFs.
+- [x] Save each original PDF locally in a temporary admin workspace.
+- [x] Record each official source URL and download/access date.
+- [x] Calculate SHA-256 hashes.
+- [x] Check that document text is retrievable from the PDF.
 - [x] Upload the three currently approved originals to Firebase Storage under
       `legal_sources/tenancy/...`.
 - [x] Create `legal_sources` Firestore metadata records in pending/inactive
@@ -311,7 +311,7 @@ Ensure that production LexiBot calls do not expose the Gemini key to Flutter.
 firebase functions:secrets:set GEMINI_API_KEY
 ```
 
-- [ ] In Cloud Functions, define and bind the secret only to functions that
+- [x] In Cloud Functions, define and bind the secret only to functions that
       need Gemini access:
 
 ```javascript
@@ -334,8 +334,10 @@ exports.askLexiBot = onCall(
 
 ### Completion Gate
 
-- [ ] A deployed/emulated backend function can read `GEMINI_API_KEY`, while
-      Flutter contains no production Gemini credential.
+- [x] The deployed `askLexiBot` function can read the backend-only
+      `GEMINI_API_KEY` secret.
+- [ ] Remove and rotate the Flutter development Gemini credential before a
+      client release.
 
 ## Phase 3: Create The Gemini File Search Store
 
@@ -469,16 +471,16 @@ functions/src/lexibot/audit_log.js
 
 ### Immediate Escalation Signals
 
-- [ ] Court papers, summons, hearing, filed case, or deadline.
-- [ ] Lockout, forced entry, belongings removed, or eviction happening now.
-- [ ] Threats, harassment, violence, or personal safety concern.
-- [ ] Police, arrest, or alleged crime.
-- [ ] Utility disconnection until a verified supporting source is indexed.
-- [ ] Sabah, Sarawak, or Syariah-specific issue.
+- [x] Court papers, summons, hearing, filed case, or deadline.
+- [x] Lockout, forced entry, belongings removed, or eviction happening now.
+- [x] Threats, harassment, violence, or personal safety concern.
+- [x] Police, arrest, or alleged crime.
+- [x] Utility disconnection until a verified supporting source is indexed.
+- [x] Sabah, Sarawak, or Syariah-specific issue.
 
 ### Completion Gate
 
-- [ ] Unit tests demonstrate that high-risk and out-of-scope inputs never
+- [x] Unit tests demonstrate that high-risk and out-of-scope inputs never
       proceed to a normal legal-information answer.
 
 ## Phase 6: Implement `askLexiBot`
@@ -524,20 +526,21 @@ Expose a secure callable backend endpoint for the Flutter UI.
 
 ### Backend Processing Checklist
 
-- [ ] Require Firebase Authentication for each callable request.
-- [ ] Validate question type, non-empty content, and maximum length.
+- [x] Require Firebase Authentication for each callable request.
+- [x] Validate question type, non-empty content, and maximum length.
 - [ ] Rate-limit or abuse-protect calls before public release.
-- [ ] Run deterministic scope/risk screening.
-- [ ] Load the active store/model configuration from Firestore.
-- [ ] Send in-scope questions to Gemini with File Search enabled.
+- [x] Run deterministic scope/risk screening.
+- [x] Load the active store/model configuration from Firestore.
+- [x] Send in-scope questions to Gemini with File Search enabled.
 - [ ] Filter retrieval to approved active Peninsular tenancy material where
       supported by indexed metadata.
-- [ ] Request structured output matching the response contract.
-- [ ] Extract grounding metadata and map it to approved Firestore sources.
-- [ ] If grounding metadata/citations are absent, return
+- [x] Request structured output matching the response contract.
+- [x] Extract grounding metadata and map it to approved Firestore sources.
+- [x] If grounding metadata/citations are absent, return
       `insufficient_sources`, not an uncited legal answer.
-- [ ] Write the audit record regardless of answer/refusal outcome.
-- [ ] Return only client-safe response fields to Flutter.
+- [x] Write an audit record for answered, insufficient-source, and
+      deterministic escalation/refusal outcomes.
+- [x] Return only client-safe response fields to Flutter.
 
 ### System Instruction Baseline
 
@@ -554,7 +557,7 @@ Use clear language and the required response sections.
 
 ### Completion Gate
 
-- [ ] Callable requests return structured cited responses for supported
+- [x] Callable requests return structured cited responses for supported
       questions and safe statuses for unsupported/risky ones.
 
 ## Phase 7: Add Firestore And Storage Security Rules
@@ -669,19 +672,26 @@ Prepare questions and expected behavior before release:
 firebase deploy --only firestore:rules,storage
 ```
 
-- [ ] Deploy Cloud Functions with bound secrets.
+- [x] Deploy Cloud Functions with bound secrets.
 
 ```bash
 firebase deploy --only functions
 ```
 
-- [ ] Confirm File Search store resource name exists in production config.
-- [ ] Confirm only approved active source versions are indexed.
-- [ ] Perform a production smoke test with a low-risk tenancy question.
-- [ ] Confirm a corresponding audit record is written.
-- [ ] Perform an urgent escalation smoke test.
+- [x] Confirm File Search store resource name exists in production config.
+- [x] Confirm only approved active source versions are indexed.
+- [x] Perform a production smoke test with a low-risk tenancy question.
+- [x] Confirm a corresponding audit record is written.
+- [x] Perform an urgent escalation smoke test.
 - [ ] Confirm Gemini key is not included in the Flutter production build.
 - [ ] Enable LexiBot for clients only after all release gates pass.
+
+### Runtime Upgrade Before Release
+
+- [ ] Upgrade Cloud Functions from Node.js 20 before 2026-10-31. Firebase
+      deployment warned that this runtime was deprecated on 2026-04-30.
+- [ ] Review the `firebase-functions` dependency upgrade and run regression
+      tests before redeploying the existing backend functions.
 
 ## Phase 11: Post-MVP Source Update Pipeline
 
@@ -725,6 +735,7 @@ Update this section when completing a milestone.
 | 2026-05-26 | Ingestion tool added | Admin tool enforces approved/active manifest status, SHA-256 matching, citation metadata, and rejects ungrounded verification responses. |
 | 2026-05-26 | Firestore metadata seeded | Created disabled `lexibot_config/tenancy_mvp` and pending/inactive records for three official AGC source PDFs; indexing remains blocked until review approval. |
 | 2026-05-26 | First sources indexed | Approved, archived, and indexed Contracts Act 1950, Specific Relief Act 1950, and Distress Act 1951; grounded contract/deposit and rent/distress retrieval checks succeeded. |
+| 2026-05-26 | Backend callable deployed | Deployed authenticated `askLexiBot` with secret binding, safety screening, citation resolution, and audit logging; grounded-answer and urgent-escalation production smoke tests passed. Client answering remains disabled pending Flutter UI and release gates. |
 
 ## Reference Links
 
