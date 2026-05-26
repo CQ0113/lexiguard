@@ -625,6 +625,44 @@ final result = await callable.call({'question': question});
 - [ ] A signed-in client can submit a supported question and see a cited
       answer, while urgent/out-of-scope prompts render escalation guidance.
 
+### Frontend UI Testing Toggle
+
+The deployed `askLexiBot` function reads this Firestore switch:
+
+```text
+lexibot_config/tenancy_mvp
+  enabled: true | false
+  configurationStatus: "ui_testing_enabled" | "ui_testing_disabled_pending_release"
+```
+
+From the repository root, enable authenticated frontend testing only after
+approved sources have been indexed:
+
+```bash
+npm --prefix tools/firestore_admin run lexibot:enable-ui-testing
+```
+
+Confirm whether LexiBot is currently open for client testing:
+
+```bash
+npm --prefix tools/firestore_admin run lexibot:verify
+```
+
+Disable normal client answers again after testing:
+
+```bash
+npm --prefix tools/firestore_admin run lexibot:disable
+```
+
+Firebase Console manual path:
+
+```text
+Firestore Database -> lexibot_config -> tenancy_mvp -> enabled
+```
+
+For a public release, do not leave `enabled: true` until the remaining release
+gates are complete.
+
 ## Phase 9: Test Before MVP Release
 
 ### Goal
@@ -741,6 +779,7 @@ Update this section when completing a milestone.
 | 2026-05-26 | Backend callable deployed | Deployed authenticated `askLexiBot` with secret binding, safety screening, citation resolution, and audit logging; grounded-answer and urgent-escalation production smoke tests passed. Client answering remains disabled pending Flutter UI and release gates. |
 | 2026-05-26 | Flutter LexiBot chat built | Replaced the client Chat placeholder with a callable-backed LexiBot experience, visible official-source citations, escalation/lawyer routing, and widget coverage for answer/refusal/loading/error states. Client answering remains disabled until release gates pass. |
 | 2026-05-26 | LexiBot rules verified | Deployed Firestore and Storage rules, then confirmed an authenticated client is denied config/source/audit/PDF access while callable audit logging remains server-managed. |
+| 2026-05-26 | UI testing toggle documented | Added guarded admin commands to enable, verify, and disable authenticated frontend test access through `lexibot_config/tenancy_mvp.enabled`. |
 
 ## Reference Links
 
