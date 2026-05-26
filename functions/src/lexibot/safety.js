@@ -3,7 +3,8 @@ const URGENT_PATTERNS = [
   /\b(force(?:d)?\s+entry|broke?\s+in|belongings?\s+(?:removed|thrown))\b/i,
   /\b(threat(?:en|ened|s)?|violence|assault|danger|unsafe)\b/i,
   /\b(police|arrest(?:ed)?|criminal|crime)\b/i,
-  /\b(court|summons|writ|hearing|deadline|tribunal|lawsuit)\b/i,
+  /\b(court|summons|writ|hearing|deadline|tribunal|lawsuit|sue|suing)\b/i,
+  /\b(file|start|commence)\s+(?:a\s+)?(?:claim|case|proceedings?)\b/i,
   /\b(cut|disconnect(?:ed)?|shut\s+off)\b.*\b(electricity|water|utilities?)\b/i,
 ];
 
@@ -20,8 +21,15 @@ const TENANCY_PATTERNS = [
   /\b(condo|minium|strata|management\s+body|joint\s+management)\b/i,
 ];
 
+function normalizeTenancyTerms(question) {
+  return String(question || "")
+    .replace(/\b(teenant|tenent|tennant)\b/gi, "tenant")
+    .replace(/\b(teenancy|tenency|tennacy)\b/gi, "tenancy")
+    .trim();
+}
+
 function assessQuestion(question) {
-  const text = String(question || "").trim();
+  const text = normalizeTenancyTerms(question);
 
   if (URGENT_PATTERNS.some((pattern) => pattern.test(text))) {
     return {
