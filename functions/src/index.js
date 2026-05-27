@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getStorage } = require("firebase-admin/storage");
 
 const {
   lookupMalaysianBarCandidates,
@@ -241,4 +242,47 @@ exports.reviewVerificationRequest = onCall(async (request) => {
     queueStatus: "resolved",
     verificationStatus,
   };
+});
+
+// Standard HTTP Callable Function (Requires proper IAM permissions, which you now have!)
+exports.generateSecureShareLink = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated", 
+      "You must be logged in to generate a sharing link."
+    );
+  }
+
+  const { storagePath, expirationHours } = request.data;
+  
+  if (!storagePath || !expirationHours) {
+    throw new HttpsError(
+      "invalid-argument", 
+      "Both storagePath and expirationHours are required."
+    );
+  }
+
+  try {
+    const bucket = getStorage().bucket();
+    const file = bucket.file(storagePath);
+    const expiresAt = Date.now() + (expirationHours * 60 * 60 * 1000);
+
+    const [url] = await file.getSignedUrl({
+      version: "v4",
+      action: "read",
+      expires: expiresAt,
+    });
+
+    return {
+      success: true,
+      url: url,
+      expiresAt: expiresAt,
+    };
+  } catch (error) {
+    logger.error("Error generating signed URL:", error);
+    throw new HttpsError(
+      "internal", 
+      "Failed to generate secure link."
+    );
+  }
 });

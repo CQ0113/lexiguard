@@ -9,6 +9,7 @@ class VaultDocumentTileWidget extends StatelessWidget {
   final VoidCallback onTap;
   final Widget? trailing; 
   final String? extraSubtitle;
+  final String? activeShareText; // NEW: Added property for the banner text
 
   const VaultDocumentTileWidget({
     super.key,
@@ -16,6 +17,7 @@ class VaultDocumentTileWidget extends StatelessWidget {
     required this.onTap,
     this.trailing,
     this.extraSubtitle,
+    this.activeShareText, // NEW
   });
 
   @override
@@ -57,61 +59,97 @@ class VaultDocumentTileWidget extends StatelessWidget {
           ],
           border: Border.all(color: const Color(0xFFF1F5F9)),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                isImage ? Icons.image_outlined : Icons.description_outlined,
-                color: const Color(0xFF0B2447),
-                size: 24,
-              ),
+            // Existing Main Row
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    isImage ? Icons.image_outlined : Icons.description_outlined,
+                    color: const Color(0xFF0B2447),
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        document.fileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${sizeLabel.isNotEmpty ? "$sizeLabel  •  " : ""}$createdLabel',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                      if (extraSubtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          extraSubtitle!,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: const Color(0xFF94A3B8),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (trailing != null) trailing!,
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    document.fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: const Color(0xFF0F172A),
+            
+            // NEW: Conditional Share Link Banner
+            if (activeShareText != null && activeShareText!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB), // Light yellow/orange background
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.access_time, 
+                      color: Color(0xFFD97706), // Orange
+                      size: 14,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${sizeLabel.isNotEmpty ? "$sizeLabel  •  " : ""}$createdLabel',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: const Color(0xFF64748B),
-                    ),
-                  ),
-                  if (extraSubtitle != null) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(width: 8),
                     Text(
-                      extraSubtitle!,
+                      activeShareText!,
                       style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: const Color(0xFF94A3B8),
-                        fontStyle: FontStyle.italic,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFFD97706),
                       ),
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-            if (trailing != null) trailing!,
+            ],
           ],
         ),
       ),

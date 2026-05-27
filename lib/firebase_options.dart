@@ -91,3 +91,4 @@ class DefaultFirebaseOptions {
     iosBundleId: _env('FIREBASE_MACOS_BUNDLE_ID', 'com.example.lexi_guard'),
   );
 }
+ 
