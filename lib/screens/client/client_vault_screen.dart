@@ -31,10 +31,7 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
   bool _isUploading = false;
   double _uploadProgress = 0;
   
-  // Client Storage Limit
   final double _maxStorageGb = 50.0;
-  
-  // Dynamically track expiration times for the UI
   final Map<String, DateTime> _activeShareLinks = {};
 
   String? get _authUid {
@@ -319,7 +316,6 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // AppBar completely removed here
       body: StreamBuilder<List<VaultDocumentModel>>(
         stream: _getSafeStream(),
         builder: (context, snapshot) {
@@ -498,10 +494,12 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
                         final doc = docs[index];
                         
                         String? shareNotice;
+                        bool isExpired = false;
                         final expiresAt = _activeShareLinks[doc.storagePath];
 
                         if (expiresAt != null) {
                           final now = DateTime.now();
+                          
                           if (expiresAt.isAfter(now)) {
                             final diff = expiresAt.difference(now);
                             final hours = diff.inHours;
@@ -509,15 +507,21 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
                             
                             if (hours > 0) {
                               shareNotice = 'Share link: ${hours}h ${minutes}m remaining';
-                            } else {
+                            } else if (minutes > 0) {
                               shareNotice = 'Share link: ${minutes}m remaining';
+                            } else {
+                              shareNotice = 'Share link: < 1m remaining';
                             }
+                          } else {
+                            shareNotice = 'Share link: Expired';
+                            isExpired = true;
                           }
                         }
 
                         return VaultDocumentTileWidget(
                           document: doc,
                           activeShareText: shareNotice, 
+                          isShareExpired: isExpired, 
                           onTap: () => _openDocument(doc),
                           trailing: IconButton(
                             onPressed: () => _showShareDialog(doc),

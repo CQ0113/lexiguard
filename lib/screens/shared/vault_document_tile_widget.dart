@@ -9,7 +9,8 @@ class VaultDocumentTileWidget extends StatelessWidget {
   final VoidCallback onTap;
   final Widget? trailing; 
   final String? extraSubtitle;
-  final String? activeShareText; // NEW: Added property for the banner text
+  final String? activeShareText;
+  final bool isShareExpired; 
 
   const VaultDocumentTileWidget({
     super.key,
@@ -17,17 +18,16 @@ class VaultDocumentTileWidget extends StatelessWidget {
     required this.onTap,
     this.trailing,
     this.extraSubtitle,
-    this.activeShareText, // NEW
+    this.activeShareText,
+    this.isShareExpired = false, 
   });
 
   @override
   Widget build(BuildContext context) {
-    // Format date like "28 Mar 2026"
     final createdLabel = document.createdAt == null
         ? 'Pending'
         : DateFormat('dd MMM yyyy').format(document.createdAt!);
     
-    // Format size into MB or KB
     String sizeLabel = '';
     if (document.sizeBytes != null) {
       if (document.sizeBytes! >= 1024 * 1024) {
@@ -61,7 +61,6 @@ class VaultDocumentTileWidget extends StatelessWidget {
         ),
         child: Column(
           children: [
-            // Existing Main Row
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -120,21 +119,20 @@ class VaultDocumentTileWidget extends StatelessWidget {
               ],
             ),
             
-            // NEW: Conditional Share Link Banner
             if (activeShareText != null && activeShareText!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEB), // Light yellow/orange background
+                  color: isShareExpired ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB), 
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.access_time, 
-                      color: Color(0xFFD97706), // Orange
+                      color: isShareExpired ? const Color(0xFFEF4444) : const Color(0xFFD97706),
                       size: 14,
                     ),
                     const SizedBox(width: 8),
@@ -143,7 +141,7 @@ class VaultDocumentTileWidget extends StatelessWidget {
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFFD97706),
+                        color: isShareExpired ? const Color(0xFFEF4444) : const Color(0xFFD97706),
                       ),
                     ),
                   ],
