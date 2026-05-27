@@ -132,7 +132,8 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!FirebaseInitializer.isReady) {
+    final hasAuth = FirebaseInitializer.isReady && FirebaseAuth.instance.currentUser != null;
+    if (!hasAuth) {
       return Scaffold(
         backgroundColor: Colors.white,
         body: Center(
