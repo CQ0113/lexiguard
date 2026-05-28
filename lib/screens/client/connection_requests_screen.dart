@@ -187,7 +187,8 @@ class _HistoryTab extends StatelessWidget {
           return _EmptyState(
             icon: Icons.history_outlined,
             message: 'No past requests',
-            subtext: 'Approved, declined and withdrawn requests will appear here.',
+            subtext:
+                'Approved, declined and withdrawn requests will appear here.',
           );
         }
 
@@ -260,8 +261,7 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
             LawyerSnapshotCard(
               snapshot: snap,
               compact: true,
-              onTap: () =>
-                  LawyerProfileSheet.show(context, snapshot: snap),
+              onTap: () => LawyerProfileSheet.show(context, snapshot: snap),
             ),
             const SizedBox(height: 8),
             // ── Case reference ────────────────────────────────────────────
@@ -325,7 +325,9 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                     side: BorderSide(color: Colors.grey.shade400),
                     foregroundColor: Colors.grey[600],
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     minimumSize: const Size(0, 32),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -344,7 +346,9 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
                     foregroundColor: _navy,
                     disabledBackgroundColor: Colors.grey[200],
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 6),
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
                     minimumSize: const Size(0, 32),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -442,7 +446,9 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
           ),
           backgroundColor: const Color(0xFF0C1D36),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -456,7 +462,9 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
           ),
           backgroundColor: Colors.red[700],
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           margin: const EdgeInsets.all(16),
         ),
       );
@@ -485,7 +493,8 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
               backgroundColor: Colors.grey[800],
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
               margin: const EdgeInsets.all(16),
             ),
           );
@@ -494,14 +503,12 @@ class _PendingRequestCardState extends State<_PendingRequestCard> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                msg,
-                style: GoogleFonts.inter(color: Colors.white),
-              ),
+              content: Text(msg, style: GoogleFonts.inter(color: Colors.white)),
               backgroundColor: Colors.red[700],
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
               margin: const EdgeInsets.all(16),
             ),
           );
@@ -592,10 +599,7 @@ class _DeclineSheetState extends State<_DeclineSheet> {
             const SizedBox(height: 4),
             Text(
               'Let us know why you\'re declining this request.',
-              style: GoogleFonts.inter(
-                color: Colors.grey[500],
-                fontSize: 13,
-              ),
+              style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
             ),
             const SizedBox(height: 16),
             RadioGroup<String>(
@@ -609,10 +613,7 @@ class _DeclineSheetState extends State<_DeclineSheet> {
                         value: preset,
                         title: Text(
                           preset,
-                          style: GoogleFonts.inter(
-                            color: _navy,
-                            fontSize: 14,
-                          ),
+                          style: GoogleFonts.inter(color: _navy, fontSize: 14),
                         ),
                         activeColor: _navy,
                         contentPadding: EdgeInsets.zero,
@@ -736,8 +737,7 @@ class _HistoryRequestCard extends StatelessWidget {
             LawyerSnapshotCard(
               snapshot: snap,
               compact: true,
-              onTap: () =>
-                  LawyerProfileSheet.show(context, snapshot: snap),
+              onTap: () => LawyerProfileSheet.show(context, snapshot: snap),
             ),
             const SizedBox(height: 8),
             // Case reference
@@ -772,6 +772,9 @@ class _HistoryRequestCard extends StatelessWidget {
         return _pill('Connected', Colors.green[700]!, Colors.green[50]!);
 
       case ConnectionRequestStatus.declined:
+        if (req.declineReason == 'case_withdrawn') {
+          return _pill('Case withdrawn', Colors.grey[600]!, Colors.grey[100]!);
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -780,17 +783,18 @@ class _HistoryRequestCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 req.declineReason!,
-                style: GoogleFonts.inter(
-                  color: Colors.grey[500],
-                  fontSize: 11,
-                ),
+                style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 11),
               ),
             ],
           ],
         );
 
       case ConnectionRequestStatus.withdrawn:
-        return _pill('Withdrawn by lawyer', Colors.grey[600]!, Colors.grey[100]!);
+        return _pill(
+          'Withdrawn by lawyer',
+          Colors.grey[600]!,
+          Colors.grey[100]!,
+        );
 
       case ConnectionRequestStatus.expired:
         return _pill('Expired', Colors.grey[500]!, Colors.grey[100]!);
@@ -857,10 +861,7 @@ class _EmptyState extends StatelessWidget {
             Text(
               subtext,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: Colors.grey[400],
-                fontSize: 13,
-              ),
+              style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
             ),
           ],
         ),
@@ -897,10 +898,7 @@ class _ErrorState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: Colors.grey[500],
-                fontSize: 12,
-              ),
+              style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 16),

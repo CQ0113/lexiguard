@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 // Case Model — ready for Firebase Firestore
 // Collection path: 'cases'
 
-enum CaseStatus { active, pending, closed }
+enum CaseStatus { active, pending, closed, withdrawn }
 
 enum CaseUrgency { low, medium, high }
 
@@ -81,6 +81,11 @@ class CaseModel {
   final double progressPercent; // 0.0 to 100.0
   final DateTime? nextHearing;
   final DateTime createdAt;
+  final DateTime? closedAt;
+  final String? closedBy;
+  final String? closeReason;
+  final DateTime? withdrawnAt;
+  final String? withdrawnBy;
   final List<String> interestedLawyerIds;
   final List<CaseAttachment> attachments;
 
@@ -98,6 +103,11 @@ class CaseModel {
     this.progressPercent = 0,
     this.nextHearing,
     required this.createdAt,
+    this.closedAt,
+    this.closedBy,
+    this.closeReason,
+    this.withdrawnAt,
+    this.withdrawnBy,
     this.interestedLawyerIds = const [],
     this.attachments = const [],
   });
@@ -140,6 +150,11 @@ class CaseModel {
       createdAt:
           _readDateTime(map['createdAt']) ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      closedAt: _readDateTime(map['closedAt']),
+      closedBy: map['closedBy']?.toString(),
+      closeReason: map['closeReason']?.toString(),
+      withdrawnAt: _readDateTime(map['withdrawnAt']),
+      withdrawnBy: map['withdrawnBy']?.toString(),
       interestedLawyerIds: List<String>.from(
         map['interestedLawyerIds'] as List? ?? [],
       ),
@@ -164,6 +179,11 @@ class CaseModel {
           ? null
           : Timestamp.fromDate(nextHearing!),
       'createdAt': Timestamp.fromDate(createdAt),
+      if (closedAt != null) 'closedAt': Timestamp.fromDate(closedAt!),
+      if (closedBy != null) 'closedBy': closedBy,
+      if (closeReason != null) 'closeReason': closeReason,
+      if (withdrawnAt != null) 'withdrawnAt': Timestamp.fromDate(withdrawnAt!),
+      if (withdrawnBy != null) 'withdrawnBy': withdrawnBy,
       'interestedLawyerIds': interestedLawyerIds,
       'attachments': attachments.map((item) => item.toFirestore()).toList(),
     };
@@ -184,6 +204,11 @@ class CaseModel {
       'progressPercent': progressPercent,
       'nextHearing': nextHearing?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
+      'closedAt': closedAt?.toIso8601String(),
+      'closedBy': closedBy,
+      'closeReason': closeReason,
+      'withdrawnAt': withdrawnAt?.toIso8601String(),
+      'withdrawnBy': withdrawnBy,
       'interestedLawyerIds': interestedLawyerIds,
       'attachments': attachments.map((item) => item.toMap()).toList(),
     };
