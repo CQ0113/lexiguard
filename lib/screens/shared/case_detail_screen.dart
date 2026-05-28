@@ -12,6 +12,7 @@ import '../../repositories/case_action_repository.dart';
 import '../../repositories/case_repository.dart';
 import '../../repositories/connection_request_repository.dart';
 import '../../widgets/express_interest_sheet.dart';
+import '../../widgets/lawyer_profile_sheet.dart';
 
 class CaseDetailScreen extends StatefulWidget {
   final CaseModel caseModel;
@@ -768,17 +769,13 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
 
   // ── Interested Lawyers ───────────────────────────────────────────────────
   Widget _buildInterestedLawyersSection() {
-    final interested = DummyData.users
-        .where((u) => _case.interestedLawyerIds.contains(u.id))
-        .toList();
-
-    return _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _cardHeader(Icons.group_outlined, 'Interested Lawyers'),
-          const SizedBox(height: 12),
-          if (interested.isEmpty)
+    if (_case.interestedLawyerIds.isEmpty) {
+      return _card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _cardHeader(Icons.group_outlined, 'Interested Lawyers'),
+            const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),
               child: Row(
@@ -798,156 +795,269 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   ),
                 ],
               ),
-            )
-          else
-            ...interested.map((lawyer) => _lawyerTile(lawyer)),
-        ],
-      ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final repo = widget.repository ?? ConnectionRequestRepository();
+
+    return StreamBuilder<List<ConnectionRequestModel>>(
+      stream: repo.streamPendingForClient(widget.viewer.id),
+      builder: (context, snapshot) {
+        final allRequests = snapshot.data ?? [];
+        final pendingRequests = allRequests
+            .where((req) => req.caseId == _case.id)
+            .toList();
+
+        return _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _cardHeader(Icons.group_outlined, 'Interested Lawyers'),
+              const SizedBox(height: 12),
+              if (snapshot.connectionState == ConnectionState.waiting && allRequests.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (pendingRequests.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.hourglass_empty,
+                        color: Colors.grey[300],
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'No lawyers have expressed interest yet.',
+                        style: GoogleFonts.inter(
+                          color: Colors.grey[400],
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ...pendingRequests.map((req) => _lawyerTile(req)),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _lawyerTile(UserModel lawyer) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[100]!),
-      ),
-      child: Row(
-        children: [
-          // Avatar
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: _gold, width: 1.5),
-              image: lawyer.avatarUrl != null
-                  ? DecorationImage(
-                      image: NetworkImage(lawyer.avatarUrl!),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-              color: _navy,
+  Widget _lawyerTile(ConnectionRequestModel request) {
+    final lawyer = request.lawyerSnapshot;
+    final isVerified = lawyer.verificationStatus == 'auto_verified';
+    final verificationLabel = isVerified 
+        ? 'Verified' 
+        : (lawyer.verificationStatus == 'pending' ? 'Pending' : 'Unverified');
+    
+    return GestureDetector(
+      onTap: () => LawyerProfileSheet.show(context, snapshot: lawyer),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey[200]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-            child: lawyer.avatarUrl == null
-                ? Center(
-                    child: Text(
-                      lawyer.name[0],
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Avatar
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _gold, width: 2),
+                    image: lawyer.avatarUrl != null
+                        ? DecorationImage(
+                            image: NetworkImage(lawyer.avatarUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                    color: _navy,
+                  ),
+                  child: lawyer.avatarUrl == null
+                      ? Center(
+                          child: Text(
+                            lawyer.name[0],
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        lawyer.name,
+                        style: GoogleFonts.inter(
+                          color: _navy,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        lawyer.specialization ?? 'Legal Practitioner',
+                        style: GoogleFonts.inter(
+                          color: Colors.grey[500],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Stars & Verification
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Color(0xFFCFA92A),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${lawyer.rating ?? '-'}',
+                          style: GoogleFonts.inter(
+                            color: _navy,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isVerified
+                            ? const Color(0xFFF0FDF4)
+                            : const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: isVerified
+                              ? const Color(0xFFBBF7D0)
+                              : const Color(0xFFFDE68A),
+                        ),
+                      ),
+                      child: Text(
+                        verificationLabel,
+                        style: GoogleFonts.inter(
+                          color: isVerified
+                              ? const Color(0xFF15803D)
+                              : const Color(0xFFD97706),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  lawyer.name,
-                  style: GoogleFonts.inter(
-                    color: _navy,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  lawyer.specialization ?? 'Legal Practitioner',
-                  style: GoogleFonts.inter(
-                    color: Colors.grey[400],
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: lawyer.isVerified
-                        ? const Color(0xFFF0FDF4)
-                        : const Color(0xFFFFFBEB),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: lawyer.isVerified
-                          ? const Color(0xFFBBF7D0)
-                          : const Color(0xFFFDE68A),
-                    ),
-                  ),
-                  child: Text(
-                    lawyer.isVerified
-                        ? 'Verified'
-                        : lawyer.verificationStatus.label,
-                    style: GoogleFonts.inter(
-                      color: lawyer.isVerified
-                          ? const Color(0xFF15803D)
-                          : const Color(0xFFD97706),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  ],
                 ),
               ],
             ),
-          ),
-          // Stars
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.star_rounded,
-                    color: Color(0xFFCFA92A),
-                    size: 14,
-                  ),
-                  const SizedBox(width: 2),
-                  Text(
-                    '${lawyer.rating ?? '-'}',
-                    style: GoogleFonts.inter(
-                      color: _navy,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 14),
+            // Message Preview
+            Text(
+              request.message,
+              style: GoogleFonts.inter(
+                color: _navy,
+                fontSize: 13,
+                height: 1.4,
               ),
-              const SizedBox(height: 2),
-              // If viewer is client, show hire button
-              if (!_isLawyer)
-                GestureDetector(
-                  onTap: () {},
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _navy,
-                      borderRadius: BorderRadius.circular(8),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  'Tap to view profile',
+                  style: GoogleFonts.inter(
+                    color: _navy.withValues(alpha: 0.6),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                if (!_isLawyer)
+                  ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        final repo = widget.repository ?? ConnectionRequestRepository();
+                        await repo.approveRequest(
+                          requestId: request.id,
+                          client: widget.viewer,
+                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Hired ${lawyer.name}!')),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed: $e')),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _gold,
+                      foregroundColor: _navy,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      minimumSize: const Size(0, 32),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
                     ),
                     child: Text(
                       'Hire',
                       style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
-                ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

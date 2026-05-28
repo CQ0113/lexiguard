@@ -15,6 +15,7 @@ service cloud.firestore {
 
     function isVerifiedLawyer() {
       return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'auto_verified';
     }
 
@@ -40,13 +41,11 @@ service cloud.firestore {
     }
 
     match /cases/{caseId} {
-      allow read: if isSignedIn() &&
-          (resource.data.clientId == request.auth.uid ||
-              resource.data.lawyerId == request.auth.uid ||
-              // Verified lawyers may browse any pending case.
-              // status='pending' implies lawyerId==null by our data model.
-              (isVerifiedLawyer() &&
-                resource.data.status == 'pending'));
+      allow read: if isSignedIn() && (
+          ('clientId' in resource.data && resource.data.clientId == request.auth.uid) ||
+          ('lawyerId' in resource.data && resource.data.lawyerId == request.auth.uid) ||
+          (isVerifiedLawyer() && 'status' in resource.data && resource.data.status == 'pending')
+      );
 
       allow create: if isSignedIn() &&
           request.resource.data.clientId == request.auth.uid &&
@@ -79,7 +78,7 @@ service cloud.firestore {
                 request.resource.data.interestedLawyerIds.hasAll(resource.data.interestedLawyerIds) &&
               request.resource.data.interestedLawyerIds.size() == resource.data.interestedLawyerIds.size() + 1 &&
               request.resource.data.status == resource.data.status) ||
-            // Verified lawyer removing self from interestedLawyerIds (withdraw)
+            // Verified lawyer withdrawing EOI (removing self from list)
             (isVerifiedLawyer() &&
                 resource.data.lawyerId == null &&
                 resource.data.interestedLawyerIds.hasAll(request.resource.data.interestedLawyerIds) &&
@@ -110,17 +109,15 @@ service cloud.firestore {
         && request.resource.data.message.size() <= 500
         && request.resource.data.lawyerSnapshot is map;
 
-      // Single-doc GET: also allows reading a non-existent doc so the
-      // sendRequest() transaction can check for a prior request.
       allow get: if isSignedIn() && (
         (resource == null && reqId.matches('.*_' + request.auth.uid)) ||
-        request.auth.uid == resource.data.clientId ||
-        request.auth.uid == resource.data.lawyerId
+        (resource != null && 'clientId' in resource.data && request.auth.uid == resource.data.clientId) ||
+        (resource != null && 'lawyerId' in resource.data && request.auth.uid == resource.data.lawyerId)
       );
-      // Collection queries (streamPendingForClient, streamForLawyer, etc.)
+      
       allow list: if isSignedIn() && (
-        request.auth.uid == resource.data.clientId ||
-        request.auth.uid == resource.data.lawyerId
+        ('clientId' in resource.data && request.auth.uid == resource.data.clientId) ||
+        ('lawyerId' in resource.data && request.auth.uid == resource.data.lawyerId)
       );
 
       allow update: if isSignedIn() && (
@@ -170,10 +167,10 @@ service cloud.firestore {
     }
 
     match /vault_documents/{docId} {
-      allow read: if isSignedIn() &&
-          (resource.data.ownerUserId == request.auth.uid ||
-              (resource.data.allowedUserIds is list &&
-                  request.auth.uid in resource.data.allowedUserIds));
+      allow read: if isSignedIn() && (
+          resource.data.ownerUserId == request.auth.uid ||
+          request.auth.uid in resource.data.allowedUserIds
+      );
 
       allow create: if isSignedIn() &&
           request.resource.data.ownerUserId == request.auth.uid &&
@@ -183,9 +180,13 @@ service cloud.firestore {
           request.resource.data.allowedUserIds is list &&
           request.auth.uid in request.resource.data.allowedUserIds;
 
-      allow update: if isSignedIn() &&
-          resource.data.ownerUserId == request.auth.uid &&
-          request.resource.data.ownerUserId == resource.data.ownerUserId;
+      allow update: if isSignedIn() && (
+          (resource.data.ownerUserId == request.auth.uid &&
+              request.resource.data.ownerUserId == resource.data.ownerUserId) ||
+          (resource.data.isContract == true &&
+              request.auth.uid in resource.data.allowedUserIds &&
+              request.resource.data.contractStatus == 'signed')
+      );
 
       allow delete: if isSignedIn() &&
           resource.data.ownerUserId == request.auth.uid;
