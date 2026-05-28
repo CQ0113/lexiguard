@@ -13,15 +13,19 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.reviewer == true;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'admin123@gmail.com';
+    }
+
     function isVerifiedLawyer() {
       return isSignedIn() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'auto_verified';
     }
 
     match /users/{uid} {
-      allow read: if isOwner(uid) || isReviewer();
+      allow read: if isOwner(uid) || isReviewer() || isAdmin();
       allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || isReviewer();
+      allow update: if isOwner(uid) || isReviewer() || isAdmin();
       allow delete: if false;
     }
 
