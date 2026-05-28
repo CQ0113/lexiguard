@@ -8,6 +8,7 @@ import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../../repositories/case_action_repository.dart';
 import '../../repositories/case_repository.dart';
 import '../../repositories/connection_request_repository.dart';
 import '../../widgets/express_interest_sheet.dart';
@@ -20,11 +21,15 @@ class CaseDetailScreen extends StatefulWidget {
   /// without a live Firebase). Defaults to a new instance for lawyer viewers.
   final ConnectionRequestRepository? repository;
 
+  /// Optional: inject a [CaseActionHandler] (e.g. for testing).
+  final CaseActionHandler? actionHandler;
+
   const CaseDetailScreen({
     super.key,
     required this.caseModel,
     required this.viewer,
     this.repository,
+    this.actionHandler,
   });
 
   @override
@@ -43,6 +48,13 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   ConnectionRequestRepository? _repoInstance;
   ConnectionRequestRepository get _repo =>
       _repoInstance ??= widget.repository ?? ConnectionRequestRepository();
+
+  CaseActionHandler? _actionInstance;
+  CaseActionHandler get _actionHandler =>
+      _actionInstance ??= widget.actionHandler ?? CaseActionRepository();
+
+  bool _actionBusy = false;
+  String? _actionInFlight;
 
   // Live case subscription — keeps fields like `interestedLawyerIds`,
   // `status`, `lawyerId` in sync after withdraw/decline/approve.
@@ -68,6 +80,19 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   }
 
   bool get _isLawyer => widget.viewer.role == UserRole.lawyer;
+  bool get _isClient => widget.viewer.role == UserRole.client;
+  bool get _isCaseOwner => _isClient && widget.viewer.id == _case.clientId;
+
+  bool get _canWithdrawCase =>
+      _isCaseOwner &&
+      _case.status == CaseStatus.pending &&
+      (_case.lawyerId == null || _case.lawyerId!.isEmpty);
+
+  bool get _canCloseCase =>
+      _isCaseOwner &&
+      _case.status == CaseStatus.active &&
+      _case.lawyerId != null &&
+      _case.lawyerId!.isNotEmpty;
 
   UserModel _resolveClientUser() {
     try {
@@ -105,6 +130,28 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         margin: const EdgeInsets.all(16),
       ),
     );
+  }
+
+  Future<void> _runCaseAction(
+    String action,
+    Future<void> Function() task,
+  ) async {
+    if (_actionBusy) return;
+    setState(() {
+      _actionBusy = true;
+      _actionInFlight = action;
+    });
+
+    try {
+      await task();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _actionBusy = false;
+          _actionInFlight = null;
+        });
+      }
+    }
   }
 
   // ── Withdraw confirmation dialog ─────────────────────────────────────────
@@ -159,6 +206,152 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     }
   }
 
+  Future<void> _confirmCaseWithdraw() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Withdraw case?',
+          style: GoogleFonts.inter(
+            color: const Color(0xFF0C1D36),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          'Withdrawing will decline all pending lawyer interests for this case.',
+          style: GoogleFonts.inter(color: Colors.grey[700], fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.grey[600]),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Withdraw',
+              style: GoogleFonts.inter(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await _runCaseAction('withdraw', () async {
+      try {
+        await _actionHandler.withdrawCase(caseId: _case.id);
+        if (mounted) {
+          _showSnack('Case withdrawn.', Colors.grey[700]!);
+        }
+      } catch (e) {
+        if (mounted) {
+          _showSnack(
+            'Could not withdraw case. Please try again.',
+            Colors.redAccent,
+          );
+        }
+      }
+    });
+  }
+
+  Future<void> _confirmCloseCase() async {
+    final reasonCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Close case?',
+          style: GoogleFonts.inter(
+            color: const Color(0xFF0C1D36),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Optionally add a closure reason for your lawyer.',
+              style: GoogleFonts.inter(color: Colors.grey[700], fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              maxLength: 200,
+              maxLines: 3,
+              style: GoogleFonts.inter(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Reason (optional)',
+                hintStyle: GoogleFonts.inter(color: Colors.grey[400]),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.grey[600]),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _gold,
+              foregroundColor: _navy,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Close case',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final reason = reasonCtrl.text.trim();
+    reasonCtrl.dispose();
+
+    if (confirmed != true || !mounted) return;
+
+    await _runCaseAction('close', () async {
+      try {
+        await _actionHandler.closeCase(
+          caseId: _case.id,
+          reason: reason.isEmpty ? null : reason,
+        );
+        if (mounted) {
+          _showSnack('Case closed.', Colors.grey[700]!);
+        }
+      } catch (e) {
+        if (mounted) {
+          _showSnack(
+            'Could not close case. Please try again.',
+            Colors.redAccent,
+          );
+        }
+      }
+    });
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -166,10 +359,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     // unverified lawyers don't need it (unverified see a disabled button,
     // clients have no EOI surface at all).
     final requestStream = (_isLawyer && widget.viewer.canAccessMarketplace)
-        ? _repo.watchRequest(
-            caseId: _case.id,
-            lawyerId: widget.viewer.id,
-          )
+        ? _repo.watchRequest(caseId: _case.id, lawyerId: widget.viewer.id)
         : null;
 
     return Scaffold(
@@ -193,6 +383,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   const SizedBox(height: 20),
                   _buildDetailsCard(),
                   const SizedBox(height: 20),
+                  if (_isCaseOwner) _buildClientActionsCard(),
+                  if (_isCaseOwner) const SizedBox(height: 20),
                   if (_case.attachments.isNotEmpty) _buildAttachmentsCard(),
                   if (_case.attachments.isNotEmpty) const SizedBox(height: 20),
                   if (!_isLawyer) _buildInterestedLawyersSection(),
@@ -209,14 +401,14 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _isLawyer
           ? (requestStream != null
-              ? StreamBuilder<ConnectionRequestModel?>(
-                  stream: requestStream,
-                  builder: (ctx, snapshot) {
-                    final request = snapshot.data;
-                    return _buildLawyerFAB(request);
-                  },
-                )
-              : _buildLawyerFAB(null))
+                ? StreamBuilder<ConnectionRequestModel?>(
+                    stream: requestStream,
+                    builder: (ctx, snapshot) {
+                      final request = snapshot.data;
+                      return _buildLawyerFAB(request);
+                    },
+                  )
+                : _buildLawyerFAB(null))
           : null,
     );
   }
@@ -428,11 +620,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
           ],
           if (_case.budgetRange != null && _case.budgetRange!.isNotEmpty) ...[
             _divider(),
-            _detailRow(
-              Icons.payments_outlined,
-              'Budget',
-              _case.budgetRange!,
-            ),
+            _detailRow(Icons.payments_outlined, 'Budget', _case.budgetRange!),
           ],
           _divider(),
           _detailRow(
@@ -458,6 +646,83 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
               valueColor: const Color(0xFF2E7D32),
             ),
           ],
+          if (_case.closeReason != null && _case.closeReason!.isNotEmpty) ...[
+            _divider(),
+            _detailRow(
+              Icons.note_outlined,
+              'Closure Reason',
+              _case.closeReason!,
+              valueColor: Colors.grey[700],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClientActionsCard() {
+    if (!_canWithdrawCase && !_canCloseCase) {
+      return const SizedBox.shrink();
+    }
+
+    final isWithdraw = _canWithdrawCase;
+    final actionLabel = isWithdraw ? 'Withdraw case' : 'Close case';
+    final helperText = isWithdraw
+        ? 'Withdraw before accepting a lawyer. Pending interests will be declined.'
+        : 'Close the case once resolved. Optionally add a reason for your lawyer.';
+    final actionColor = isWithdraw ? Colors.redAccent : _gold;
+    final actionTextColor = isWithdraw ? Colors.white : _navy;
+    final busy =
+        _actionBusy && _actionInFlight == (isWithdraw ? 'withdraw' : 'close');
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _cardHeader(Icons.manage_accounts_outlined, 'Case Actions'),
+          const SizedBox(height: 8),
+          Text(
+            helperText,
+            style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton(
+              onPressed: busy
+                  ? null
+                  : isWithdraw
+                  ? _confirmCaseWithdraw
+                  : _confirmCloseCase,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: actionColor,
+                foregroundColor: actionTextColor,
+                disabledBackgroundColor: actionColor.withValues(alpha: 0.6),
+                disabledForegroundColor: actionTextColor,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: busy
+                  ? SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: actionTextColor,
+                      ),
+                    )
+                  : Text(
+                      actionLabel,
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+            ),
+          ),
         ],
       ),
     );
@@ -473,11 +738,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
           for (final attachment in _case.attachments) ...[
             Row(
               children: [
-                const Icon(
-                  Icons.description_outlined,
-                  color: _navy,
-                  size: 16,
-                ),
+                const Icon(Icons.description_outlined, color: _navy, size: 16),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -878,10 +1139,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
           icon: Icon(icon, size: 18),
           label: Text(
             label,
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-            ),
+            style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14),
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: bg,
@@ -1023,6 +1281,11 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
         color = Colors.grey;
         label = 'Closed';
         icon = Icons.check_circle_outline;
+        break;
+      case CaseStatus.withdrawn:
+        color = Colors.redAccent;
+        label = 'Withdrawn';
+        icon = Icons.remove_circle_outline;
         break;
     }
     return Container(

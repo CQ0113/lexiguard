@@ -54,7 +54,7 @@ service cloud.firestore {
           request.resource.data.description is string &&
           request.resource.data.category is string &&
           request.resource.data.status is string &&
-          request.resource.data.status in ['pending', 'active', 'closed'] &&
+          request.resource.data.status in ['pending', 'active', 'closed', 'withdrawn'] &&
           request.resource.data.urgency is string &&
           request.resource.data.progressPercent is number &&
           request.resource.data.createdAt is timestamp &&
@@ -70,23 +70,27 @@ service cloud.firestore {
           request.resource.data.clientId == resource.data.clientId &&
           request.resource.data.createdAt == resource.data.createdAt && (
             // Original: case owner or assigned lawyer may update freely
-            (resource.data.clientId == request.auth.uid ||
-                resource.data.lawyerId == request.auth.uid) ||
+            ((resource.data.clientId == request.auth.uid ||
+              resource.data.lawyerId == request.auth.uid) &&
+              request.resource.data.status == resource.data.status) ||
             // Verified lawyer appending self to interestedLawyerIds (EOI send)
             (isVerifiedLawyer() &&
                 resource.data.lawyerId == null &&
                 request.resource.data.interestedLawyerIds.hasAll(resource.data.interestedLawyerIds) &&
-                request.resource.data.interestedLawyerIds.size() == resource.data.interestedLawyerIds.size() + 1) ||
+              request.resource.data.interestedLawyerIds.size() == resource.data.interestedLawyerIds.size() + 1 &&
+              request.resource.data.status == resource.data.status) ||
             // Verified lawyer removing self from interestedLawyerIds (withdraw)
             (isVerifiedLawyer() &&
                 resource.data.lawyerId == null &&
                 resource.data.interestedLawyerIds.hasAll(request.resource.data.interestedLawyerIds) &&
                 request.resource.data.interestedLawyerIds.size() == resource.data.interestedLawyerIds.size() - 1 &&
-                !request.resource.data.interestedLawyerIds.hasAny([request.auth.uid])) ||
+              !request.resource.data.interestedLawyerIds.hasAny([request.auth.uid]) &&
+              request.resource.data.status == resource.data.status) ||
             // Client setting lawyerId on their own case (approve connection)
             (resource.data.clientId == request.auth.uid &&
                 resource.data.lawyerId == null &&
-                request.resource.data.lawyerId is string)
+              request.resource.data.lawyerId is string &&
+              request.resource.data.status == 'active')
           );
 
       allow delete: if false;
@@ -147,6 +151,22 @@ service cloud.firestore {
       );
 
       allow delete: if false;
+    }
+
+    match /cases/{caseId}/history/{historyId} {
+      allow read: if isSignedIn() &&
+          (get(/databases/$(database)/documents/cases/$(caseId)).data.clientId == request.auth.uid ||
+            get(/databases/$(database)/documents/cases/$(caseId)).data.lawyerId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read, list: if isSignedIn() &&
+          request.auth.uid == resource.data.userId;
+      allow update: if isSignedIn() &&
+          request.auth.uid == resource.data.userId &&
+          request.resource.data.userId == resource.data.userId;
+      allow create, delete: if false;
     }
 
     match /vault_documents/{docId} {
