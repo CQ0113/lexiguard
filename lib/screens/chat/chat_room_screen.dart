@@ -45,6 +45,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   bool _isSending = false;
   bool _isUploading = false;
 
+  // Storage path of the most recently sent attachment, passed to LexiBot so it
+  // can ground answers on the shared image/file. Cleared after each draft.
+  String? _lastAttachmentPath;
+
   // ── Derived from the room — never from arbitrary input ────────────────────
 
   bool get _isClient => widget.currentUser.role == UserRole.client;
@@ -141,7 +145,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
     setState(() => _isUploading = true);
     try {
-      await _repo.sendAttachmentMessage(
+      final path = await _repo.sendAttachmentMessage(
         roomId: widget.room.id,
         senderId: widget.currentUser.id,
         senderRole: _senderRole,
@@ -151,6 +155,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         mimeType: mimeType,
         type: msgType,
       );
+      if (mounted) setState(() => _lastAttachmentPath = path);
     } catch (e) {
       if (!mounted) return;
       _showErrorSnackBar('Could not send attachment: ${e.toString()}');
@@ -198,9 +203,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       context,
       roomId: widget.room.id,
       seedQuestion: seedQuestion,
-      // No pending attachment state exists in this screen — pass null.
-      attachmentStoragePath: null,
+      // Ground the answer on the most recently shared attachment, if any.
+      attachmentStoragePath: _lastAttachmentPath,
     );
+    // Consume the attachment context so it doesn't leak into the next query.
+    if (mounted) setState(() => _lastAttachmentPath = null);
     if (draft != null && draft.isNotEmpty && mounted) {
       _textCtrl.text = draft;
       _textCtrl.selection = TextSelection.collapsed(

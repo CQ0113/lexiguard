@@ -60,11 +60,11 @@ void main() {
     await openSheet(tester);
 
     // Header title
-    expect(find.text('Ask LexiBot'), findsOneWidget);
+    expect(find.text('LexiBot'), findsOneWidget);
 
     // Disclaimer text (partial match)
     expect(
-      find.textContaining('General information, not formal legal advice'),
+      find.textContaining('General information only'),
       findsOneWidget,
     );
 
@@ -255,7 +255,7 @@ void main() {
       );
 
       // Sheet should remain open for retry.
-      expect(find.text('Ask LexiBot'), findsOneWidget);
+      expect(find.text('LexiBot'), findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
     },
   );

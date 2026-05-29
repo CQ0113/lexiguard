@@ -140,7 +140,10 @@ class ChatRepository {
   ///
   /// Throws [ArgumentError] when the file exceeds 10 MB.
   /// Storage path: `chat_attachments/{roomId}/{messageId}_{sanitizedFileName}`.
-  Future<void> sendAttachmentMessage({
+  ///
+  /// Returns the Storage path of the uploaded attachment so callers (e.g. the
+  /// chat room screen) can pass it to LexiBot for image/file-grounded answers.
+  Future<String> sendAttachmentMessage({
     required String roomId,
     required String senderId,
     required UserRole senderRole,
@@ -223,6 +226,8 @@ class ChatRepository {
       print('ChatRepository.sendAttachmentMessage: Firestore batch failed: $e');
       rethrow;
     }
+
+    return storagePath;
   }
 
   /// Resets the caller's unread counter to zero.
