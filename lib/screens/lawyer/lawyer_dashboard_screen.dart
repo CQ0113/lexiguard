@@ -17,6 +17,7 @@ import 'reviewer_console_screen.dart';
 import '../chat/chat_list_screen.dart';
 import '../chat/chat_room_screen.dart';
 import '../../repositories/chat_repository.dart';
+import 'send_contract_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LAWYER SHELL — matches MobileShell + all lawyer screens from Figma
@@ -2103,40 +2104,52 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
 
                   // Contracts CTA (if connected)
                   if (isConnected) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _gold.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _gold.withValues(alpha: 0.2)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.edit_document,
-                            color: _gold,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Send Contract',
-                              style: GoogleFonts.inter(
-                                color: _navy,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SendContractScreen(
+                              caseModel: c,
+                              lawyer: widget.user,
                             ),
                           ),
-                          const Icon(
-                            Icons.chevron_right,
-                            color: _gold,
-                            size: 16,
-                          ),
-                        ],
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _gold.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _gold.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.edit_document,
+                              color: _gold,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Send Contract',
+                                style: GoogleFonts.inter(
+                                  color: _navy,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: _gold,
+                              size: 16,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),

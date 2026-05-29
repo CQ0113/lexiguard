@@ -5,17 +5,24 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    match /vault/{ownerUserId}/{fileName=**} {
-      allow read: if isSignedIn() &&
-          request.auth.uid == ownerUserId;
+    match /vault/{ownerUserId}/{docId}/{fileName=**} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == ownerUserId ||
+        request.auth.uid in firestore.get(/databases/(default)/documents/vault_documents/$(docId)).data.allowedUserIds
+      );
       allow write: if isSignedIn() &&
-          request.auth.uid == ownerUserId;
+        request.auth.uid == ownerUserId;
     }
 
     match /case_attachments/{clientUserId}/{caseId}/{fileName=**} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        request.auth.uid == clientUserId ||
+        request.auth.uid == firestore.get(/databases/(default)/documents/cases/$(caseId)).data.lawyerId ||
+        (firestore.get(/databases/(default)/documents/cases/$(caseId)).data.status == 'pending' &&
+         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.verificationStatus == 'auto_verified')
+      );
       allow write: if isSignedIn() &&
-          request.auth.uid == clientUserId;
+        request.auth.uid == clientUserId;
     }
 
     match /chat_attachments/{roomId}/{fileName} {

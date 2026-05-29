@@ -21,6 +21,8 @@ dependencies:
   google_sign_in: ^6.2.1
   url_launcher: ^6.2.5
   dotted_border: ^2.1.0
+  google_generative_ai: ^0.2.2
+  syncfusion_flutter_pdf: ^33.2.8
 
 dev_dependencies:
   flutter_test:

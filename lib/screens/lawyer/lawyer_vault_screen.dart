@@ -156,6 +156,17 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
     }
   }
 
+  Future<void> _remindClient(VaultDocumentModel document) async {
+    try {
+      if (FirebaseInitializer.isReady) {
+        await _repository.updateReminderTimestamp(document.id);
+      }
+      _showSnack('Dispatched secure legal draft reminder to client!');
+    } catch (e) {
+      _showSnack('Failed to dispatch reminder: $e');
+    }
+  }
+
   List<VaultDocumentModel> _applyFilter(List<VaultDocumentModel> docs) {
     switch (_filter) {
       case LawyerVaultFilter.mine:
@@ -198,7 +209,8 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!FirebaseInitializer.isReady) {
+    final hasAuth = FirebaseInitializer.isReady && FirebaseAuth.instance.currentUser != null;
+    if (!hasAuth) {
       return Scaffold(
         backgroundColor: Colors.white,
         body: Center(
@@ -216,6 +228,11 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
         stream: _repository.streamAccessibleDocuments(userId: _effectiveUserId),
         builder: (context, snapshot) {
           final allDocs = snapshot.data ?? const <VaultDocumentModel>[];
+          
+          // --- CALCULATE CONTRACTS TRACKER DYNAMICALLY ---
+          final contracts = allDocs.where((doc) => doc.isContract && doc.ownerUserId == _effectiveUserId).toList();
+          final pendingContracts = contracts.where((doc) => doc.contractStatus == 'pending_signature').toList();
+          final signedContracts = contracts.where((doc) => doc.contractStatus == 'signed').toList();
           
           // --- CALCULATE STORAGE DYNAMICALLY ---
           // Always calculate total storage based on ALL docs, regardless of the filter applied
@@ -331,6 +348,92 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 16),
+
+                      // Sent Contracts Tracker Dashboard Card
+                      if (contracts.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFFBEB),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFFDE68A)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.01),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    )
+                                  ]
+                                ),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      '${pendingContracts.length}',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFFB45309),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Pending Signatures',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFFB45309),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFECFDF5),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFA7F3D0)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.01),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    )
+                                  ]
+                                ),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      '${signedContracts.length}',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF047857),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Signed Agreements',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF047857),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       
                       // Upload Area
@@ -434,17 +537,33 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                               document: doc,
                               onTap: () => _openDocument(doc),
                               extraSubtitle: !canDelete ? 'Shared by user: ${doc.ownerUserId}' : null,
-                              trailing: canDelete
-                                  ? IconButton(
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (doc.isContract && doc.contractStatus == 'pending_signature' && canDelete) ...[
+                                    IconButton(
+                                      onPressed: () => _remindClient(doc),
+                                      tooltip: 'Send signature reminder',
+                                      icon: const Icon(
+                                        Icons.notification_important_outlined,
+                                        color: Color(0xFFD4AF37),
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  if (canDelete)
+                                    IconButton(
                                       onPressed: () => _deleteDocument(doc),
-                                      tooltip: 'Delete file',
+                                      tooltip: 'Delete document',
                                       icon: const Icon(
                                         Icons.delete_outline_rounded,
                                         color: Color(0xFFEF4444),
                                         size: 22,
                                       ),
-                                    )
-                                  : null,
+                                    ),
+                                ],
+                              ),
                             );
                           },
                           childCount: filteredDocs.length,
