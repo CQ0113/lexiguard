@@ -2,26 +2,20 @@
  * seed_law_corpus.js — Populates the Firestore law_corpus collection with
  * pre-embedded Malaysian statute chunks for LexiBot RAG.
  *
- * Usage:
+ * Usage (from repo root):
  *   cd functions
- *   GEMINI_API_KEY=$(firebase functions:secrets:access GEMINI_API_KEY) node scripts/seed_law_corpus.js
+ *   GEMINI_API_KEY=<your-key> node scripts/seed_law_corpus.js
  *
- * Or export the key first:
- *   export GEMINI_API_KEY=$(firebase functions:secrets:access GEMINI_API_KEY)
- *   node scripts/seed_law_corpus.js
- *
- * Note: GEMINI_API_KEY is a Firebase secret (not in .env). GEMINI_EMBED_MODEL
- * is loaded from functions/.env automatically.
- *
- * Firebase auth: uses Application Default Credentials from `firebase login`
- * or GOOGLE_APPLICATION_CREDENTIALS env var (service account JSON).
+ * Firestore auth: uses `gcloud auth print-access-token` (the active gcloud
+ * account) via the Firestore REST API — no Admin SDK credentials needed.
+ * Make sure `gcloud` is logged in with an account that has project access.
  */
 
 "use strict";
 
 require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
 
-const admin = require("firebase-admin");
+const { execSync } = require("child_process");
 const { GoogleGenAI } = require("@google/genai");
 
 // ---------------------------------------------------------------------------
@@ -48,13 +42,60 @@ if (!GEMINI_API_KEY) {
 }
 
 // ---------------------------------------------------------------------------
-// Firebase Admin init — uses application default credentials (firebase login
-// sets these up) or GOOGLE_APPLICATION_CREDENTIALS service account.
+// Firestore REST API helpers — use gcloud access token (service account)
 // ---------------------------------------------------------------------------
-admin.initializeApp({
-  projectId: "lexiguard-32c63",
-});
-const db = admin.firestore();
+const PROJECT = "lexiguard-32c63";
+const FS_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
+
+function getGcloudToken() {
+  return execSync("gcloud auth print-access-token", { encoding: "utf8" }).trim();
+}
+
+async function firestoreGet(collection, docId, token) {
+  const res = await fetch(`${FS_BASE}/${collection}/${docId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Firestore GET ${collection}/${docId} failed ${res.status}: ${body}`);
+  }
+  return res.json();
+}
+
+async function firestoreSet(collection, docId, fields, token) {
+  // Build Firestore document format
+  const document = { fields: {} };
+  for (const [k, v] of Object.entries(fields)) {
+    if (typeof v === "string") document.fields[k] = { stringValue: v };
+    else if (typeof v === "number") document.fields[k] = { doubleValue: v };
+    else if (typeof v === "boolean") document.fields[k] = { booleanValue: v };
+    else if (Array.isArray(v)) {
+      document.fields[k] = {
+        arrayValue: {
+          values: v.map((x) =>
+            typeof x === "number" ? { doubleValue: x } : { stringValue: String(x) }
+          ),
+        },
+      };
+    }
+  }
+
+  const url = `${FS_BASE}/${collection}/${docId}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(document),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Firestore PATCH ${collection}/${docId} failed ${res.status}: ${body}`);
+  }
+  return res.json();
+}
 
 // ---------------------------------------------------------------------------
 // Statute chunks — ~20 sections covering property, contract, tenancy,
@@ -307,7 +348,8 @@ async function main() {
   console.log(`Embed model: ${GEMINI_EMBED_MODEL}`);
 
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-  const col = db.collection("law_corpus");
+  const token = getGcloudToken();
+  console.log(`gcloud token obtained (${token.length} chars)\n`);
 
   let added = 0;
   let skipped = 0;
@@ -315,11 +357,11 @@ async function main() {
 
   for (const chunk of STATUTE_CHUNKS) {
     const docId = slugify(`${chunk.actNo}-${chunk.sectionNo}`);
-    const docRef = col.doc(docId);
 
-    // Skip if already seeded
-    const existing = await docRef.get();
-    if (existing.exists && Array.isArray(existing.data().embedding) && existing.data().embedding.length > 0) {
+    // Skip if already seeded (has a non-empty embedding array)
+    const existing = await firestoreGet("law_corpus", docId, token);
+    const existingEmbed = existing?.fields?.embedding?.arrayValue?.values;
+    if (Array.isArray(existingEmbed) && existingEmbed.length > 0) {
       console.log(`  [skip] ${docId}`);
       skipped++;
       continue;
@@ -329,7 +371,7 @@ async function main() {
       console.log(`  [embed] ${docId} ...`);
       const embedding = await embedText(ai, chunk.chunkText);
 
-      await docRef.set({
+      await firestoreSet("law_corpus", docId, {
         actName: chunk.actName,
         actNo: chunk.actNo,
         sectionNo: chunk.sectionNo,
@@ -337,13 +379,12 @@ async function main() {
         chunkText: chunk.chunkText,
         sourceUrl: chunk.sourceUrl,
         embedding,
-        seededAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      }, token);
 
       console.log(`  [ok]   ${docId} (${embedding.length}d vector)`);
       added++;
 
-      // Brief pause to stay within rate limits (2 req/s is conservative)
+      // Brief pause to stay within rate limits
       await new Promise((r) => setTimeout(r, 600));
     } catch (err) {
       console.error(`  [err]  ${docId}: ${err.message}`);
