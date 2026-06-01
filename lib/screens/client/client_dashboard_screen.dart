@@ -15,6 +15,7 @@ import '../shared/case_detail_screen.dart';
 import '../shared/profile_screen.dart';
 import '../shared/vault_tab_router_screen.dart';
 import 'connection_requests_screen.dart';
+import '../chat/chat_list_screen.dart';
 import 'client_signature_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -169,10 +170,7 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
         index: _currentTab <= 1 ? 0 : _currentTab - 1,
         children: [
           _ClientHomeTab(user: widget.user), // Maps to index 0 (Home)
-          _PlaceholderTab(
-            'Chat',
-            Icons.chat_bubble_outline_rounded,
-          ), // Maps to index 2 (Chat)
+          ChatListScreen(currentUser: widget.user), // Maps to index 2 (Chat)
           VaultTabRouterScreen(user: widget.user), // Maps to index 3 (Vault)
           ClientSignatureScreen(clientUser: widget.user), // Maps to index 4 (Sign)
           ProfileScreen(
@@ -1202,40 +1200,6 @@ class _ClientProfileTab extends StatelessWidget {
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
         .toUpperCase();
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Placeholder for Chat / Vault / Sign tabs
-// ─────────────────────────────────────────────────────────────────────────────
-class _PlaceholderTab extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  const _PlaceholderTab(this.label, this.icon);
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 48, color: Colors.grey[300]),
-          const SizedBox(height: 12),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: Colors.grey[400],
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(
-            'Coming soon',
-            style: GoogleFonts.inter(color: Colors.grey[300], fontSize: 12),
-          ),
-        ],
-      ),
-    );
   }
 }
 

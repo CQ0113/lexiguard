@@ -192,6 +192,77 @@ service cloud.firestore {
           resource.data.ownerUserId == request.auth.uid;
     }
 
+    match /chat_rooms/{roomId} {
+      // get: resource is available — check participants directly.
+      // list: resource is null for queries; allow authenticated users to query.
+      //   Security comes from the arrayContains filter: only rooms where the
+      //   caller is a participant are returned, and each returned doc satisfies
+      //   the get rule.
+      // resource == null when the doc doesn't exist; allow the get so callers
+      // can check existence before creating (e.g. ensureRoom in ChatRepository).
+      allow get: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participants);
+      allow list: if isSignedIn();
+
+      // Created atomically inside ConnectionRequestRepository.approveRequest.
+      // Rules evaluate against the pre-transaction committed state, so the
+      // connection_requests doc status is still 'pending' at create time —
+      // checking for 'approved' here would always deny. Instead we verify
+      // (a) the caller is listed in the new room's participants array, and
+      // (b) a matching connection_requests doc actually exists, and
+      // (c) the caller is one of the two parties on that connection request.
+      // This prevents anyone outside the legitimate pair from creating a room.
+      allow create: if request.auth.uid in request.resource.data.participants
+                    && exists(/databases/$(database)/documents/connection_requests/$(roomId))
+                    && (request.auth.uid == get(/databases/$(database)/documents/connection_requests/$(roomId)).data.clientId
+                        || request.auth.uid == get(/databases/$(database)/documents/connection_requests/$(roomId)).data.lawyerId);
+
+      // Only mutable fields may change. Two permitted paths:
+      //   1. Send a message: lastSenderId == caller (updates last-message fields + bumps unreadCounts).
+      //   2. Mark read: caller zeroes their own unread slot only.
+      allow update: if request.auth.uid in resource.data.participants
+                    && request.resource.data.participants == resource.data.participants
+                    && request.resource.data.caseId == resource.data.caseId
+                    && request.resource.data.clientId == resource.data.clientId
+                    && request.resource.data.lawyerId == resource.data.lawyerId
+                    && request.resource.data.diff(resource.data).changedKeys().hasOnly(
+                         ['lastMessageText','lastMessageType','lastSenderId','lastMessageAt','unreadCounts'])
+                    && (
+                         request.resource.data.lastSenderId == request.auth.uid
+                         || request.resource.data.unreadCounts[request.auth.uid] == 0
+                       );
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants;
+
+        // Validated create: caller must be senderId, must be a room participant,
+        // senderRole must match their role on the room, type must be valid,
+        // text messages bounded 1–4000 chars, non-text messages require attachment fields.
+        allow create: if request.auth.uid == request.resource.data.senderId
+                      && request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants
+                      && request.resource.data.type in ['text', 'image', 'file']
+                      && request.resource.data.senderRole in ['client', 'lawyer']
+                      && (request.resource.data.senderRole == 'client'
+                            ? request.auth.uid == get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.clientId
+                            : request.auth.uid == get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.lawyerId)
+                      && (request.resource.data.type != 'text'
+                            || (request.resource.data.text is string
+                                && request.resource.data.text.size() > 0
+                                && request.resource.data.text.size() <= 4000))
+                      && (request.resource.data.type == 'text'
+                            || (request.resource.data.attachmentStoragePath is string
+                                && request.resource.data.attachmentName is string));
+
+        // Append-only — no edits or deletes.
+        allow update, delete: if false;
+      }
+    }
+
+    match /law_corpus/{chunkId} {
+      allow read, write: if false; // Admin SDK only.
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

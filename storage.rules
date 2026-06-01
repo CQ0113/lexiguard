@@ -25,6 +25,19 @@ service firebase.storage {
         request.auth.uid == clientUserId;
     }
 
+    match /chat_attachments/{roomId}/{fileName} {
+      allow read: if isSignedIn()
+          && request.auth.uid in firestore.get(/databases/(default)/documents/chat_rooms/$(roomId)).data.participants;
+      allow write: if isSignedIn()
+          && request.auth.uid in firestore.get(/databases/(default)/documents/chat_rooms/$(roomId)).data.participants
+          && request.resource.size <= 10 * 1024 * 1024
+          && (request.resource.contentType.matches('image/.*')
+              || request.resource.contentType.matches('application/pdf')
+              || request.resource.contentType.matches('application/vnd\\.openxmlformats.*')
+              || request.resource.contentType.matches('application/msword')
+              || request.resource.contentType.matches('text/plain'));
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

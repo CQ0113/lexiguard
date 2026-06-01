@@ -15,6 +15,12 @@ const {
 const {
   buildVerificationDecision,
 } = require("./verification/verification_decision");
+const {
+  generateLegalChatResponse,
+} = require("./chat/lexibot");
+const {
+  seedLawCorpus,
+} = require("./chat/corpus_seed");
 const { assessQuestion, escalationResponse } = require("./lexibot/safety");
 const { generateGroundedAnswer } = require("./lexibot/gemini_file_search");
 const { resolveApprovedCitations } = require("./lexibot/citation_resolver");
@@ -664,6 +670,9 @@ exports.withdrawCase = onCall({ invoker: "public" }, async (request) => {
     notifiedLawyerCount: notifiedLawyerIds.length,
   };
 });
+
+exports.generateLegalChatResponse = generateLegalChatResponse;
+exports.seedLawCorpus = seedLawCorpus;
 
 exports.closeCase = onCall({ invoker: "public" }, async (request) => {
   const auth = requireAuth(request);

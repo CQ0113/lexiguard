@@ -1,0 +1,17 @@
+SOURCE: https://lom.agc.gov.my/ilims/upload/portal/akta/outputp/act_574/Act%20574.pdf
+ACT: Penal Code
+ACT_NO: Act 574
+LANGUAGE: English
+RETRIEVED: 2026-05
+
+## s415 — Cheating
+Section 415 defines the offence of cheating as dishonestly inducing a person to deliver property, consent to the retention of property by any person, or intentionally inducing a person to do or omit an act which causes or is likely to cause damage or harm to that person in body, mind, reputation, or property. The section covers deception by any fraudulent or dishonest means, including false representations about facts or the future intentions of the deceiver.
+
+## s420 — Cheating and dishonestly inducing delivery of property
+Section 420 is a specific and aggravated form of cheating under section 415, focusing on cases where the victim is dishonestly induced to deliver property or to make, alter, or destroy any valuable security or document. The punishment upon conviction is imprisonment for a term that may extend to ten years and shall not be less than one year, and the offender shall also be liable to whipping.
+
+## s441 — Criminal trespass
+Section 441 defines criminal trespass as entering onto property in the possession of another person with intent to commit an offence, or with intent to intimidate, insult, or annoy the person in possession. It also covers remaining unlawfully on such property after being required to depart by the person in possession or their authorised representative.
+
+## sXX — [TODO: Title]
+[TODO: paste from https://lom.agc.gov.my/]

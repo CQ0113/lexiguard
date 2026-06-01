@@ -10,8 +10,10 @@ import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../../repositories/case_action_repository.dart';
 import '../../repositories/case_repository.dart';
+import '../../repositories/chat_repository.dart';
 import '../../repositories/connection_request_repository.dart';
 import '../../widgets/express_interest_sheet.dart';
+import '../chat/chat_room_screen.dart';
 import '../../widgets/lawyer_profile_sheet.dart';
 
 class CaseDetailScreen extends StatefulWidget {
@@ -402,15 +404,93 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: _isLawyer
           ? (requestStream != null
-                ? StreamBuilder<ConnectionRequestModel?>(
-                    stream: requestStream,
-                    builder: (ctx, snapshot) {
-                      final request = snapshot.data;
-                      return _buildLawyerFAB(request);
-                    },
-                  )
-                : _buildLawyerFAB(null))
-          : null,
+              ? StreamBuilder<ConnectionRequestModel?>(
+                  stream: requestStream,
+                  builder: (ctx, snapshot) {
+                    final request = snapshot.data;
+                    return _buildLawyerFAB(request);
+                  },
+                )
+              : _buildLawyerFAB(null))
+          : _buildClientChatFAB(),
+    );
+  }
+
+  // ── Client "Chat with lawyer" FAB ────────────────────────────────────────
+  //
+  // Shown only when there's an approved connection on this case. Streams all
+  // approved requests for the client and checks for a match on this case.
+  Widget _buildClientChatFAB() {
+    if (!FirebaseInitializer.isReady) return const SizedBox.shrink();
+
+    return StreamBuilder<List<ConnectionRequestModel>>(
+      stream: _repo.streamHistoryForClient(widget.viewer.id),
+      builder: (context, snapshot) {
+        final requests = snapshot.data ?? const [];
+        ConnectionRequestModel? approved;
+        try {
+          approved = requests.firstWhere(
+            (r) => r.caseId == _case.id &&
+                r.status == ConnectionRequestStatus.approved,
+          );
+        } catch (_) {
+          approved = null;
+        }
+
+        if (approved == null) return const SizedBox.shrink();
+
+        return _fab(
+          label: 'Chat with lawyer',
+          icon: Icons.chat_bubble_outline,
+          bg: _gold,
+          fg: _navy,
+          onPressed: () => _openClientChat(approved!.id),
+        );
+      },
+    );
+  }
+
+  Future<void> _openLawyerChat(String roomId) async {
+    final chatRepo = ChatRepository();
+    final room = await chatRepo.fetchRoom(roomId);
+    if (!mounted) return;
+    if (room == null) {
+      _showSnack(
+        'Chat room not found. It may have been created before chat was enabled.',
+        Colors.grey[700]!,
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatRoomScreen(
+          currentUser: widget.viewer,
+          room: room,
+          repository: chatRepo,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openClientChat(String roomId) async {
+    final chatRepo = ChatRepository();
+    final room = await chatRepo.fetchRoom(roomId);
+    if (!mounted) return;
+    if (room == null) {
+      _showSnack(
+        'Chat room not found. It may have been created before chat was enabled.',
+        Colors.grey[700]!,
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatRoomScreen(
+          currentUser: widget.viewer,
+          room: room,
+          repository: chatRepo,
+        ),
+      ),
     );
   }
 
@@ -1137,15 +1217,20 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       );
     }
 
-    // Connected (assigned to self OR request approved)
+    // Connected (assigned to self OR request approved) — open chat
     if ((assignedLawyerId != null && assignedLawyerId == widget.viewer.id) ||
         request?.status == ConnectionRequestStatus.approved) {
+      final roomId = request?.id ??
+          ConnectionRequestRepository.docIdFor(
+            caseId: _case.id,
+            lawyerId: widget.viewer.id,
+          );
       return _fab(
-        label: 'Connected',
-        icon: Icons.check_circle_outline,
-        bg: const Color(0xFF2E7D32),
+        label: 'Chat with client',
+        icon: Icons.chat_bubble_outline,
+        bg: _navy,
         fg: Colors.white,
-        onPressed: null, // future: open chat
+        onPressed: () => _openLawyerChat(roomId),
       );
     }
 
