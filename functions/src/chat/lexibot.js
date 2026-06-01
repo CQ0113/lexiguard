@@ -15,10 +15,16 @@
 require("dotenv").config();
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const { GoogleGenAI } = require("@google/genai");
 const { cosine, embedText: _embedText } = require("./rag_helpers");
+
+// GEMINI_API_KEY is stored as a Firebase secret (not in .env). Binding it to
+// the callable below injects it into process.env at runtime, where requireEnv
+// reads it. Model names live in functions/.env and ship as plain env vars.
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
 // ---------------------------------------------------------------------------
 // Env-var validation — deferred to first call so the module loads cleanly
@@ -152,7 +158,7 @@ async function rankByQuestion(question, corpus, ai) {
 // generateLegalChatResponse — HTTPS callable
 // ---------------------------------------------------------------------------
 exports.generateLegalChatResponse = onCall(
-  { invoker: "public" },
+  { invoker: "public", secrets: [geminiApiKey], timeoutSeconds: 300 },
   async (request) => {
     // 1. Auth check
     if (!request.auth || !request.auth.uid) {
