@@ -67,9 +67,11 @@ async function embedText(ai, modelName, text) {
     result.values;
 
   if (!Array.isArray(vec) || vec.length === 0) {
+    const preview = JSON.stringify(result || {}).slice(0, 300);
     throw new Error(
       `embedText: could not extract embedding vector from response. ` +
-        `Model: ${modelName}. Response keys: ${Object.keys(result || {}).join(", ")}`
+        `Model: ${modelName}. Response keys: ${Object.keys(result || {}).join(", ")}. ` +
+        `Preview: ${preview}`
     );
   }
 

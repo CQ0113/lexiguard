@@ -115,16 +115,17 @@ function buildPrompt(question, topChunks) {
 // ---------------------------------------------------------------------------
 async function rankByQuestion(question, corpus, ai) {
   const embedModel = requireEnv("GEMINI_EMBED_MODEL");
+  const TOP_K = Math.min(5, corpus.length);
 
-  // Embed the question
+  // Embed the question — fall back to unranked first-K if embedding is
+  // unavailable (e.g. transient API error or invalid key).
   let qVec;
   try {
     qVec = await _embedText(ai, embedModel, question);
   } catch (err) {
-    throw new HttpsError(
-      "internal",
-      "Failed to obtain a valid embedding vector for the question."
-    );
+    console.error("[lexibot] embedText(question) failed:", err.message,
+      "— falling back to first-K corpus chunks without ranking.");
+    return corpus.slice(0, TOP_K);
   }
 
   // Embed any corpus chunks that don't have pre-computed embeddings
@@ -132,23 +133,28 @@ async function rankByQuestion(question, corpus, ai) {
     corpus.map(async (chunk) => {
       let vec = chunk.embedding;
       if (!Array.isArray(vec) || vec.length === 0) {
-        const cEmbedResult = await ai.models.embedContent({
-          model: embedModel,
-          contents: chunk.chunkText,
-        });
-        vec =
-          cEmbedResult.embeddings?.[0]?.values ??
-          cEmbedResult.embedding?.values ??
-          cEmbedResult.values;
+        try {
+          const cEmbedResult = await ai.models.embedContent({
+            model: embedModel,
+            contents: chunk.chunkText,
+          });
+          vec =
+            cEmbedResult.embeddings?.[0]?.values ??
+            cEmbedResult.embedding?.values ??
+            cEmbedResult.values;
+        } catch (e) {
+          vec = null;
+        }
       }
       return { chunk, vec };
     })
   );
 
-  const TOP_K = Math.min(5, resolved.length);
-
   return resolved
-    .map(({ chunk, vec }) => ({ chunk, sim: cosine(qVec, vec) }))
+    .map(({ chunk, vec }) => ({
+      chunk,
+      sim: Array.isArray(vec) && vec.length > 0 ? cosine(qVec, vec) : -1,
+    }))
     .sort((a, b) => b.sim - a.sim)
     .slice(0, TOP_K)
     .map(({ chunk }) => chunk);
@@ -317,6 +323,7 @@ exports.generateLegalChatResponse = onCall(
       }
     } catch (err) {
       if (err instanceof HttpsError) throw err;
+      console.error("[lexibot] generateContent failed:", err.message);
       throw new HttpsError(
         "internal",
         "LexiBot could not generate a response at this time. Please try again."
