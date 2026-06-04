@@ -45,6 +45,14 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
   static const _gold = Color(0xFFD4AF37);
 
   int _currentTab = 0;
+  late final Stream<List<CaseModel>> _openCasesStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _openCasesStream =
+        (widget.caseRepository ?? CaseRepository()).streamOpenCases();
+  }
 
   // Lawyer tabs (from mobile-shell.tsx lawyerTabs)
   static const _tabs = [
@@ -83,6 +91,8 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
       _LawyerCRMTab(
         user: widget.user,
         connectionRequestRepository: widget.connectionRequestRepository,
+        openCasesStream: _openCasesStream,
+        onViewAllLeads: () => setState(() => _currentTab = 1),
       ),
       _LawyerMyCasesTab(
         user: widget.user,
@@ -272,10 +282,14 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
 class _LawyerCRMTab extends StatelessWidget {
   final UserModel user;
   final ConnectionRequestRepository? connectionRequestRepository;
+  final Stream<List<CaseModel>>? openCasesStream;
+  final VoidCallback? onViewAllLeads;
 
   const _LawyerCRMTab({
     required this.user,
     this.connectionRequestRepository,
+    this.openCasesStream,
+    this.onViewAllLeads,
   });
 
   static const _navy = Color(0xFF0B2447);
@@ -310,32 +324,6 @@ class _LawyerCRMTab extends StatelessWidget {
       '127 reviews',
       Icons.star_outline,
       Color(0xFFE6A817),
-    ),
-  ];
-
-  // Leads from lawyer-dashboard.tsx exactly
-  static const _leads = [
-    _Lead(
-      'Tan Wei Ming',
-      'Property Dispute — Penang',
-      'Hot Lead',
-      'Today',
-      'high',
-    ),
-    _Lead(
-      'Nurul Izzah',
-      'Divorce Proceedings',
-      'Follow Up',
-      'Yesterday',
-      'medium',
-    ),
-    _Lead('Siva a/l Rajan', 'Employment Termination', 'New', '2d ago', 'low'),
-    _Lead(
-      'Lim Boon Keat',
-      'Criminal Defense — KL',
-      'Hot Lead',
-      '3d ago',
-      'high',
     ),
   ];
 
@@ -435,46 +423,82 @@ class _LawyerCRMTab extends StatelessWidget {
               },
             ),
 
-          // ── Stats 2×2 grid ────────────────────────────────────────────────
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.65,
-            children: _stats.map((s) => _statCard(s)).toList(),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Lead Pipeline chart ───────────────────────────────────────────
-          _pipelineChart(),
-          const SizedBox(height: 20),
-
-          // ── Recent Leads ──────────────────────────────────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Recent Leads',
-                style: GoogleFonts.inter(
-                  color: _navy,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+          // ── Stats + Recent Leads (live) ───────────────────────────────────
+          StreamBuilder<List<CaseModel>>(
+            stream: openCasesStream,
+            builder: (context, snap) {
+              final openCases = snap.data ?? const <CaseModel>[];
+              final recentLeads = openCases.take(4).toList();
+              final displayStats = [
+                _Stat(
+                  'Active Leads',
+                  '${openCases.length}',
+                  'in marketplace',
+                  Icons.group_outlined,
+                  const Color(0xFF0B2447),
                 ),
-              ),
-              Text(
-                'View All',
-                style: GoogleFonts.inter(
-                  color: _gold,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+                ..._stats.skip(1),
+              ];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.65,
+                    children: displayStats.map((s) => _statCard(s)).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  _pipelineChart(),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Recent Leads',
+                        style: GoogleFonts.inter(
+                          color: _navy,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: onViewAllLeads,
+                        behavior: HitTestBehavior.opaque,
+                        child: Text(
+                          'View All',
+                          style: GoogleFonts.inter(
+                            color: _gold,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (recentLeads.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          'No open cases yet',
+                          style: GoogleFonts.inter(
+                            color: Colors.grey[400],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ...recentLeads.map((c) => _caseLeadCard(context, c)),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 12),
-          ..._leads.map((l) => _leadCard(l)),
         ],
       ),
     );
@@ -805,124 +829,130 @@ class _LawyerCRMTab extends StatelessWidget {
     );
   }
 
-  Widget _leadCard(_Lead lead) {
+  Widget _caseLeadCard(BuildContext context, CaseModel c) {
+    final urgencyKey = c.urgency == CaseUrgency.high
+        ? 'high'
+        : c.urgency == CaseUrgency.medium
+            ? 'medium'
+            : 'low';
+    final urgencyLabel = c.urgency == CaseUrgency.high
+        ? 'Hot Lead'
+        : c.urgency == CaseUrgency.medium
+            ? 'Follow Up'
+            : 'New';
+    final diff = DateTime.now().difference(c.createdAt);
+    final dateLabel = diff.inDays == 0
+        ? 'Today'
+        : diff.inDays == 1
+            ? 'Yesterday'
+            : '${diff.inDays}d ago';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+      child: GestureDetector(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CaseDetailScreen(caseModel: c, viewer: user),
+          ),
         ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      lead.name,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          c.categoryLabel,
+                          style: GoogleFonts.inter(
+                            color: _navy,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          c.title,
+                          style: GoogleFonts.inter(
+                            color: Colors.grey[500],
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _urgencyBg(urgencyKey),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      urgencyLabel,
                       style: GoogleFonts.inter(
-                        color: _navy,
-                        fontSize: 14,
+                        color: _urgencyFg(urgencyKey),
+                        fontSize: 10,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    Text(
-                      lead.matter,
-                      style: GoogleFonts.inter(
-                        color: Colors.grey[500],
-                        fontSize: 12,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Divider(height: 1, color: Color(0xFFF3F4F6)),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, size: 12, color: Colors.grey[400]),
+                      const SizedBox(width: 4),
+                      Text(
+                        dateLabel,
+                        style: GoogleFonts.inter(
+                          color: Colors.grey[400],
+                          fontSize: 11,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                    ],
                   ),
-                  decoration: BoxDecoration(
-                    color: _urgencyBg(lead.urgency),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    lead.status,
+                  Text(
+                    'Tap to view →',
                     style: GoogleFonts.inter(
-                      color: _urgencyFg(lead.urgency),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                      color: _gold,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            const Divider(height: 1, color: Color(0xFFF3F4F6)),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.access_time, size: 12, color: Colors.grey[400]),
-                    const SizedBox(width: 4),
-                    Text(
-                      lead.date,
-                      style: GoogleFonts.inter(
-                        color: Colors.grey[400],
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: _navy.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.phone_outlined,
-                        color: _navy,
-                        size: 16,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: _gold.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.chat_bubble_outline,
-                        color: _gold,
-                        size: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2776,7 +2806,3 @@ class _Stat {
   const _Stat(this.label, this.value, this.change, this.icon, this.color);
 }
 
-class _Lead {
-  final String name, matter, status, date, urgency;
-  const _Lead(this.name, this.matter, this.status, this.date, this.urgency);
-}

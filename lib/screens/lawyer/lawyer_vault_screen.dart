@@ -248,6 +248,16 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                        color: const Color(0xFF0B2447),
+                        padding: EdgeInsets.zero,
+                        alignment: Alignment.centerLeft,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        tooltip: 'Back',
+                      ),
+                      const SizedBox(height: 4),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
