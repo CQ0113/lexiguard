@@ -78,6 +78,10 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
     setState(() => _currentTab = index);
   }
 
+  void _goHome() {
+    setState(() => _currentTab = 0);
+  }
+
   void _showNotificationsSnackBar() {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -136,29 +140,37 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  // Logo circle
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.shield_outlined,
-                        color: _navy,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'LexiGuard',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                  GestureDetector(
+                    onTap: _goHome,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.shield_outlined,
+                              color: _navy,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'LexiGuard',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const Spacer(),

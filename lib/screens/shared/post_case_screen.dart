@@ -226,7 +226,16 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                color: _navy,
+                padding: EdgeInsets.zero,
+                alignment: Alignment.centerLeft,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                tooltip: 'Back',
+              ),
+              const SizedBox(height: 4),
               Text(
                 'Post Your Case',
                 style: GoogleFonts.inter(
