@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
@@ -27,12 +26,20 @@ class CaseDetailScreen extends StatefulWidget {
   /// Optional: inject a [CaseActionHandler] (e.g. for testing).
   final CaseActionHandler? actionHandler;
 
+  /// Optional: inject a [CaseRepository] (e.g. for testing with fake Firestore).
+  final CaseRepository? caseRepository;
+
+  /// When false, the screen renders from [caseModel] only (widget tests).
+  final bool subscribeToLiveUpdates;
+
   const CaseDetailScreen({
     super.key,
     required this.caseModel,
     required this.viewer,
     this.repository,
     this.actionHandler,
+    this.caseRepository,
+    this.subscribeToLiveUpdates = true,
   });
 
   @override
@@ -68,8 +75,9 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     super.initState();
     _case = widget.caseModel;
 
-    if (FirebaseInitializer.isReady) {
-      _caseSub = CaseRepository().watchCase(_case.id).listen((updated) {
+    if (widget.subscribeToLiveUpdates) {
+      final repo = widget.caseRepository ?? CaseRepository();
+      _caseSub = repo.watchCase(_case.id).listen((updated) {
         if (!mounted || updated == null) return;
         setState(() => _case = updated);
       });
@@ -421,8 +429,6 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   // Shown only when there's an approved connection on this case. Streams all
   // approved requests for the client and checks for a match on this case.
   Widget _buildClientChatFAB() {
-    if (!FirebaseInitializer.isReady) return const SizedBox.shrink();
-
     return StreamBuilder<List<ConnectionRequestModel>>(
       stream: _repo.streamHistoryForClient(widget.viewer.id),
       builder: (context, snapshot) {

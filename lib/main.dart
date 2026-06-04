@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'core/firebase/firebase_initializer.dart';
 import 'screens/login_screen.dart';
+import 'screens/shared/firebase_setup_required_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,7 +28,9 @@ class MainApp extends StatelessWidget {
         useMaterial3: true,
         textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme),
       ),
-      home: const LoginScreen(),
+      home: FirebaseInitializer.isReady
+          ? const LoginScreen()
+          : const FirebaseSetupRequiredScreen(),
     );
   }
 }

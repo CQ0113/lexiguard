@@ -8,16 +8,17 @@ import '../../models/vault_document_model.dart';
 import '../../repositories/vault_document_repository.dart';
 import '../shared/vault_document_tile_widget.dart';
 import '../shared/vault_upload_card_widget.dart';
-import '../../core/firebase/firebase_initializer.dart';
 
 enum LawyerVaultFilter { all, mine, sharedWithMe }
 
 class LawyerVaultScreen extends StatefulWidget {
   final String lawyerUserId;
+  final VaultDocumentRepository? repository;
 
   const LawyerVaultScreen({
     super.key,
     required this.lawyerUserId,
+    this.repository,
   });
 
   @override
@@ -25,7 +26,7 @@ class LawyerVaultScreen extends StatefulWidget {
 }
 
 class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
-  final VaultDocumentRepository _repository = VaultDocumentRepository();
+  late final VaultDocumentRepository _repository;
   final TextEditingController _clientIdController = TextEditingController();
 
   bool _isUploading = false;
@@ -35,9 +36,21 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
   // Lawyer Storage Limit (100 GB)
   final double _maxStorageGb = 100.0;
 
-  String? get _authUid => FirebaseInitializer.isReady ? FirebaseAuth.instance.currentUser?.uid : null;
+  String? get _authUid {
+    try {
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      return null;
+    }
+  }
 
   String get _effectiveUserId => _authUid ?? widget.lawyerUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? VaultDocumentRepository();
+  }
 
   @override
   void dispose() {
@@ -64,14 +77,9 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
   }
 
   Future<void> _pickAndUpload() async {
-    if (!FirebaseInitializer.isReady) {
-      _showSnack('Demo mode: Firebase is not configured. Uploads are disabled.');
-      return;
-    }
-
     final authUid = _authUid;
     if (authUid == null) {
-      _showSnack('Please sign in to upload files to Firebase Vault.');
+      _showSnack('Please sign in to upload files.');
       return;
     }
 
@@ -158,9 +166,7 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
 
   Future<void> _remindClient(VaultDocumentModel document) async {
     try {
-      if (FirebaseInitializer.isReady) {
-        await _repository.updateReminderTimestamp(document.id);
-      }
+      await _repository.updateReminderTimestamp(document.id);
       _showSnack('Dispatched secure legal draft reminder to client!');
     } catch (e) {
       _showSnack('Failed to dispatch reminder: $e');
@@ -209,19 +215,6 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasAuth = FirebaseInitializer.isReady && FirebaseAuth.instance.currentUser != null;
-    if (!hasAuth) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(
-          child: Text(
-            'Demo mode (Firebase not connected).',
-            style: GoogleFonts.inter(color: const Color(0xFF6B7280)),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: StreamBuilder<List<VaultDocumentModel>>(

@@ -3,8 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../core/firebase/firebase_initializer.dart';
-import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../../repositories/case_repository.dart';
@@ -85,10 +83,8 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       _descCtrl.text.trim().isNotEmpty &&
       _locationIdx >= 0;
 
-  bool get _canUseFirestore {
-    if (!FirebaseInitializer.isReady) return false;
-    return FirebaseAuth.instance.currentUser?.uid == widget.poster.id;
-  }
+  bool get _canUseFirestore =>
+      FirebaseAuth.instance.currentUser?.uid == widget.poster.id;
 
   Future<void> _addFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -145,7 +141,15 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
     final caseId = 'case_${DateTime.now().millisecondsSinceEpoch}';
     final attachmentMetadata = <CaseAttachment>[];
 
-    if (_canUseFirestore) {
+    if (!_canUseFirestore) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        _showSnack('Please sign in again before posting a case.');
+      }
+      return;
+    }
+
+    if (_files.isNotEmpty) {
       try {
         for (final file in _files) {
           final bytes = file.bytes;
@@ -169,20 +173,6 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
         }
         return;
       }
-    } else if (_files.isNotEmpty) {
-      attachmentMetadata.addAll(
-        _files.map(
-          (file) => CaseAttachment(
-            id: '${caseId}_${file.name}_${file.size}',
-            fileName: file.name,
-            downloadUrl: '',
-            storagePath: '',
-            sizeBytes: file.size,
-            contentType: _contentTypeFor(file.name),
-            uploadedAt: DateTime.now(),
-          ),
-        ),
-      );
     }
 
     final newCase = CaseModel(
@@ -202,29 +192,21 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       attachments: attachmentMetadata,
     );
 
-    var storedInFirestore = false;
-    if (_canUseFirestore) {
-      try {
-        await _caseRepository.createCase(newCase);
-        storedInFirestore = true;
-      } catch (error) {
-        for (final attachment in attachmentMetadata) {
-          try {
-            await _caseRepository.deleteCaseAttachment(attachment);
-          } catch (_) {
-            // The submission error is more useful to surface here.
-          }
+    try {
+      await _caseRepository.createCase(newCase);
+    } catch (error) {
+      for (final attachment in attachmentMetadata) {
+        try {
+          await _caseRepository.deleteCaseAttachment(attachment);
+        } catch (_) {
+          // The submission error is more useful to surface here.
         }
-        if (mounted) {
-          setState(() => _submitting = false);
-          _showSnack('Case submission failed: $error');
-        }
-        return;
       }
-    }
-
-    if (!storedInFirestore) {
-      DummyData.openCases.insert(0, newCase);
+      if (mounted) {
+        setState(() => _submitting = false);
+        _showSnack('Case submission failed: $error');
+      }
+      return;
     }
 
     if (mounted) {

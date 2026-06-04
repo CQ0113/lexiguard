@@ -2,7 +2,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-import '../core/firebase/firebase_initializer.dart';
 import '../models/user_model.dart';
 import '../repositories/lawyer_profile_repository.dart';
 import '../repositories/user_repository.dart';
@@ -48,10 +47,6 @@ class FirebaseAuthSyncService {
     required UserRole role,
     UserModel? lawyerProfile,
   }) async {
-    if (!FirebaseInitializer.isReady) {
-      return const SyncSessionResult(firebaseUnavailable: true);
-    }
-
     try {
       final credential = await _resolveCredential(
         isLogin: isLogin,

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lei_guard/models/case_model.dart';
 import 'package:lei_guard/models/user_model.dart';
 import 'package:lei_guard/repositories/case_action_repository.dart';
+import 'package:lei_guard/repositories/connection_request_repository.dart';
 import 'package:lei_guard/screens/shared/case_detail_screen.dart';
 
 class _FakeCaseActionHandler implements CaseActionHandler {
@@ -26,6 +28,7 @@ void main() {
   }
 
   testWidgets('client sees withdraw action for pending case', (tester) async {
+    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
     const client = UserModel(
       id: 'client_1',
       name: 'Client A',
@@ -50,7 +53,9 @@ void main() {
         CaseDetailScreen(
           caseModel: pendingCase,
           viewer: client,
+          repository: repo,
           actionHandler: _FakeCaseActionHandler(),
+          subscribeToLiveUpdates: false,
         ),
       ),
     );
@@ -61,6 +66,7 @@ void main() {
   });
 
   testWidgets('client sees close action for active case', (tester) async {
+    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
     const client = UserModel(
       id: 'client_2',
       name: 'Client B',
@@ -86,7 +92,9 @@ void main() {
         CaseDetailScreen(
           caseModel: activeCase,
           viewer: client,
+          repository: repo,
           actionHandler: _FakeCaseActionHandler(),
+          subscribeToLiveUpdates: false,
         ),
       ),
     );

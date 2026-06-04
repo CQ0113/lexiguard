@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
@@ -25,7 +24,17 @@ import 'send_contract_screen.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 class LawyerDashboardScreen extends StatefulWidget {
   final UserModel user;
-  const LawyerDashboardScreen({super.key, required this.user});
+  final CaseRepository? caseRepository;
+  final ConnectionRequestRepository? connectionRequestRepository;
+  final ChatRepository? chatRepository;
+
+  const LawyerDashboardScreen({
+    super.key,
+    required this.user,
+    this.caseRepository,
+    this.connectionRequestRepository,
+    this.chatRepository,
+  });
 
   @override
   State<LawyerDashboardScreen> createState() => _LawyerDashboardScreenState();
@@ -71,9 +80,19 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
 
   List<Widget> get _verifiedTabs {
     return [
-      _LawyerCRMTab(user: widget.user),
-      _LawyerMyCasesTab(user: widget.user),
-      ChatListScreen(currentUser: widget.user),
+      _LawyerCRMTab(
+        user: widget.user,
+        connectionRequestRepository: widget.connectionRequestRepository,
+      ),
+      _LawyerMyCasesTab(
+        user: widget.user,
+        caseRepository: widget.caseRepository,
+        connectionRequestRepository: widget.connectionRequestRepository,
+      ),
+      ChatListScreen(
+        currentUser: widget.user,
+        repository: widget.chatRepository,
+      ),
       _PlaceholderTab('Forms', Icons.description_outlined),
       _PlaceholderTab('Docs', Icons.folder_outlined),
       ProfileScreen(user: widget.user, embedded: true),
@@ -239,7 +258,12 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 class _LawyerCRMTab extends StatelessWidget {
   final UserModel user;
-  const _LawyerCRMTab({required this.user});
+  final ConnectionRequestRepository? connectionRequestRepository;
+
+  const _LawyerCRMTab({
+    required this.user,
+    this.connectionRequestRepository,
+  });
 
   static const _navy = Color(0xFF0B2447);
   static const _gold = Color(0xFFD4AF37);
@@ -380,10 +404,10 @@ class _LawyerCRMTab extends StatelessWidget {
           // ── Pending interest status (blue) ────────────────────────────────
           // Live count from Firestore — hide entirely when zero so we don't
           // show a fake banner when the lawyer has no pending requests.
-          if (FirebaseInitializer.isReady)
-            StreamBuilder<List<ConnectionRequestModel>>(
-              stream: ConnectionRequestRepository().streamForLawyer(user.id),
-              builder: (context, snap) {
+          StreamBuilder<List<ConnectionRequestModel>>(
+            stream: (connectionRequestRepository ?? ConnectionRequestRepository())
+                .streamForLawyer(user.id),
+            builder: (context, snap) {
                 final pendingCount = (snap.data ?? const [])
                     .where((r) => r.status == ConnectionRequestStatus.pending)
                     .length;
@@ -893,7 +917,14 @@ class _LawyerCRMTab extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _LawyerMyCasesTab extends StatefulWidget {
   final UserModel user;
-  const _LawyerMyCasesTab({required this.user});
+  final CaseRepository? caseRepository;
+  final ConnectionRequestRepository? connectionRequestRepository;
+
+  const _LawyerMyCasesTab({
+    required this.user,
+    this.caseRepository,
+    this.connectionRequestRepository,
+  });
 
   @override
   State<_LawyerMyCasesTab> createState() => _LawyerMyCasesTabState();
@@ -906,19 +937,16 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   String _activeTab = 'all'; // all | active | pending
   final _searchCtrl = TextEditingController();
 
-  // Null when Firebase is not ready (demo-safe mode).
-  ConnectionRequestRepository? _connRepo;
-  CaseRepository? _caseRepo;
+  late final ConnectionRequestRepository _connRepo;
+  late final CaseRepository _caseRepo;
   // Tracks which pending request cards are expanded (to show full message).
   final Set<String> _expandedRequests = {};
 
   @override
   void initState() {
     super.initState();
-    if (FirebaseInitializer.isReady) {
-      _connRepo = ConnectionRequestRepository();
-      _caseRepo = CaseRepository();
-    }
+    _connRepo = widget.connectionRequestRepository ?? ConnectionRequestRepository();
+    _caseRepo = widget.caseRepository ?? CaseRepository();
   }
 
   @override
@@ -957,10 +985,9 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
 
   @override
   Widget build(BuildContext context) {
-    final openCasesStream = _caseRepo?.streamOpenCases() ??
-        Stream.value(<CaseModel>[...DummyData.openCases]);
-    final connectedStream = _caseRepo?.streamConnectedCasesForLawyer(widget.user.id) ??
-        Stream.value(<CaseModel>[]);
+    final openCasesStream = _caseRepo.streamOpenCases();
+    final connectedStream =
+        _caseRepo.streamConnectedCasesForLawyer(widget.user.id);
 
     return StreamBuilder<List<CaseModel>>(
       stream: connectedStream,
@@ -969,7 +996,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
         return StreamBuilder<List<CaseModel>>(
           stream: openCasesStream,
           builder: (context, openSnap) {
-            final openCases = openSnap.data ?? DummyData.openCases;
+            final openCases = openSnap.data ?? const <CaseModel>[];
             return _buildBody(context, openCases);
           },
         );
@@ -1033,8 +1060,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
 
           // ── Tab filters + case list (share the live requests stream) ────────
           StreamBuilder<List<ConnectionRequestModel>>(
-            stream: _connRepo?.streamForLawyer(widget.user.id) ??
-                Stream.value(<ConnectionRequestModel>[]),
+            stream: _connRepo.streamForLawyer(widget.user.id),
             builder: (context, snap) {
               final allRequests = snap.data ?? [];
 
@@ -1177,13 +1203,8 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   // ── Live pending connection-requests list ─────────────────────────────────
 
   Widget _pendingRequestsList() {
-    // Demo-safe: Firebase not configured.
-    if (_connRepo == null) {
-      return _pendingEmptyState();
-    }
-
     return StreamBuilder<List<ConnectionRequestModel>>(
-      stream: _connRepo!.streamForLawyer(widget.user.id),
+      stream: _connRepo.streamForLawyer(widget.user.id),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Padding(
@@ -1745,7 +1766,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     if (!mounted) return;
 
     try {
-      await _connRepo?.withdrawRequest(req.id);
+      await _connRepo.withdrawRequest(req.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1895,6 +1916,23 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     }
   }
 
+  void _showCallUnavailable(BuildContext context) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Direct calling is not available in this demo. Use Chat to contact the client.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: _navy,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+  }
+
   Widget _myCaseCard(BuildContext context, CaseModel c, bool isConnected, {bool hasApplied = false}) {
     // Status bar config (from lawyer-my-cases.tsx)
     final statusBg = isConnected
@@ -2008,7 +2046,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                         child: isConnected
                             ? Center(
                                 child: Text(
-                                  c.clientId.substring(0, 2).toUpperCase(),
+                                  c.clientId.substring(0, c.clientId.length >= 2 ? 2 : c.clientId.length).toUpperCase(),
                                   style: GoogleFonts.inter(
                                     color: Colors.white,
                                     fontSize: 13,
@@ -2188,7 +2226,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
-                          onPressed: () {},
+                          onPressed: () => _showCallUnavailable(context),
                           icon: const Icon(Icons.phone_outlined, size: 15),
                           label: Text(
                             'Call',
@@ -2559,20 +2597,6 @@ class _VerificationStatusTab extends StatelessWidget {
           const SizedBox(height: 14),
           OutlinedButton.icon(
             onPressed: () {
-              if (!FirebaseInitializer.isReady) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Reviewer console requires Firebase configuration.',
-                      style: GoogleFonts.inter(color: Colors.white),
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: const Color(0xFFB91C1C),
-                  ),
-                );
-                return;
-              }
-
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const ReviewerConsoleScreen(),
@@ -2686,230 +2710,6 @@ class _VerificationLockedTab extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-// ignore: unused_element
-class _LawyerProfileTab extends StatelessWidget {
-  final UserModel user;
-  const _LawyerProfileTab({required this.user});
-
-  static const _navy = Color(0xFF0B2447);
-  static const _gold = Color(0xFFD4AF37);
-
-  String _displayExperience() {
-    final years = user.yearsExperience;
-    if (years == null) return 'Not provided';
-    return years == 1 ? '1 year' : '$years years';
-  }
-
-  String _displayHourlyRate() {
-    final rate = user.hourlyRate;
-    if (rate == null) return 'Not provided';
-    final amount = rate.toStringAsFixed(rate == rate.roundToDouble() ? 0 : 2);
-    return 'RM $amount / hour';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Lawyer Profile',
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            'Your public and professional account details.',
-            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: _navy,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: _gold, width: 2),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _initials(user.name),
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.legalFullName ?? user.name,
-                        style: GoogleFonts.inter(
-                          color: _navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        user.email,
-                        style: GoogleFonts.inter(
-                          color: Colors.grey[500],
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _gold.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'LAWYER',
-                    style: GoogleFonts.inter(
-                      color: _gold,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _sectionCard(
-            title: 'Professional information',
-            children: [
-              _profileRow('Legal Name', user.legalFullName ?? user.name),
-              const SizedBox(height: 8),
-              _profileRow('Bar Number', user.barNumber ?? 'Not provided'),
-              const SizedBox(height: 8),
-              _profileRow('Firm', user.firmName ?? 'Not provided'),
-              const SizedBox(height: 8),
-              _profileRow(
-                'Specialization',
-                user.specialization ?? 'Not provided',
-              ),
-              const SizedBox(height: 8),
-              _profileRow('Experience', _displayExperience()),
-              const SizedBox(height: 8),
-              _profileRow('Hourly Rate', _displayHourlyRate()),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _sectionCard(
-            title: 'Account and verification',
-            children: [
-              _profileRow('Status', user.verificationStatus.label),
-              const SizedBox(height: 8),
-              _profileRow('Jurisdiction', user.jurisdiction ?? 'peninsular'),
-              const SizedBox(height: 8),
-              _profileRow('Email', user.email),
-              const SizedBox(height: 8),
-              _profileRow('Phone', user.phone),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionCard({required String title, required List<Widget> children}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
-    );
-  }
-
-  Widget _profileRow(String label, String value) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 96,
-          child: Text(
-            label,
-            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return 'U';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
-        .toUpperCase();
   }
 }
 

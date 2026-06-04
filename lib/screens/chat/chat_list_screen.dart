@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/firebase/firebase_initializer.dart';
 import '../../models/user_model.dart';
 import '../../repositories/chat_repository.dart';
 import 'chat_room_screen.dart';
@@ -40,10 +39,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     // Guard Firebase access — if the caller injected a repo (e.g. in tests)
-    // use it directly. Otherwise only initialise when Firebase is ready.
+    // use it directly. Otherwise initialise the live repository.
     if (widget.repository != null) {
       _repo = widget.repository;
-    } else if (FirebaseInitializer.isReady) {
+    } else {
       _repo = ChatRepository();
     }
   }
