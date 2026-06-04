@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lei_guard/data/dummy_data.dart';
-import 'package:lei_guard/screens/lawyer/lawyer_dashboard_screen.dart';
+
+import '../helpers/dashboard_test_harness.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -11,13 +10,9 @@ void main() {
     GoogleFonts.config.allowRuntimeFetching = false;
   });
 
-  Widget wrap(Widget child) {
-    return MaterialApp(home: child);
-  }
-
   testWidgets('pending lawyer lands in verification center', (tester) async {
     await tester.pumpWidget(
-      wrap(LawyerDashboardScreen(user: DummyData.firstPendingLawyer)),
+      DashboardTestHarness.wrapLawyer(user: DashboardTestHarness.pendingLawyer),
     );
     await tester.pumpAndSettle();
 
@@ -29,7 +24,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      wrap(LawyerDashboardScreen(user: DummyData.firstPendingLawyer)),
+      DashboardTestHarness.wrapLawyer(user: DashboardTestHarness.pendingLawyer),
     );
     await tester.pumpAndSettle();
 
@@ -45,7 +40,7 @@ void main() {
 
   testWidgets('verified lawyer can open My Cases tab', (tester) async {
     await tester.pumpWidget(
-      wrap(LawyerDashboardScreen(user: DummyData.firstVerifiedLawyer)),
+      DashboardTestHarness.wrapLawyer(user: DashboardTestHarness.verifiedLawyer),
     );
     await tester.pumpAndSettle();
 

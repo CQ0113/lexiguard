@@ -8,16 +8,17 @@ import '../../models/vault_document_model.dart';
 import '../../repositories/vault_document_repository.dart';
 import '../shared/vault_document_tile_widget.dart';
 import '../shared/vault_upload_card_widget.dart';
-import '../../core/firebase/firebase_initializer.dart';
 
 class ClientVaultScreen extends StatefulWidget {
   final String userId;
   final List<String> sharedLawyerIds;
+  final VaultDocumentRepository? repository;
 
   const ClientVaultScreen({
     super.key,
     required this.userId,
     this.sharedLawyerIds = const [],
+    this.repository,
   });
 
   @override
@@ -25,7 +26,7 @@ class ClientVaultScreen extends StatefulWidget {
 }
 
 class _ClientVaultScreenState extends State<ClientVaultScreen> {
-  final VaultDocumentRepository _repository = VaultDocumentRepository();
+  late final VaultDocumentRepository _repository;
   bool _isUploading = false;
   double _uploadProgress = 0;
   
@@ -34,20 +35,22 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
 
   String? get _authUid {
     try {
-      return FirebaseInitializer.isReady ? FirebaseAuth.instance.currentUser?.uid : null;
-    } catch (e) {
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
       return null;
     }
   }
 
   String get _effectiveUserId => _authUid ?? widget.userId;
 
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? VaultDocumentRepository();
+  }
+
   Stream<List<VaultDocumentModel>> _getSafeStream() {
-    try {
-      return _repository.streamClientDocuments(clientUserId: _effectiveUserId);
-    } catch (e) {
-      return Stream.error('Stream setup failed'); 
-    }
+    return _repository.streamClientDocuments(clientUserId: _effectiveUserId);
   }
 
   Future<void> _openDocument(VaultDocumentModel document) async {
@@ -69,14 +72,9 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
   }
 
   Future<void> _pickAndUpload() async {
-    if (!FirebaseInitializer.isReady) {
-      _showSnack('Demo mode: Firebase is not configured. Uploads are disabled.');
-      return;
-    }
-
     final authUid = _authUid;
     if (authUid == null) {
-      _showSnack('Please sign in to upload files to Firebase Vault.');
+      _showSnack('Please sign in to upload files.');
       return;
     }
 
@@ -132,19 +130,6 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasAuth = FirebaseInitializer.isReady && FirebaseAuth.instance.currentUser != null;
-    if (!hasAuth) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(
-          child: Text(
-            'Demo mode (Firebase not connected).',
-            style: GoogleFonts.inter(color: const Color(0xFF6B7280)),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: StreamBuilder<List<VaultDocumentModel>>(

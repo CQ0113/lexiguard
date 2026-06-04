@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../models/user_model.dart';
 import '../../models/vault_document_model.dart';
 import '../../repositories/vault_document_repository.dart';
-import '../../core/firebase/firebase_initializer.dart';
 import '../shared/contract_review_screen.dart';
 
 class ClientSignatureScreen extends StatefulWidget {
   final UserModel clientUser;
+  final VaultDocumentRepository? repository;
 
   const ClientSignatureScreen({
     super.key,
     required this.clientUser,
+    this.repository,
   });
 
   @override
@@ -27,13 +27,13 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
   static const _goldLight = Color(0xFFFFF9E6);
   static const _grey = Color(0xFF64748B);
 
-  final VaultDocumentRepository _repository = VaultDocumentRepository();
+  late final VaultDocumentRepository _repository;
   late TabController _tabController;
-  bool _forceDemo = false;
 
   @override
   void initState() {
     super.initState();
+    _repository = widget.repository ?? VaultDocumentRepository();
     _tabController = TabController(length: 2, vsync: this);
   }
 
@@ -47,100 +47,8 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
     return _repository.streamContractsForUser(userId: widget.clientUser.id);
   }
 
-  // Fallback demo/mock contracts when Firebase is not ready
-  List<VaultDocumentModel> _getMockContracts() {
-    return [
-      VaultDocumentModel(
-        id: 'mock_contract_1',
-        fileName: 'Tenancy_Agreement_Ahmad_Razif.pdf',
-        downloadUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        ownerUserId: 'lawyer_1',
-        ownerRole: 'lawyer',
-        storagePath: 'vault/lawyer_1/tenancy_agreement.pdf',
-        allowedUserIds: [widget.clientUser.id],
-        isContract: true,
-        contractStatus: 'pending_signature',
-        contractType: 'tenancy',
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-        sizeBytes: 124500,
-        contentType: 'application/pdf',
-        contractTerms: {
-          'type': 'tenancy',
-          'monthlyRent': 2200.0,
-          'deposit': 4400.0,
-          'durationMonths': 12,
-          'aiReview': {
-            'riskLevel': 'Low',
-            'riskColor': const Color(0xFF22C55E).value,
-            'riskCount': 1,
-            'keyClauses': [
-              'Monthly Rental: RM 2,200.00',
-              'Security Deposit: RM 4,400.00 (equivalent to 2.0 months rent)',
-              'Lease Duration: 12 Months lease term',
-              'Utility Bills: Tenant is strictly responsible for electricity, water, and internet bills.',
-            ],
-            'warnings': [
-              '[Warning] Late payment interest fee is omitted. Consider specifying an 8% p.a. interest fee for late payments to discourage defaults.',
-            ],
-            'source': 'Gemini 3.5 Flash',
-            'signaturePage': 3,
-            'signatureAnchor': "Tenant's Signature",
-          },
-        },
-      ),
-      VaultDocumentModel(
-        id: 'mock_contract_2',
-        fileName: 'Representation_Retainer_Agreement.pdf',
-        downloadUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        ownerUserId: 'lawyer_1',
-        ownerRole: 'lawyer',
-        storagePath: 'vault/lawyer_1/retainer.pdf',
-        allowedUserIds: [widget.clientUser.id],
-        isContract: true,
-        contractStatus: 'signed',
-        contractType: 'representation',
-        createdAt: DateTime.now().subtract(const Duration(days: 15)),
-        signedAt: DateTime.now().subtract(const Duration(days: 14)),
-        sizeBytes: 98000,
-        contentType: 'application/pdf',
-        contractTerms: {
-          'type': 'representation',
-          'hourlyRate': 350.0,
-          'fixedRetainer': 1500.0,
-          'scope': 'Full legal representation for Property Dispute case in Shah Alam.',
-          'aiReview': {
-            'riskLevel': 'Low',
-            'riskColor': const Color(0xFF22C55E).value,
-            'riskCount': 1,
-            'keyClauses': [
-              'Professional Retainer Fee: RM 1,500.00 (Fixed)',
-              'Hourly Billing Rate: RM 350.00/hour for extra work',
-              'Scope of Representation: "Full legal representation for Property Dispute case in Shah Alam."',
-            ],
-            'warnings': [
-              '[Warning] No billing ceiling cap. Recommend adding a clause stating that total billable hours cannot exceed a specific budget.',
-            ],
-            'source': 'Gemini 3.5 Flash',
-            'signaturePage': 2,
-            'signatureAnchor': "Client's Signature",
-          },
-        },
-      ),
-    ];
-  }
-
   @override
   Widget build(BuildContext context) {
-    final hasAuth = FirebaseInitializer.isReady && FirebaseAuth.instance.currentUser != null;
-    if (!hasAuth || _forceDemo) {
-      // In Demo mode, show mock items for verification
-      final mockDocs = _getMockContracts();
-      return Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        body: _buildContent(mockDocs, isDemo: true),
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: StreamBuilder<List<VaultDocumentModel>>(
@@ -170,7 +78,7 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Failed to load from database',
+                      'Could not load agreements',
                       style: GoogleFonts.inter(
                         color: _navy,
                         fontSize: 16,
@@ -187,31 +95,6 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _forceDemo = true;
-                          });
-                        },
-                        icon: const Icon(Icons.bolt, size: 16),
-                        label: Text(
-                          'Switch to Demo Sandbox Mode',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _gold,
-                          foregroundColor: _navy,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -225,7 +108,7 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
     );
   }
 
-  Widget _buildContent(List<VaultDocumentModel> allContracts, {bool isDemo = false}) {
+  Widget _buildContent(List<VaultDocumentModel> allContracts) {
     final pending = allContracts.where((c) => c.contractStatus != 'signed').toList();
     final signed = allContracts.where((c) => c.contractStatus == 'signed').toList();
 
@@ -248,20 +131,6 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                       color: _navy,
                     ),
                   ),
-                  if (isDemo) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: _gold.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'DEMO MODE',
-                        style: GoogleFonts.inter(color: _gold, fontSize: 9, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
                 ],
               ),
               const SizedBox(height: 4),
@@ -337,8 +206,8 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildContractList(pending, isPending: true, isDemo: isDemo),
-              _buildContractList(signed, isPending: false, isDemo: isDemo),
+              _buildContractList(pending, isPending: true),
+              _buildContractList(signed, isPending: false),
             ],
           ),
         ),
@@ -346,7 +215,7 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
     );
   }
 
-  Widget _buildContractList(List<VaultDocumentModel> list, {required bool isPending, bool isDemo = false}) {
+  Widget _buildContractList(List<VaultDocumentModel> list, {required bool isPending}) {
     if (list.isEmpty) {
       return Center(
         child: Padding(
@@ -396,12 +265,12 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
       itemCount: list.length,
       itemBuilder: (context, idx) {
         final doc = list[idx];
-        return _buildContractCard(doc, isPending: isPending, isDemo: isDemo);
+        return _buildContractCard(doc, isPending: isPending);
       },
     );
   }
 
-  Widget _buildContractCard(VaultDocumentModel doc, {required bool isPending, bool isDemo = false}) {
+  Widget _buildContractCard(VaultDocumentModel doc, {required bool isPending}) {
     final typeLabel = doc.contractType == 'tenancy'
         ? 'Tenancy Agreement'
         : doc.contractType == 'representation'
@@ -546,7 +415,6 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                         MaterialPageRoute(
                           builder: (_) => ContractReviewScreen(
                             contract: doc,
-                            isDemo: isDemo,
                           ),
                         ),
                       );

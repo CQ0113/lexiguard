@@ -87,6 +87,23 @@ const MOCK_CORPUS = [
 
 // cosine re-exported from rag_helpers for backward-compat unit-test exports below.
 
+const AGC_ACT_DETAIL_BASE = "https://lom.agc.gov.my/act-detail.php";
+
+// Direct PDF paths on lom.agc.gov.my often return 500; act detail pages work.
+function toActDetailUrl(actNo, fallbackUrl = "") {
+  const fromActNo = String(actNo || "").match(/(\d+)/);
+  if (fromActNo) {
+    return `${AGC_ACT_DETAIL_BASE}?act=${fromActNo[1]}&language=BI`;
+  }
+
+  const fromUrl = String(fallbackUrl || "").match(/act_(\d+)/i);
+  if (fromUrl) {
+    return `${AGC_ACT_DETAIL_BASE}?act=${fromUrl[1]}&language=BI`;
+  }
+
+  return fallbackUrl || AGC_ACT_DETAIL_BASE;
+}
+
 // ---------------------------------------------------------------------------
 // buildPrompt(question, topChunks) — assemble the full prompt text.
 // ---------------------------------------------------------------------------
@@ -336,7 +353,7 @@ exports.generateLegalChatResponse = onCall(
       sources: topChunks.map((c) => ({
         actName: c.actName,
         sectionNo: c.sectionNo,
-        sourceUrl: c.sourceUrl,
+        sourceUrl: toActDetailUrl(c.actNo, c.sourceUrl),
       })),
     };
   }
@@ -347,4 +364,5 @@ exports.generateLegalChatResponse = onCall(
 exports._cosine = cosine;
 exports._buildPrompt = buildPrompt;
 exports._rankByQuestion = rankByQuestion;
+exports._toActDetailUrl = toActDetailUrl;
 exports._MOCK_CORPUS = MOCK_CORPUS;

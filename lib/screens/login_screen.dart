@@ -2,12 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../core/firebase/firebase_initializer.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_auth_sync_service.dart';
-import 'client/client_dashboard_screen.dart';
-import 'lawyer/lawyer_dashboard_screen.dart';
 import 'shared/live_dashboard_router_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -129,13 +126,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  String _registrationMessageForStatus(VerificationStatus status) {
-    if (status == VerificationStatus.manualReviewRequired) {
-      return 'East Malaysia verification is currently manual review only. Our team will review your profile within 48 hours.';
-    }
-    return 'Verification submitted. You are now in pending sandbox mode.';
-  }
-
   UserModel _buildPendingLawyerFromForm() {
     final jurisdiction = selectedJurisdiction;
     final initialStatus = _initialStatusForJurisdiction(jurisdiction);
@@ -165,83 +155,13 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  UserModel _buildFallbackClient() {
-    final email = emailController.text.trim();
-    final localName = email.split('@').first.trim();
-
-    return UserModel(
-      id: 'local_client_${DateTime.now().millisecondsSinceEpoch}',
-      name: localName.isEmpty ? 'Client User' : localName,
-      email: email,
-      phone: '',
-      role: UserRole.client,
-    );
-  }
-
-  UserModel _buildFallbackLawyerLogin() {
-    final email = emailController.text.trim();
-    final localName = email.split('@').first.trim();
-
-    return UserModel(
-      id: 'local_lawyer_login',
-      name: localName.isEmpty ? 'Lawyer User' : localName,
-      email: email,
-      phone: '',
-      role: UserRole.lawyer,
-      specialization: 'General Practice',
-      verificationStatus: VerificationStatus.autoVerified,
-      verificationBadgeVisible: true,
-    );
-  }
-
-  void _navigateFallback(UserRole role, UserModel? lawyerProfile) {
-    if (!mounted) return;
-
-    if (role == UserRole.client) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              ClientDashboardScreen(user: _buildFallbackClient()),
-        ),
-      );
-      return;
-    }
-
-    final lawyer = lawyerProfile ?? _buildFallbackLawyerLogin();
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => LawyerDashboardScreen(user: lawyer),
-      ),
-    );
-
-    if (!isLogin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _registrationMessageForStatus(lawyer.verificationStatus),
-            style: GoogleFonts.inter(color: Colors.white),
-          ),
-          backgroundColor: const Color(0xFF1E3A8A),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
   Future<void> _onGoogleSignIn() async {
     if (_isGoogleSubmitting || _isSubmitting) return;
 
     setState(() => _isGoogleSubmitting = true);
 
     try {
-      if (!FirebaseInitializer.isReady) {
-        _showInputError('Firebase is not available. Please try again later.');
-        return;
-      }
-
-      // Step 1: OAuth Ã¢â‚¬â€ checks if returning user or brand new.
+      // Step 1: OAuth — checks if returning user or brand new.
       final result = await _authService.authenticateWithGoogle(
         role: selectedRole,
       );
@@ -313,12 +233,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      // If Firebase is completely unavailable, allow local/demo mode.
-      if (!FirebaseInitializer.isReady) {
-        _navigateFallback(role, lawyerProfile);
-        return;
-      }
-
       final syncResult = await _authSyncService.syncSession(
         isLogin: isLogin,
         email: email,
@@ -361,12 +275,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final message = _friendlyAuthError(e.code);
       if (mounted) _showInputError(message);
     } catch (e) {
-      // For non-auth errors (network, Firestore, etc.): allow local fallback
-      // only for registration; login must always use real credentials.
-      if (!isLogin) {
-        _showInputError('Could not reach Firebase. Continuing in local mode.');
-        _navigateFallback(role, lawyerProfile);
-      } else {
+      if (mounted) {
         _showInputError('Could not connect to the server. Please try again.');
       }
     } finally {
@@ -379,10 +288,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _syncIssueMessage(SyncSessionResult result) {
     // Only show issues during registration — login doesn't trigger verification.
     if (isLogin) return null;
-    if (result.firebaseUnavailable) {
-      return 'Firebase is not configured on this device. Your verification will '
-          'not run until the app is set up with valid Firebase credentials.';
-    }
     if (result.verificationCallError != null) {
       return 'Account created, but verification could not start. The Cloud '
           'Function may not be deployed. Contact support if this persists.';
