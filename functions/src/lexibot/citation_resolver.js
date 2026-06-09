@@ -3,7 +3,7 @@ async function resolveApprovedCitations(db, citations) {
     .collection("legal_sources")
     .where("status", "==", "active")
     .get();
-  const snapshot = await db.collection("legal_sources").where("status", "==", "active").get();
+
   const sources = await Promise.all(
     snapshot.docs.map(async (document) => {
       const source = document.data();
@@ -35,7 +35,6 @@ async function resolveApprovedCitations(db, citations) {
       source &&
       !resolved.some((entry) => entry.sourceId === source.sourceId)
     ) {
-    if (source && !resolved.some((entry) => entry.sourceId === source.sourceId)) {
       resolved.push(source);
     }
   }
@@ -45,4 +44,3 @@ async function resolveApprovedCitations(db, citations) {
 module.exports = {
   resolveApprovedCitations,
 };
-}
