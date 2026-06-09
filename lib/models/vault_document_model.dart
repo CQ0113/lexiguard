@@ -12,6 +12,14 @@ class VaultDocumentModel {
   final int? sizeBytes;
   final String? contentType;
 
+  // New Contract fields
+  final bool isContract;
+  final String? contractStatus;
+  final String? contractType;
+  final DateTime? signedAt;
+  final Map<String, dynamic>? contractTerms;
+  final List<Map<String, dynamic>>? signaturePoints;
+
   VaultDocumentModel({
     required this.id,
     required this.fileName,
@@ -23,6 +31,12 @@ class VaultDocumentModel {
     this.createdAt,
     this.sizeBytes,
     this.contentType,
+    this.isContract = false,
+    this.contractStatus,
+    this.contractType,
+    this.signedAt,
+    this.contractTerms,
+    this.signaturePoints,
   });
 
   // Convert from Firestore Document to Dart Object
@@ -39,6 +53,12 @@ class VaultDocumentModel {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       sizeBytes: data['sizeBytes'] as int?,
       contentType: data['contentType'] as String?,
+      isContract: data['isContract'] as bool? ?? false,
+      contractStatus: data['contractStatus'] as String?,
+      contractType: data['contractType'] as String?,
+      signedAt: (data['signedAt'] as Timestamp?)?.toDate(),
+      contractTerms: data['contractTerms'] as Map<String, dynamic>?,
+      signaturePoints: (data['signaturePoints'] as List?)?.map((p) => Map<String, dynamic>.from(p)).toList(),
     );
   }
 
@@ -55,6 +75,12 @@ class VaultDocumentModel {
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'sizeBytes': sizeBytes,
       'contentType': contentType,
+      'isContract': isContract,
+      'contractStatus': contractStatus,
+      'contractType': contractType,
+      'signedAt': signedAt != null ? Timestamp.fromDate(signedAt!) : null,
+      'contractTerms': contractTerms,
+      'signaturePoints': signaturePoints,
     };
   }
 

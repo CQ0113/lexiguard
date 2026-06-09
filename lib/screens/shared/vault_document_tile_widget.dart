@@ -101,6 +101,45 @@ class VaultDocumentTileWidget extends StatelessWidget {
                           color: const Color(0xFF64748B),
                         ),
                       ),
+                      
+                      // --- 新增的律师合同状态标签 ---
+                      if (document.isContract) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: document.contractStatus == 'signed'
+                                    ? const Color(0xFFECFDF5)
+                                    : const Color(0xFFFFFBEB),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: document.contractStatus == 'signed'
+                                      ? const Color(0xFFA7F3D0)
+                                      : const Color(0xFFFDE68A),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Text(
+                                document.contractStatus == 'signed'
+                                    ? 'SIGNED'
+                                    : 'PENDING CLIENT SIGNATURE',
+                                style: GoogleFonts.inter(
+                                  color: document.contractStatus == 'signed'
+                                      ? const Color(0xFF047857)
+                                      : const Color(0xFFB45309),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      // ----------------------------
+
                       if (extraSubtitle != null) ...[
                         const SizedBox(height: 2),
                         Text(
@@ -119,6 +158,7 @@ class VaultDocumentTileWidget extends StatelessWidget {
               ],
             ),
             
+            // --- 安全分享链接状态横幅 ---
             if (activeShareText != null && activeShareText!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
@@ -148,6 +188,7 @@ class VaultDocumentTileWidget extends StatelessWidget {
                 ),
               ),
             ],
+            // ----------------------------
           ],
         ),
       ),
