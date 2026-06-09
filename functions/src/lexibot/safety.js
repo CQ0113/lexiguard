@@ -182,8 +182,55 @@ function insufficientSourcesResponse(assessment) {
   };
 }
 
+function serviceUnavailableResponse(assessment) {
+  const responseLanguage = assessment.responseLanguage || "en";
+  const copies = {
+    en: {
+      shortAnswer: "LexiBot could not reach its retrieval service right now.",
+      whatThisMeans:
+        "The tenancy-law source search is temporarily unavailable. This is a service issue, not a problem with your question.",
+      next: "Please try again in a few minutes.",
+      needLawyer: "Yes, if your tenancy issue is urgent or time-sensitive.",
+    },
+    ms: {
+      shortAnswer: "LexiBot tidak dapat menghubungi perkhidmatan carian sumber buat masa ini.",
+      whatThisMeans:
+        "Carian sumber undang-undang penyewaan sedang terganggu sementara. Ini isu perkhidmatan, bukan masalah dengan soalan anda.",
+      next: "Sila cuba lagi dalam beberapa minit.",
+      needLawyer: "Ya, jika isu penyewaan anda mendesak atau terikat masa.",
+    },
+    zh: {
+      shortAnswer: "LexiBot 目前无法连接资料检索服务。",
+      whatThisMeans:
+        "租赁法律资料搜索暂时不可用。这是服务问题，不是您的问题不合适。",
+      next: "请几分钟后再试。",
+      needLawyer: "如果您的租赁问题紧急或有期限，是的。",
+    },
+  };
+  const localized = copies[responseLanguage] || copies.en;
+
+  return {
+    status: "service_unavailable",
+    scopeStatus: assessment.scopeStatus,
+    riskLevel: "medium",
+    responseLanguage,
+    answer: {
+      shortAnswer: localized.shortAnswer,
+      whatTheSourceSays: "",
+      whatThisMeans: localized.whatThisMeans,
+      evidenceToKeep: [],
+      whatYouCanDoNext: [localized.next],
+      sourcesUsed: [],
+      needALawyer: localized.needLawyer,
+    },
+    citations: [],
+    groundingChunkCount: 0,
+  };
+}
+
 module.exports = {
   assessQuestion,
   escalationResponse,
   insufficientSourcesResponse,
+  serviceUnavailableResponse,
 };

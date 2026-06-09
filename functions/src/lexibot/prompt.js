@@ -31,10 +31,13 @@ Do not tell a user to sign, admit liability, ignore deadlines, or commence proce
 If retrieved documents do not directly support an answer, state that the available
 sources are insufficient and recommend speaking with a Malaysian lawyer.
 
-function questionPrompt(question) {
 Use simple language. Write all user-facing answer field values in the requested
 answer language. Keep official statute/source titles in their original form.
 The Sources Used field must name only retrieved sources.
+
+Return only a JSON object with these keys:
+shortAnswer, whatTheSourceSays, whatThisMeans, evidenceToKeep,
+whatYouCanDoNext, sourcesUsed, needALawyer.
 `.trim();
 
 const LANGUAGE_NAMES = {
