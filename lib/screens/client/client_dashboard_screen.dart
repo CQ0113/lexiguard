@@ -174,6 +174,7 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
             onOpenLexiBot: () => setState(() => _currentTab = 2),
           ), // Maps to index 0 (Home)
           LexiBotChatScreen(
+            user: widget.user,
             onRequestLawyer: () => _onTabTap(1),
           ), // Maps to index 2 (Chat)
           VaultTabRouterScreen(user: widget.user), // Maps to index 3 (Vault)

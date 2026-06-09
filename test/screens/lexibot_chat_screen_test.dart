@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lei_guard/models/lexibot_response.dart';
+import 'package:lei_guard/models/user_model.dart';
 import 'package:lei_guard/screens/client/lexibot_chat_screen.dart';
 import 'package:lei_guard/services/lexibot_service.dart';
 
@@ -123,9 +124,22 @@ const chineseResponse = LexiBotResponse(
 );
 
 Widget wrap(LexiBotClient client, {VoidCallback? onRequestLawyer}) {
+  final dummyUser = const UserModel(
+    id: 'test-client-123',
+    name: 'Test Client',
+    email: 'client@example.com',
+    phone: '0123456789',
+    role: UserRole.client,
+    hasAcknowledgedLexiBotDisclaimer: true,
+  );
+
   return MaterialApp(
     home: Scaffold(
-      body: LexiBotChatScreen(client: client, onRequestLawyer: onRequestLawyer),
+      body: LexiBotChatScreen(
+        user: dummyUser,
+        client: client,
+        onRequestLawyer: onRequestLawyer,
+      ),
     ),
   );
 }

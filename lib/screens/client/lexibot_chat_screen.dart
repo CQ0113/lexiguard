@@ -6,16 +6,20 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/lexibot_response.dart';
+import '../../models/user_model.dart';
+import '../../repositories/user_repository.dart';
 import '../../services/lexibot_service.dart';
 
 class LexiBotChatScreen extends StatefulWidget {
   const LexiBotChatScreen({
     super.key,
+    required this.user,
     LexiBotClient? client,
     VoidCallback? onRequestLawyer,
   }) : _client = client,
        _onRequestLawyer = onRequestLawyer;
 
+  final UserModel user;
   final LexiBotClient? _client;
   final VoidCallback? _onRequestLawyer;
 
@@ -40,6 +44,7 @@ class _LexiBotChatScreenState extends State<LexiBotChatScreen> {
     ),
   ].toList();
   bool _isSending = false;
+  late bool _hasAcknowledgedDisclaimer;
 
   @override
   void initState() {
@@ -47,6 +52,7 @@ class _LexiBotChatScreenState extends State<LexiBotChatScreen> {
     _client = widget._client ?? LexiBotService();
     _conversationId =
         'flutter-${DateTime.now().microsecondsSinceEpoch.toString()}';
+    _hasAcknowledgedDisclaimer = widget.user.hasAcknowledgedLexiBotDisclaimer;
   }
 
   @override
@@ -130,6 +136,15 @@ class _LexiBotChatScreenState extends State<LexiBotChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_hasAcknowledgedDisclaimer) {
+      return Column(
+        children: [
+          _buildHeader(),
+          Expanded(child: _buildDisclaimer()),
+        ],
+      );
+    }
+
     return Column(
       children: [
         _buildHeader(),
@@ -151,6 +166,98 @@ class _LexiBotChatScreenState extends State<LexiBotChatScreen> {
         ),
         _buildComposer(),
       ],
+    );
+  }
+
+  Widget _buildDisclaimer() {
+    return Container(
+      color: const Color(0xFFF2F2F7),
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: _navy.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.info_outline_rounded, color: _navy, size: 32),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'AI Disclaimer',
+                style: GoogleFonts.inter(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: _navy,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'LexiBot provides general information based on Peninsular Malaysia residential tenancy sources. '
+                'It does not provide formal legal advice.\n\n'
+                'Please consult a qualified lawyer for specific legal advice or urgent situations.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () async {
+                    setState(() {
+                      _hasAcknowledgedDisclaimer = true;
+                    });
+                    try {
+                      await UserRepository().upsertUser(
+                        uid: widget.user.id,
+                        payload: {'hasAcknowledgedLexiBotDisclaimer': true},
+                      );
+                    } catch (e) {
+                      debugPrint('Failed to save disclaimer state: $e');
+                    }
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _navy,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'I Understand',
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

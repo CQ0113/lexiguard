@@ -80,6 +80,7 @@ class UserModel {
   final String? jurisdiction;
   final String? practiceState;
   final String? practiceCity;
+  final bool hasAcknowledgedLexiBotDisclaimer;
 
   const UserModel({
     required this.id,
@@ -107,6 +108,7 @@ class UserModel {
     this.jurisdiction,
     this.practiceState,
     this.practiceCity,
+    this.hasAcknowledgedLexiBotDisclaimer = false,
   });
 
   // ─── Firestore Deserialization ───────────────────────────────────────────────
@@ -156,6 +158,7 @@ class UserModel {
       if (jurisdiction != null) 'jurisdiction': jurisdiction,
       if (practiceState != null) 'practiceState': practiceState,
       if (practiceCity != null) 'practiceCity': practiceCity,
+      'hasAcknowledgedLexiBotDisclaimer': hasAcknowledgedLexiBotDisclaimer,
     };
   }
 
@@ -202,6 +205,7 @@ class UserModel {
       jurisdiction: map['jurisdiction'] as String?,
       practiceState: map['practiceState'] as String?,
       practiceCity: map['practiceCity'] as String?,
+      hasAcknowledgedLexiBotDisclaimer: _readBool(map['hasAcknowledgedLexiBotDisclaimer']) ?? false,
     );
   }
 
@@ -323,6 +327,7 @@ class UserModel {
       'jurisdiction': jurisdiction,
       'practiceState': practiceState,
       'practiceCity': practiceCity,
+      'hasAcknowledgedLexiBotDisclaimer': hasAcknowledgedLexiBotDisclaimer,
     };
   }
 
