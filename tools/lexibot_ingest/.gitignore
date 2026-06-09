@@ -1,0 +1,4 @@
+node_modules/
+.lexibot.local.json
+manifest.json
+source_pdfs/

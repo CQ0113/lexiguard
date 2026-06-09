@@ -12,11 +12,18 @@ const {
   buildVerificationDecision,
 } = require("./verification/verification_decision");
 const { assessQuestion, escalationResponse } = require("./lexibot/safety");
+const {
+  assessQuestion,
+  escalationResponse,
+  insufficientSourcesResponse,
+} = require("./lexibot/safety");
 const { generateGroundedAnswer } = require("./lexibot/gemini_file_search");
 const { resolveApprovedCitations } = require("./lexibot/citation_resolver");
 const { writeAuditLog } = require("./lexibot/audit_log");
 
 initializeApp();
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
+
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
 function validateStartPayload(data) {
@@ -733,3 +740,119 @@ exports.closeCase = onCall({ invoker: "public" }, async (request) => {
 
   return { caseId, status: "closed" };
 });
+exports.askLexiBot = onCall(
+  {
+    invoker: "public",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 300,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication is required.");
+    }
+
+    const data = request.data || {};
+    const question = String(data.question || "").trim();
+    const conversationId = String(data.conversationId || "").trim() || null;
+    if (!question) {
+      throw new HttpsError("invalid-argument", "question is required.");
+    }
+    if (question.length > 2000) {
+      throw new HttpsError(
+        "invalid-argument",
+        "question must not exceed 2000 characters.",
+      );
+    }
+
+    const db = getFirestore();
+    const configSnapshot = await db.doc("lexibot_config/tenancy_mvp").get();
+    if (!configSnapshot.exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        "LexiBot has not been configured yet.",
+      );
+    }
+    const config = configSnapshot.data();
+    const assessment = assessQuestion(question);
+
+    if (assessment.scopeStatus !== "in_scope") {
+      const result = escalationResponse(assessment);
+      const auditId = await writeAuditLog(db, {
+        uid: request.auth.uid,
+        conversationId,
+        question,
+        assessment,
+        result,
+        config,
+      });
+      return { ...result, auditId };
+    }
+
+    if (config.enabled !== true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "LexiBot is not enabled for client questions yet.",
+      );
+    }
+    if (!config.answerModel || !config.fileSearchStoreName) {
+      throw new HttpsError(
+        "failed-precondition",
+        "LexiBot retrieval configuration is incomplete.",
+      );
+    }
+
+    let grounded;
+    try {
+      grounded = await generateGroundedAnswer({
+        apiKey: geminiApiKey.value(),
+        question,
+        responseLanguage: assessment.responseLanguage,
+        model: config.answerModel,
+        fileSearchStoreName: config.fileSearchStoreName,
+      });
+      if (grounded.status === "answered") {
+        grounded.citations = await resolveApprovedCitations(db, grounded.citations);
+        if (grounded.citations.length === 0) {
+          grounded.status = "insufficient_sources";
+          grounded.answer = null;
+          grounded.groundingChunkCount = 0;
+        }
+      }
+    } catch (error) {
+      logger.error("LexiBot Gemini request failed", {
+        uid: request.auth.uid,
+        message: error.message,
+      });
+      throw new HttpsError("internal", "LexiBot could not answer right now.");
+    }
+
+    const result =
+      grounded.status === "answered"
+        ? {
+            status: "answered",
+            scopeStatus: assessment.scopeStatus,
+            riskLevel: assessment.riskLevel,
+            responseLanguage: assessment.responseLanguage,
+            answer: grounded.answer,
+            citations: grounded.citations,
+            groundingChunkCount: grounded.groundingChunkCount,
+          }
+        : insufficientSourcesResponse(assessment);
+
+    const auditId = await writeAuditLog(db, {
+      uid: request.auth.uid,
+      conversationId,
+      question,
+      assessment,
+      result,
+      config,
+    });
+    logger.info("LexiBot request processed", {
+      uid: request.auth.uid,
+      answerStatus: result.status,
+      groundingChunkCount: result.groundingChunkCount,
+    });
+
+    return { ...result, auditId };
+  },
+);

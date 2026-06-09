@@ -31,14 +31,25 @@ Do not tell a user to sign, admit liability, ignore deadlines, or commence proce
 If retrieved documents do not directly support an answer, state that the available
 sources are insufficient and recommend speaking with a Malaysian lawyer.
 
-Use simple language. The Sources Used field must name only retrieved sources.
+function questionPrompt(question) {
+Use simple language. Write all user-facing answer field values in the requested
+answer language. Keep official statute/source titles in their original form.
+The Sources Used field must name only retrieved sources.
 `.trim();
 
-function questionPrompt(question) {
+const LANGUAGE_NAMES = {
+  en: "English",
+  ms: "Bahasa Melayu",
+  zh: "Chinese",
+};
+
+function questionPrompt(question, responseLanguage = "en") {
+  const answerLanguage = LANGUAGE_NAMES[responseLanguage] || LANGUAGE_NAMES.en;
   return [
     "Answer this client question using only retrieved approved sources:",
     question,
     "",
+    `Required answer language: ${answerLanguage}.`,
     "Where the question depends on tenancy agreement terms, clearly say so.",
   ].join("\n");
 }
