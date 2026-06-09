@@ -6,6 +6,7 @@ const URGENT_PATTERNS = [
   /\b(court|summons|writ|hearing|deadline|tribunal|lawsuit)\b/i,
   /\b(cut|disconnect(?:ed)?|shut\s+off)\b.*\b(electricity|water|utilities?)\b/i,
   /\b(file|start|commence)\s+(?:a\s+)?(?:claim|case|proceedings?)\b/i,
+  /\bsue\b/i,
   /\b(dikunci|(?:menukar|tukar)\s+kunci|pecah\s+masuk|diugut|ugut|ancam|keganasan)\b/i,
   /\b(polis|ditangkap|jenayah|mahkamah|saman|tarikh\s+akhir|tribunal)\b/i,
   /\b(failkan|memfailkan|mulakan)\s+(?:satu\s+)?(?:tuntutan|kes|prosiding)\b/i,

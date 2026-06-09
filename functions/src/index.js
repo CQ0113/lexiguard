@@ -11,7 +11,6 @@ const {
 const {
   buildVerificationDecision,
 } = require("./verification/verification_decision");
-const { assessQuestion, escalationResponse } = require("./lexibot/safety");
 const {
   assessQuestion,
   escalationResponse,
@@ -22,8 +21,6 @@ const { resolveApprovedCitations } = require("./lexibot/citation_resolver");
 const { writeAuditLog } = require("./lexibot/audit_log");
 
 initializeApp();
-const geminiApiKey = defineSecret("GEMINI_API_KEY");
-
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
 function validateStartPayload(data) {
