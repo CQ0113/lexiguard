@@ -94,5 +94,4 @@ class DefaultFirebaseOptions {
     databaseURL: 'https://lexiguard-32c63-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'lexiguard-32c63.firebasestorage.app',
   );
-
 }
