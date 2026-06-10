@@ -17,6 +17,7 @@ import '../shared/vault_tab_router_screen.dart';
 import 'connection_requests_screen.dart';
 import '../chat/chat_list_screen.dart';
 import 'client_signature_screen.dart';
+import 'lexibot_chat_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT SHELL — matches MobileShell + all client screens from Figma
@@ -52,7 +53,16 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       final result = await Navigator.of(context).push<CaseModel>(
         MaterialPageRoute(builder: (_) => PostCaseScreen(poster: widget.user)),
       );
-      if (result != null) setState(() {});
+      if (result != null) {
+        setState(() {});
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CaseDetailScreen(caseModel: result, viewer: widget.user),
+            ),
+          );
+        }
+      }
       return;
     }
 
@@ -169,8 +179,13 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
         // (skipping index 1 because Post Case is a push overlay)
         index: _currentTab <= 1 ? 0 : _currentTab - 1,
         children: [
-          _ClientHomeTab(user: widget.user), // Maps to index 0 (Home)
-          ChatListScreen(currentUser: widget.user), // Maps to index 2 (Chat)
+          _ClientHomeTab(
+            user: widget.user,
+            onOpenLexiBot: () => setState(() => _currentTab = 2),
+          ), // Maps to index 0 (Home)
+          LexiBotChatScreen(
+            onRequestLawyer: () => _onTabTap(1),
+          ), // Maps to index 2 (Chat)
           VaultTabRouterScreen(user: widget.user), // Maps to index 3 (Vault)
           ClientSignatureScreen(clientUser: widget.user), // Maps to index 4 (Sign)
           ProfileScreen(
@@ -241,7 +256,8 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 class _ClientHomeTab extends StatefulWidget {
   final UserModel user;
-  const _ClientHomeTab({required this.user});
+  final VoidCallback onOpenLexiBot;
+  const _ClientHomeTab({required this.user, required this.onOpenLexiBot});
 
   @override
   State<_ClientHomeTab> createState() => _ClientHomeTabState();
@@ -364,7 +380,16 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     final result = await Navigator.of(context).push<CaseModel>(
       MaterialPageRoute(builder: (_) => PostCaseScreen(poster: widget.user)),
     );
-    if (result != null) setState(() {});
+    if (result != null) {
+      setState(() {});
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CaseDetailScreen(caseModel: result, viewer: widget.user),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -373,7 +398,9 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
       stream: _pendingStream,
       builder: (context, pendingSnap) {
         if (pendingSnap.hasError) {
-          debugPrint('[ClientDashboard] pendingStream error: ${pendingSnap.error}');
+          debugPrint(
+            '[ClientDashboard] pendingStream error: ${pendingSnap.error}',
+          );
         }
         final pendingRequests = pendingSnap.data ?? const [];
         return _buildWithPending(pendingRequests);
@@ -598,7 +625,9 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                           child: Text(
                             pendingRequests
                                 .take(3)
-                                .map((r) => r.lawyerSnapshot.name.split(' ').first)
+                                .map(
+                                  (r) => r.lawyerSnapshot.name.split(' ').first,
+                                )
                                 .join(', '),
                             style: GoogleFonts.inter(
                               color: _navy.withValues(alpha: 0.8),
@@ -714,7 +743,11 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: _quickActions.map((a) {
               return GestureDetector(
-                onTap: a.label == 'Post Case' ? _openPostCase : () {},
+                onTap: a.label == 'Post Case'
+                    ? _openPostCase
+                    : a.label == 'LexiBot'
+                    ? widget.onOpenLexiBot
+                    : () {},
                 child: Column(
                   children: [
                     Container(
@@ -1200,6 +1233,40 @@ class _ClientProfileTab extends StatelessWidget {
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
         .toUpperCase();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Placeholder for unfinished tabs
+// ─────────────────────────────────────────────────────────────────────────────
+class _PlaceholderTab extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  const _PlaceholderTab(this.label, this.icon);
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 48, color: Colors.grey[300]),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: Colors.grey[400],
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            'Coming soon',
+            style: GoogleFonts.inter(color: Colors.grey[300], fontSize: 12),
+          ),
+        ],
+      ),
+    );
   }
 }
 

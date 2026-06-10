@@ -9,6 +9,8 @@ class VaultDocumentTileWidget extends StatelessWidget {
   final VoidCallback onTap;
   final Widget? trailing; 
   final String? extraSubtitle;
+  final String? activeShareText;
+  final bool isShareExpired; 
 
   const VaultDocumentTileWidget({
     super.key,
@@ -16,16 +18,16 @@ class VaultDocumentTileWidget extends StatelessWidget {
     required this.onTap,
     this.trailing,
     this.extraSubtitle,
+    this.activeShareText,
+    this.isShareExpired = false, 
   });
 
   @override
   Widget build(BuildContext context) {
-    // Format date like "28 Mar 2026"
     final createdLabel = document.createdAt == null
         ? 'Pending'
         : DateFormat('dd MMM yyyy').format(document.createdAt!);
     
-    // Format size into MB or KB
     String sizeLabel = '';
     if (document.sizeBytes != null) {
       if (document.sizeBytes! >= 1024 * 1024) {
@@ -57,97 +59,136 @@ class VaultDocumentTileWidget extends StatelessWidget {
           ],
           border: Border.all(color: const Color(0xFFF1F5F9)),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                isImage ? Icons.image_outlined : Icons.description_outlined,
-                color: const Color(0xFF0B2447),
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    document.fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: const Color(0xFF0F172A),
-                    ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${sizeLabel.isNotEmpty ? "$sizeLabel  •  " : ""}$createdLabel',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: const Color(0xFF64748B),
-                    ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    isImage ? Icons.image_outlined : Icons.description_outlined,
+                    color: const Color(0xFF0B2447),
+                    size: 24,
                   ),
-                  // For contracts, display custom status tag
-                  if (document.isContract) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: document.contractStatus == 'signed'
-                                ? const Color(0xFFECFDF5)
-                                : const Color(0xFFFFFBEB),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: document.contractStatus == 'signed'
-                                  ? const Color(0xFFA7F3D0)
-                                  : const Color(0xFFFDE68A),
-                              width: 0.5,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        document.fileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          color: const Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${sizeLabel.isNotEmpty ? "$sizeLabel  •  " : ""}$createdLabel',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFF64748B),
+                        ),
+                      ),
+                      
+                      // --- 新增的律师合同状态标签 ---
+                      if (document.isContract) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: document.contractStatus == 'signed'
+                                    ? const Color(0xFFECFDF5)
+                                    : const Color(0xFFFFFBEB),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: document.contractStatus == 'signed'
+                                      ? const Color(0xFFA7F3D0)
+                                      : const Color(0xFFFDE68A),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Text(
+                                document.contractStatus == 'signed'
+                                    ? 'SIGNED'
+                                    : 'PENDING CLIENT SIGNATURE',
+                                style: GoogleFonts.inter(
+                                  color: document.contractStatus == 'signed'
+                                      ? const Color(0xFF047857)
+                                      : const Color(0xFFB45309),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            document.contractStatus == 'signed'
-                                ? 'SIGNED'
-                                : 'PENDING CLIENT SIGNATURE',
-                            style: GoogleFonts.inter(
-                              color: document.contractStatus == 'signed'
-                                  ? const Color(0xFF047857)
-                                  : const Color(0xFFB45309),
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
+                          ],
+                        ),
+                      ],
+                      // ----------------------------
+
+                      if (extraSubtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          extraSubtitle!,
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: const Color(0xFF94A3B8),
+                            fontStyle: FontStyle.italic,
                           ),
                         ),
                       ],
+                    ],
+                  ),
+                ),
+                if (trailing != null) trailing!,
+              ],
+            ),
+            
+            // --- 安全分享链接状态横幅 ---
+            if (activeShareText != null && activeShareText!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isShareExpired ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB), 
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.access_time, 
+                      color: isShareExpired ? const Color(0xFFEF4444) : const Color(0xFFD97706),
+                      size: 14,
                     ),
-                  ],
-                  if (extraSubtitle != null) ...[
-                    const SizedBox(height: 2),
+                    const SizedBox(width: 8),
                     Text(
-                      extraSubtitle!,
+                      activeShareText!,
                       style: GoogleFonts.inter(
-                        fontSize: 11,
-                        color: const Color(0xFF94A3B8),
-                        fontStyle: FontStyle.italic,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isShareExpired ? const Color(0xFFEF4444) : const Color(0xFFD97706),
                       ),
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-            if (trailing != null) trailing!,
+            ],
+            // ----------------------------
           ],
         ),
       ),

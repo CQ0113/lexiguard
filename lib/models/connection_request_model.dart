@@ -52,6 +52,10 @@ class LawyerSnapshot {
   final String? specialization;
   final int? yearsExperience;
   final double? rating;
+  final String? practiceState;
+  final String? practiceCity;
+  final List<String> languages;
+  final double? hourlyRate;
   final String? barNumber;
   final String? jurisdiction;
 
@@ -65,6 +69,10 @@ class LawyerSnapshot {
     this.specialization,
     this.yearsExperience,
     this.rating,
+    this.practiceState,
+    this.practiceCity,
+    this.languages = const [],
+    this.hourlyRate,
     this.barNumber,
     this.jurisdiction,
     required this.verificationStatus,
@@ -78,9 +86,14 @@ class LawyerSnapshot {
       specialization: map['specialization']?.toString(),
       yearsExperience: _readInt(map['yearsExperience']),
       rating: _readDouble(map['rating']),
+      practiceState: map['practiceState']?.toString(),
+      practiceCity: map['practiceCity']?.toString(),
+      languages: List<String>.from(map['languages'] as List? ?? []),
+      hourlyRate: _readDouble(map['hourlyRate']),
       barNumber: map['barNumber']?.toString(),
       jurisdiction: map['jurisdiction']?.toString(),
-      verificationStatus: map['verificationStatus']?.toString() ?? 'unsubmitted',
+      verificationStatus:
+          map['verificationStatus']?.toString() ?? 'unsubmitted',
     );
   }
 
@@ -92,6 +105,10 @@ class LawyerSnapshot {
       if (specialization != null) 'specialization': specialization,
       if (yearsExperience != null) 'yearsExperience': yearsExperience,
       if (rating != null) 'rating': rating,
+      if (practiceState != null) 'practiceState': practiceState,
+      if (practiceCity != null) 'practiceCity': practiceCity,
+      'languages': languages,
+      if (hourlyRate != null) 'hourlyRate': hourlyRate,
       if (barNumber != null) 'barNumber': barNumber,
       if (jurisdiction != null) 'jurisdiction': jurisdiction,
       'verificationStatus': verificationStatus,
@@ -107,6 +124,10 @@ class LawyerSnapshot {
       specialization: user.specialization,
       yearsExperience: user.yearsExperience,
       rating: user.rating,
+      practiceState: user.practiceState,
+      practiceCity: user.practiceCity,
+      languages: user.languages,
+      hourlyRate: user.hourlyRate,
       barNumber: user.barNumber,
       jurisdiction: user.jurisdiction,
       verificationStatus: user.verificationStatus.wireValue,
@@ -164,6 +185,46 @@ class ClientReveal {
   }
 }
 
+// ─── Nested helper: CaseSnapshot ─────────────────────────────────────────────
+
+/// Denormalized case summary captured when a client requests a recommended
+/// lawyer, so the lawyer dashboard can render incoming requests cheaply.
+class CaseSnapshot {
+  final String title;
+  final String category;
+  final String? location;
+  final String? budgetRange;
+  final String urgency;
+
+  const CaseSnapshot({
+    required this.title,
+    required this.category,
+    this.location,
+    this.budgetRange,
+    required this.urgency,
+  });
+
+  factory CaseSnapshot.fromMap(Map<String, dynamic> map) {
+    return CaseSnapshot(
+      title: map['title']?.toString() ?? '',
+      category: map['category']?.toString() ?? '',
+      location: map['location']?.toString(),
+      budgetRange: map['budgetRange']?.toString(),
+      urgency: map['urgency']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'category': category,
+      if (location != null) 'location': location,
+      if (budgetRange != null) 'budgetRange': budgetRange,
+      'urgency': urgency,
+    };
+  }
+}
+
 // ─── Main model ───────────────────────────────────────────────────────────────
 
 class ConnectionRequestModel {
@@ -173,11 +234,14 @@ class ConnectionRequestModel {
   final String lawyerId;
   final String message;
   final ConnectionRequestStatus status;
+  final String initiatedByRole;
+  final String requestDirection;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? respondedAt;
   final String? declineReason;
   final LawyerSnapshot lawyerSnapshot;
+  final CaseSnapshot? caseSnapshot;
 
   /// `null` until the client approves the request.
   final ClientReveal? clientReveal;
@@ -189,11 +253,14 @@ class ConnectionRequestModel {
     required this.lawyerId,
     required this.message,
     required this.status,
+    this.initiatedByRole = 'lawyer',
+    this.requestDirection = 'lawyer_to_client',
     required this.createdAt,
     required this.updatedAt,
     this.respondedAt,
     this.declineReason,
     required this.lawyerSnapshot,
+    this.caseSnapshot,
     this.clientReveal,
   });
 
@@ -220,6 +287,11 @@ class ConnectionRequestModel {
         ? ClientReveal.fromMap(Map<String, dynamic>.from(revealRaw))
         : null;
 
+    final caseSnapshotRaw = map['caseSnapshot'];
+    final caseSnapshot = caseSnapshotRaw is Map
+        ? CaseSnapshot.fromMap(Map<String, dynamic>.from(caseSnapshotRaw))
+        : null;
+
     return ConnectionRequestModel(
       id: map['id']?.toString() ?? '',
       caseId: map['caseId']?.toString() ?? '',
@@ -227,6 +299,9 @@ class ConnectionRequestModel {
       lawyerId: map['lawyerId']?.toString() ?? '',
       message: map['message']?.toString() ?? '',
       status: ConnectionRequestStatusWire.fromWire(map['status']?.toString()),
+      initiatedByRole: map['initiatedByRole']?.toString() ?? 'lawyer',
+      requestDirection:
+          map['requestDirection']?.toString() ?? 'lawyer_to_client',
       createdAt:
           _readDateTime(map['createdAt']) ??
           DateTime.fromMillisecondsSinceEpoch(0),
@@ -236,6 +311,7 @@ class ConnectionRequestModel {
       respondedAt: _readDateTime(map['respondedAt']),
       declineReason: map['declineReason']?.toString(),
       lawyerSnapshot: lawyerSnapshot,
+      caseSnapshot: caseSnapshot,
       clientReveal: clientReveal,
     );
   }
@@ -250,11 +326,14 @@ class ConnectionRequestModel {
       'lawyerId': lawyerId,
       'message': message,
       'status': status.wireValue,
+      'initiatedByRole': initiatedByRole,
+      'requestDirection': requestDirection,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
       if (respondedAt != null) 'respondedAt': Timestamp.fromDate(respondedAt!),
       if (declineReason != null) 'declineReason': declineReason,
       'lawyerSnapshot': lawyerSnapshot.toMap(),
+      if (caseSnapshot != null) 'caseSnapshot': caseSnapshot!.toMap(),
       if (clientReveal != null) 'clientReveal': clientReveal!.toMap(),
     };
   }
@@ -268,11 +347,14 @@ class ConnectionRequestModel {
     String? lawyerId,
     String? message,
     ConnectionRequestStatus? status,
+    String? initiatedByRole,
+    String? requestDirection,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? respondedAt,
     String? declineReason,
     LawyerSnapshot? lawyerSnapshot,
+    CaseSnapshot? caseSnapshot,
     ClientReveal? clientReveal,
     bool clearRespondedAt = false,
     bool clearDeclineReason = false,
@@ -285,6 +367,8 @@ class ConnectionRequestModel {
       lawyerId: lawyerId ?? this.lawyerId,
       message: message ?? this.message,
       status: status ?? this.status,
+      initiatedByRole: initiatedByRole ?? this.initiatedByRole,
+      requestDirection: requestDirection ?? this.requestDirection,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       respondedAt: clearRespondedAt ? null : (respondedAt ?? this.respondedAt),
@@ -292,9 +376,17 @@ class ConnectionRequestModel {
           ? null
           : (declineReason ?? this.declineReason),
       lawyerSnapshot: lawyerSnapshot ?? this.lawyerSnapshot,
-      clientReveal: clearClientReveal ? null : (clientReveal ?? this.clientReveal),
+      caseSnapshot: caseSnapshot ?? this.caseSnapshot,
+      clientReveal: clearClientReveal
+          ? null
+          : (clientReveal ?? this.clientReveal),
     );
   }
+
+  bool get isClientInitiated =>
+      initiatedByRole == 'client' || requestDirection == 'client_to_lawyer';
+
+  bool get isLawyerInitiated => !isClientInitiated;
 
   // ── Private date helper (mirrors CaseModel._readDateTime) ──────────────────
 
@@ -386,4 +478,3 @@ class MessageLengthException implements Exception {
   String toString() =>
       'MessageLengthException: message length $length is outside [50, 500]';
 }
-

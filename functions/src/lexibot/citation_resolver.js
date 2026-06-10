@@ -3,6 +3,7 @@ async function resolveApprovedCitations(db, citations) {
     .collection("legal_sources")
     .where("status", "==", "active")
     .get();
+
   const sources = await Promise.all(
     snapshot.docs.map(async (document) => {
       const source = document.data();

@@ -94,17 +94,16 @@ class CaseRepository {
   Stream<List<CaseModel>> streamOpenCases() {
     // Single-field filter only — composite index not needed.
     // lawyerId == null is checked in Dart after the fetch.
-    return _cases
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .map((snapshot) {
-          final cases = snapshot.docs
-              .map(CaseModel.fromFirestore)
-              .where((c) => c.lawyerId == null)
-              .toList();
-          cases.sort((left, right) => right.createdAt.compareTo(left.createdAt));
-          return cases;
-        });
+    return _cases.where('status', isEqualTo: 'pending').snapshots().map((
+      snapshot,
+    ) {
+      final cases = snapshot.docs
+          .map(CaseModel.fromFirestore)
+          .where((c) => c.lawyerId == null)
+          .toList();
+      cases.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      return cases;
+    });
   }
 
   Stream<CaseModel?> watchCase(String caseId) {
@@ -112,6 +111,12 @@ class CaseRepository {
       if (!snapshot.exists) return null;
       return CaseModel.fromFirestore(snapshot);
     });
+  }
+
+  Future<CaseModel?> getCase(String caseId) async {
+    final snapshot = await _cases.doc(caseId).get();
+    if (!snapshot.exists) return null;
+    return CaseModel.fromFirestore(snapshot);
   }
 
   Future<void> updateCaseStatus({
@@ -134,6 +139,13 @@ class CaseRepository {
     }
 
     return _cases.doc(caseId).update(payload);
+  }
+
+  Future<void> updateCaseRecommendationStatus(String caseId, String status) {
+    return _cases.doc(caseId).update({
+      'recommendationStatus': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   String _sanitize(String value) {

@@ -1,0 +1,88 @@
+{
+  "sources": [
+    {
+      "sourceId": "contracts_act_1950",
+      "versionId": "YYYY-MM-DD",
+      "title": "Contracts Act 1950",
+      "sourceUrl": "PASTE_OFFICIAL_SOURCE_URL_HERE",
+      "sourceType": "legislation",
+      "authorityLevel": "primary",
+      "categories": ["deposit_dispute", "early_termination"],
+      "jurisdiction": "peninsular_malaysia",
+      "localPath": "source_pdfs/contracts_act_1950.pdf",
+      "contentHash": "PASTE_SHA256_HASH_HERE",
+      "reviewStatus": "pending",
+      "status": "inactive"
+    },
+    {
+      "sourceId": "specific_relief_act_1950",
+      "versionId": "YYYY-MM-DD",
+      "title": "Specific Relief Act 1950",
+      "sourceUrl": "PASTE_OFFICIAL_SOURCE_URL_HERE",
+      "sourceType": "legislation",
+      "authorityLevel": "primary",
+      "categories": ["eviction", "possession"],
+      "jurisdiction": "peninsular_malaysia",
+      "localPath": "source_pdfs/specific_relief_act_1950.pdf",
+      "contentHash": "PASTE_SHA256_HASH_HERE",
+      "reviewStatus": "pending",
+      "status": "inactive"
+    },
+    {
+      "sourceId": "distress_act_1951",
+      "versionId": "YYYY-MM-DD",
+      "title": "Distress Act 1951",
+      "sourceUrl": "PASTE_OFFICIAL_SOURCE_URL_HERE",
+      "sourceType": "legislation",
+      "authorityLevel": "primary",
+      "categories": ["unpaid_rent", "distress"],
+      "jurisdiction": "peninsular_malaysia",
+      "localPath": "source_pdfs/distress_act_1951.pdf",
+      "contentHash": "PASTE_SHA256_HASH_HERE",
+      "reviewStatus": "pending",
+      "status": "inactive"
+    },
+    {
+      "sourceId": "national_land_code",
+      "versionId": "YYYY-MM-DD",
+      "title": "National Land Code",
+      "sourceUrl": "PASTE_OFFICIAL_SOURCE_URL_HERE",
+      "sourceType": "legislation",
+      "authorityLevel": "primary",
+      "categories": ["land_framework"],
+      "jurisdiction": "peninsular_malaysia",
+      "localPath": "source_pdfs/national_land_code.pdf",
+      "contentHash": "PASTE_SHA256_HASH_HERE",
+      "reviewStatus": "pending",
+      "status": "inactive"
+    },
+    {
+      "sourceId": "strata_management_act_2013",
+      "versionId": "YYYY-MM-DD",
+      "title": "Strata Management Act 2013",
+      "sourceUrl": "PASTE_OFFICIAL_SOURCE_URL_HERE",
+      "sourceType": "legislation",
+      "authorityLevel": "primary",
+      "categories": ["condo", "strata"],
+      "jurisdiction": "peninsular_malaysia",
+      "localPath": "source_pdfs/strata_management_act_2013.pdf",
+      "contentHash": "PASTE_SHA256_HASH_HERE",
+      "reviewStatus": "pending",
+      "status": "inactive"
+    },
+    {
+      "sourceId": "strata_management_regulations_2015",
+      "versionId": "YYYY-MM-DD",
+      "title": "Strata Management Regulations 2015",
+      "sourceUrl": "PASTE_OFFICIAL_SOURCE_URL_HERE",
+      "sourceType": "subsidiary_legislation",
+      "authorityLevel": "primary",
+      "categories": ["condo", "strata"],
+      "jurisdiction": "peninsular_malaysia",
+      "localPath": "source_pdfs/strata_management_regulations_2015.pdf",
+      "contentHash": "PASTE_SHA256_HASH_HERE",
+      "reviewStatus": "pending",
+      "status": "inactive"
+    }
+  ]
+}
