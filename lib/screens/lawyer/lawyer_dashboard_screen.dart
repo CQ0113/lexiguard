@@ -339,6 +339,11 @@ class _LawyerCRMTab extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
+          if (FirebaseInitializer.isReady) ...[
+            _IncomingClientRequestsSection(user: user),
+            const SizedBox(height: 14),
+          ],
+
           // ── New connection banners (green) ────────────────────────────────
           ..._activeCases.map((c) => _connectionCard(context, c)),
           if (_activeCases.isNotEmpty) const SizedBox(height: 10),
@@ -351,7 +356,11 @@ class _LawyerCRMTab extends StatelessWidget {
               stream: ConnectionRequestRepository().streamForLawyer(user.id),
               builder: (context, snap) {
                 final pendingCount = (snap.data ?? const [])
-                    .where((r) => r.status == ConnectionRequestStatus.pending)
+                    .where(
+                      (r) =>
+                          r.status == ConnectionRequestStatus.pending &&
+                          r.isLawyerInitiated,
+                    )
                     .length;
                 if (pendingCount == 0) return const SizedBox.shrink();
                 return Column(
@@ -853,6 +862,348 @@ class _LawyerCRMTab extends StatelessWidget {
   }
 }
 
+class _IncomingClientRequestsSection extends StatelessWidget {
+  const _IncomingClientRequestsSection({required this.user});
+
+  final UserModel user;
+
+  static const _navy = Color(0xFF0B2447);
+
+  @override
+  Widget build(BuildContext context) {
+    final repo = ConnectionRequestRepository();
+    return StreamBuilder<List<ConnectionRequestModel>>(
+      stream: repo.streamPendingClientRequestsForLawyer(user.id),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _infoCard(
+            icon: Icons.error_outline,
+            title: 'Could not load client requests',
+            subtitle: snapshot.error.toString(),
+            color: Colors.redAccent,
+          );
+        }
+
+        final requests = snapshot.data ?? const [];
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _infoCard(
+            icon: Icons.hourglass_empty,
+            title: 'Checking client requests',
+            subtitle: 'Loading incoming recommended-lawyer requests...',
+            color: _navy,
+          );
+        }
+        if (requests.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Client Requests',
+              style: GoogleFonts.inter(
+                color: _navy,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ...requests.map(
+              (request) => _IncomingClientRequestCard(
+                request: request,
+                lawyer: user,
+                repo: repo,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _infoCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: _navy,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.inter(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IncomingClientRequestCard extends StatefulWidget {
+  const _IncomingClientRequestCard({
+    required this.request,
+    required this.lawyer,
+    required this.repo,
+  });
+
+  final ConnectionRequestModel request;
+  final UserModel lawyer;
+  final ConnectionRequestRepository repo;
+
+  @override
+  State<_IncomingClientRequestCard> createState() =>
+      _IncomingClientRequestCardState();
+}
+
+class _IncomingClientRequestCardState
+    extends State<_IncomingClientRequestCard> {
+  static const _navy = Color(0xFF0B2447);
+  static const _gold = Color(0xFFD4AF37);
+
+  bool _acting = false;
+  bool _openingCase = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final request = widget.request;
+    final caseSnapshot = request.caseSnapshot;
+
+    return InkWell(
+      onTap: _openingCase ? null : _openCaseDetail,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.person_add_outlined, color: _gold, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    caseSnapshot?.title.isNotEmpty == true
+                        ? caseSnapshot!.title
+                        : 'Client requested you for a case',
+                    style: GoogleFonts.inter(
+                      color: _navy,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _openingCase
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(
+                        Icons.chevron_right,
+                        color: Color(0xFF9CA3AF),
+                        size: 18,
+                      ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (caseSnapshot?.category.isNotEmpty == true)
+                  _chip(caseSnapshot!.category),
+                if (caseSnapshot?.location?.isNotEmpty == true)
+                  _chip(caseSnapshot!.location!),
+                if (caseSnapshot?.budgetRange?.isNotEmpty == true)
+                  _chip(caseSnapshot!.budgetRange!),
+                if (caseSnapshot?.urgency.isNotEmpty == true)
+                  _chip('${caseSnapshot!.urgency} urgency'),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              request.message,
+              style: GoogleFonts.inter(color: Colors.grey[700], fontSize: 12),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Tap to view case details',
+              style: GoogleFonts.inter(
+                color: _gold,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton(
+                  onPressed: _acting ? null : _reject,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[700],
+                    side: const BorderSide(color: Color(0xFFE5E7EB)),
+                  ),
+                  child: Text(
+                    'Reject',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _acting ? null : _accept,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _gold,
+                    foregroundColor: _navy,
+                    elevation: 0,
+                  ),
+                  child: _acting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          'Accept',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                        ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 11),
+      ),
+    );
+  }
+
+  Future<void> _accept() async {
+    setState(() => _acting = true);
+    try {
+      await widget.repo.approveClientRequest(
+        requestId: widget.request.id,
+        lawyer: widget.lawyer,
+      );
+      if (!mounted) return;
+      _showSnack('Client request accepted.', const Color(0xFF166534));
+    } catch (error) {
+      if (!mounted) return;
+      _showSnack('Could not accept request: $error', Colors.redAccent);
+      setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _openCaseDetail() async {
+    setState(() => _openingCase = true);
+    try {
+      final caseModel = await CaseRepository().getCase(widget.request.caseId);
+      if (!mounted) return;
+      if (caseModel == null) {
+        _showSnack('Case not found.', Colors.redAccent);
+        return;
+      }
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              CaseDetailScreen(caseModel: caseModel, viewer: widget.lawyer),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showSnack('Could not open case details: $error', Colors.redAccent);
+    } finally {
+      if (mounted) {
+        setState(() => _openingCase = false);
+      }
+    }
+  }
+
+  Future<void> _reject() async {
+    setState(() => _acting = true);
+    try {
+      await widget.repo.declineClientRequest(
+        requestId: widget.request.id,
+        lawyer: widget.lawyer,
+      );
+      if (!mounted) return;
+      _showSnack('Client request rejected.', Colors.grey[800]!);
+    } catch (error) {
+      if (!mounted) return;
+      _showSnack('Could not reject request: $error', Colors.redAccent);
+      setState(() => _acting = false);
+    }
+  }
+
+  void _showSnack(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.inter(color: Colors.white)),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MY CASES TAB — exact match of lawyer-my-cases.tsx
 // ─────────────────────────────────────────────────────────────────────────────
@@ -876,6 +1227,33 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   CaseRepository? _caseRepo;
   // Tracks which pending request cards are expanded (to show full message).
   final Set<String> _expandedRequests = {};
+
+  // Sorting & Filtering State
+  bool _showFilters = false;
+  String _selectedUrgencyFilter = 'All Urgencies';
+  String _selectedBudgetFilter = 'All Budgets';
+  String _selectedSort = 'Default';
+
+  int _urgencyValue(CaseUrgency u) {
+    switch (u) {
+      case CaseUrgency.high:
+        return 3;
+      case CaseUrgency.medium:
+        return 2;
+      case CaseUrgency.low:
+        return 1;
+    }
+  }
+
+  int _budgetValue(String? b) {
+    if (b == null) return 0;
+    if (b.contains('600+')) return 5;
+    if (b.contains('400 - 600')) return 4;
+    if (b.contains('200 - 400')) return 3;
+    if (b.contains('100 - 200')) return 2;
+    if (b.contains('Flexible') || b.contains('Negotiable')) return 1;
+    return 0;
+  }
 
   @override
   void initState() {
@@ -909,22 +1287,103 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     } else {
       list = [..._connectedCases, ...openCases];
     }
+    
+    // Filter by text search query
     final q = _searchCtrl.text.trim().toLowerCase();
-    if (q.isEmpty) return list;
-    return list
-        .where(
-          (c) =>
-              c.title.toLowerCase().contains(q) ||
-              c.categoryLabel.toLowerCase().contains(q),
-        )
-        .toList();
+    if (q.isNotEmpty) {
+      list = list
+          .where(
+            (c) =>
+                c.title.toLowerCase().contains(q) ||
+                c.categoryLabel.toLowerCase().contains(q),
+          )
+          .toList();
+    }
+
+    // Filter by Urgency
+    if (_selectedUrgencyFilter != 'All Urgencies') {
+      final targetUrgency = _selectedUrgencyFilter.toLowerCase();
+      list = list.where((c) => c.urgency.name == targetUrgency).toList();
+    }
+
+    // Filter by Budget
+    if (_selectedBudgetFilter != 'All Budgets') {
+      list = list.where((c) => c.budgetRange == _selectedBudgetFilter).toList();
+    }
+
+    // Sort list
+    if (_selectedSort == 'Urgency (High to Low)') {
+      list.sort((a, b) => _urgencyValue(b.urgency).compareTo(_urgencyValue(a.urgency)));
+    } else if (_selectedSort == 'Urgency (Low to High)') {
+      list.sort((a, b) => _urgencyValue(a.urgency).compareTo(_urgencyValue(b.urgency)));
+    } else if (_selectedSort == 'Budget (High to Low)') {
+      list.sort((a, b) => _budgetValue(b.budgetRange).compareTo(_budgetValue(a.budgetRange)));
+    } else if (_selectedSort == 'Budget (Low to High)') {
+      list.sort((a, b) => _budgetValue(a.budgetRange).compareTo(_budgetValue(b.budgetRange)));
+    }
+
+    return list;
+  }
+
+  Widget _buildFilterDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            color: Colors.grey[500],
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              icon: Icon(
+                Icons.keyboard_arrow_down,
+                color: Colors.grey[400],
+                size: 16,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              borderRadius: BorderRadius.circular(8),
+              style: GoogleFonts.inter(
+                color: _navy,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              items: items
+                  .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+                  .toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final openCasesStream = _caseRepo?.streamOpenCases() ??
+    final openCasesStream =
+        _caseRepo?.streamOpenCases() ??
         Stream.value(<CaseModel>[...DummyData.openCases]);
-    final connectedStream = _caseRepo?.streamConnectedCasesForLawyer(widget.user.id) ??
+    final connectedStream =
+        _caseRepo?.streamConnectedCasesForLawyer(widget.user.id) ??
         Stream.value(<CaseModel>[]);
 
     return StreamBuilder<List<CaseModel>>(
@@ -943,7 +1402,6 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   }
 
   Widget _buildBody(BuildContext context, List<CaseModel> openCases) {
-
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
       child: Column(
@@ -964,44 +1422,174 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
           ),
           const SizedBox(height: 16),
 
-          // ── Search ──────────────────────────────────────────────────────
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (_) => setState(() {}),
-              style: GoogleFonts.inter(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search cases or clients...',
-                hintStyle: GoogleFonts.inter(
-                  color: Colors.grey[400],
-                  fontSize: 13,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: Colors.grey[400],
-                  size: 18,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
+          // ── Search & Filter Controls ─────────────────────────────────────
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: (_) => setState(() {}),
+                    style: GoogleFonts.inter(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search cases or clients...',
+                      hintStyle: GoogleFonts.inter(
+                        color: Colors.grey[400],
+                        fontSize: 13,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: Colors.grey[400],
+                        size: 18,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => setState(() => _showFilters = !_showFilters),
+                child: Container(
+                  height: 48,
+                  width: 48,
+                  decoration: BoxDecoration(
+                    color: _showFilters ? _navy : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _showFilters ? _navy : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.filter_list_rounded,
+                    color: _showFilters ? Colors.white : _navy,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
           ),
+          
+          if (_showFilters) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Filter & Sort Options',
+                        style: GoogleFonts.inter(
+                          color: _navy,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (_selectedUrgencyFilter != 'All Urgencies' ||
+                          _selectedBudgetFilter != 'All Budgets' ||
+                          _selectedSort != 'Default')
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedUrgencyFilter = 'All Urgencies';
+                              _selectedBudgetFilter = 'All Budgets';
+                              _selectedSort = 'Default';
+                            });
+                          },
+                          child: Text(
+                            'Clear All',
+                            style: GoogleFonts.inter(
+                              color: _gold,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildFilterDropdown(
+                    label: 'Sort By',
+                    value: _selectedSort,
+                    items: [
+                      'Default',
+                      'Urgency (High to Low)',
+                      'Urgency (Low to High)',
+                      'Budget (High to Low)',
+                      'Budget (Low to High)',
+                    ],
+                    onChanged: (v) => setState(() => _selectedSort = v ?? 'Default'),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildFilterDropdown(
+                          label: 'Urgency',
+                          value: _selectedUrgencyFilter,
+                          items: ['All Urgencies', 'High', 'Medium', 'Low'],
+                          onChanged: (v) =>
+                              setState(() => _selectedUrgencyFilter = v ?? 'All Urgencies'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildFilterDropdown(
+                          label: 'Budget',
+                          value: _selectedBudgetFilter,
+                          items: [
+                            'All Budgets',
+                            'RM 100 - 200/hr',
+                            'RM 200 - 400/hr',
+                            'RM 400 - 600/hr',
+                            'RM 600+/hr',
+                            'Flexible / Negotiable',
+                          ],
+                          onChanged: (v) =>
+                              setState(() => _selectedBudgetFilter = v ?? 'All Budgets'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
 
           // ── Tab filters + case list (share the live requests stream) ────────
           StreamBuilder<List<ConnectionRequestModel>>(
-            stream: _connRepo?.streamForLawyer(widget.user.id) ??
+            stream:
+                _connRepo?.streamForLawyer(widget.user.id) ??
                 Stream.value(<ConnectionRequestModel>[]),
             builder: (context, snap) {
-              final allRequests = snap.data ?? [];
+              final allRequests = (snap.data ?? [])
+                  .where((request) => request.isLawyerInitiated)
+                  .toList();
 
               // Live derived sets from the lawyer's connection_requests.
               final pendingCaseIds = allRequests
@@ -1017,8 +1605,10 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
 
               // Cases the lawyer has a terminal request on — must NOT appear
               // as a fresh OPEN card on the All tab (would be a dead lead).
-              final terminalCaseIds =
-                  allRequests.where(isTerminal).map((r) => r.caseId).toSet();
+              final terminalCaseIds = allRequests
+                  .where(isTerminal)
+                  .map((r) => r.caseId)
+                  .toSet();
 
               // Sorted history list (newest decision first). Approved
               // requests live in the Connected tab; pending in the Pending
@@ -1071,8 +1661,9 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                         decoration: BoxDecoration(
                           color: _gold.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
-                          border:
-                              Border.all(color: _gold.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: _gold.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -1083,8 +1674,11 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                                 color: _gold,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.auto_awesome,
-                                  color: _navy, size: 16),
+                              child: const Icon(
+                                Icons.auto_awesome,
+                                color: _navy,
+                                size: 16,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -1126,9 +1720,16 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                     _emptyState()
                   else
                     ...filtered.map((c) {
-                      final isConnected = _connectedCases.any((cc) => cc.id == c.id);
+                      final isConnected = _connectedCases.any(
+                        (cc) => cc.id == c.id,
+                      );
                       final hasApplied = pendingCaseIds.contains(c.id);
-                      return _myCaseCard(context, c, isConnected, hasApplied: hasApplied);
+                      return _myCaseCard(
+                        context,
+                        c,
+                        isConnected,
+                        hasApplied: hasApplied,
+                      );
                     }),
                 ],
               );
@@ -1154,9 +1755,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 48),
             child: Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF0B2447),
-              ),
+              child: CircularProgressIndicator(color: Color(0xFF0B2447)),
             ),
           );
         }
@@ -1167,17 +1766,18 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
             child: Center(
               child: Text(
                 'Could not load requests.',
-                style: GoogleFonts.inter(
-                  color: Colors.grey[500],
-                  fontSize: 13,
-                ),
+                style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
               ),
             ),
           );
         }
 
         final pending = (snap.data ?? [])
-            .where((r) => r.status == ConnectionRequestStatus.pending)
+            .where(
+              (r) =>
+                  r.status == ConnectionRequestStatus.pending &&
+                  r.isLawyerInitiated,
+            )
             .toList();
 
         if (pending.isEmpty) {
@@ -1249,8 +1849,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   Widget _historyList(List<ConnectionRequestModel> historyRequests) {
     if (historyRequests.isEmpty) return _historyEmptyState();
     return Column(
-      children:
-          historyRequests.map((req) => _historyRequestCard(req)).toList(),
+      children: historyRequests.map((req) => _historyRequestCard(req)).toList(),
     );
   }
 
@@ -1436,9 +2035,8 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                   if (!isExpanded && req.message.length > 100) ...[
                     const SizedBox(height: 2),
                     GestureDetector(
-                      onTap: () => setState(
-                        () => _expandedRequests.add(req.id),
-                      ),
+                      onTap: () =>
+                          setState(() => _expandedRequests.add(req.id)),
                       child: Text(
                         'Read more',
                         style: GoogleFonts.inter(
@@ -1451,9 +2049,8 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                   ] else if (isExpanded) ...[
                     const SizedBox(height: 2),
                     GestureDetector(
-                      onTap: () => setState(
-                        () => _expandedRequests.remove(req.id),
-                      ),
+                      onTap: () =>
+                          setState(() => _expandedRequests.remove(req.id)),
                       child: Text(
                         'Show less',
                         style: GoogleFonts.inter(
@@ -1476,8 +2073,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                       decoration: BoxDecoration(
                         color: const Color(0xFFFEF2F2),
                         borderRadius: BorderRadius.circular(10),
-                        border:
-                            Border.all(color: const Color(0xFFFECACA)),
+                        border: Border.all(color: const Color(0xFFFECACA)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1537,9 +2133,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: const BoxDecoration(
                 color: Color(0xFFFFFBEB),
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFFDE68A)),
-                ),
+                border: Border(bottom: BorderSide(color: Color(0xFFFDE68A))),
               ),
               child: Row(
                 children: [
@@ -1605,9 +2199,8 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                   if (!isExpanded && req.message.length > 100) ...[
                     const SizedBox(height: 2),
                     GestureDetector(
-                      onTap: () => setState(
-                        () => _expandedRequests.add(req.id),
-                      ),
+                      onTap: () =>
+                          setState(() => _expandedRequests.add(req.id)),
                       child: Text(
                         'Read more',
                         style: GoogleFonts.inter(
@@ -1620,9 +2213,8 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                   ] else if (isExpanded) ...[
                     const SizedBox(height: 2),
                     GestureDetector(
-                      onTap: () => setState(
-                        () => _expandedRequests.remove(req.id),
-                      ),
+                      onTap: () =>
+                          setState(() => _expandedRequests.remove(req.id)),
                       child: Text(
                         'Show less',
                         style: GoogleFonts.inter(
@@ -1829,33 +2421,38 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     );
   }
 
-  Widget _myCaseCard(BuildContext context, CaseModel c, bool isConnected, {bool hasApplied = false}) {
+  Widget _myCaseCard(
+    BuildContext context,
+    CaseModel c,
+    bool isConnected, {
+    bool hasApplied = false,
+  }) {
     // Status bar config (from lawyer-my-cases.tsx)
     final statusBg = isConnected
         ? const Color(0xFFF0FDF4)
         : hasApplied
-            ? const Color(0xFFFFFBEB)
-            : const Color(0xFFF8FAFC);
+        ? const Color(0xFFFFFBEB)
+        : const Color(0xFFF8FAFC);
     final statusBorder = isConnected
         ? const Color(0xFFBBF7D0)
         : hasApplied
-            ? const Color(0xFFFDE68A)
-            : const Color(0xFFE2E8F0);
+        ? const Color(0xFFFDE68A)
+        : const Color(0xFFE2E8F0);
     final statusText = isConnected
         ? const Color(0xFF16A34A)
         : hasApplied
-            ? const Color(0xFFD97706)
-            : const Color(0xFF64748B);
+        ? const Color(0xFFD97706)
+        : const Color(0xFF64748B);
     final statusLabel = isConnected
         ? 'CONNECTED'
         : hasApplied
-            ? 'AWAITING'
-            : 'OPEN';
+        ? 'AWAITING'
+        : 'OPEN';
     final statusIcon = isConnected
         ? Icons.lock_open_outlined
         : hasApplied
-            ? Icons.access_time
-            : Icons.search_outlined;
+        ? Icons.access_time
+        : Icons.search_outlined;
 
     // Urgency
     Color urgencyBg, urgencyFg;
@@ -1887,318 +2484,306 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
           ),
         ),
         child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            // Status bar
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: statusBg,
-                border: Border(bottom: BorderSide(color: statusBorder)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-              child: Row(
-                children: [
-                  Icon(statusIcon, color: statusText, size: 14),
-                  const SizedBox(width: 6),
-                  Text(
-                    statusLabel,
-                    style: GoogleFonts.inter(
-                      color: statusText,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              // Status bar
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: statusBg,
+                  border: Border(bottom: BorderSide(color: statusBorder)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(statusIcon, color: statusText, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      statusLabel,
+                      style: GoogleFonts.inter(
+                        color: statusText,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
 
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // Case info
-                  Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: isConnected ? _navy : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: isConnected
-                            ? Center(
-                                child: Text(
-                                  c.clientId.substring(0, 2).toUpperCase(),
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    // Case info
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: isConnected ? _navy : Colors.grey[200],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: isConnected
+                              ? Center(
+                                  child: Text(
+                                    c.clientId.substring(0, 2).toUpperCase(),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
+                                )
+                              : Icon(
+                                  Icons.lock_outline,
+                                  color: Colors.grey[400],
+                                  size: 20,
                                 ),
-                              )
-                            : Icon(
-                                Icons.lock_outline,
-                                color: Colors.grey[400],
-                                size: 20,
-                              ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isConnected
-                                  ? DummyData.users
-                                        .firstWhere(
-                                          (u) => u.id == c.clientId,
-                                          orElse: () => DummyData.users.first,
-                                        )
-                                        .name
-                                  : 'CLIENT-${c.id.hashCode.abs() % 10000}',
-                              style: GoogleFonts.inter(
-                                color: _navy,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              c.title,
-                              style: GoogleFonts.inter(
-                                color: Colors.grey[500],
-                                fontSize: 12,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Tags
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _gold.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          c.categoryLabel,
-                          style: GoogleFonts.inter(
-                            color: _gold,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: urgencyBg,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          urgencyLabel,
-                          style: GoogleFonts.inter(
-                            color: urgencyFg,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Contracts CTA (if connected)
-                  if (isConnected) ...[
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => SendContractScreen(
-                              caseModel: c,
-                              lawyer: widget.user,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _gold.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _gold.withValues(alpha: 0.2)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.edit_document,
-                              color: _gold,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Send Contract',
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isConnected
+                                    ? DummyData.users
+                                          .firstWhere(
+                                            (u) => u.id == c.clientId,
+                                            orElse: () => DummyData.users.first,
+                                          )
+                                          .name
+                                    : 'CLIENT-${c.id.hashCode.abs() % 10000}',
                                 style: GoogleFonts.inter(
                                   color: _navy,
-                                  fontSize: 12,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: _gold,
-                              size: 16,
-                            ),
-                          ],
+                              Text(
+                                c.title,
+                                style: GoogleFonts.inter(
+                                  color: Colors.grey[500],
+                                  fontSize: 12,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                     const SizedBox(height: 10),
-                  ],
 
-                  // Action buttons
-                  Row(
-                    children: [
-                      if (isConnected) ...[
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {},
-                            icon: const Icon(
-                              Icons.chat_bubble_outline,
-                              size: 15,
-                            ),
-                            label: Text(
-                              'Chat',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _navy,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
+                    // Tags
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _gold.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            c.categoryLabel,
+                            style: GoogleFonts.inter(
+                              color: _gold,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: () {},
-                          icon: const Icon(Icons.phone_outlined, size: 15),
-                          label: Text(
-                            'Call',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
                           ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF16A34A),
-                            side: const BorderSide(color: Color(0xFFBBF7D0)),
-                            backgroundColor: const Color(0xFFF0FDF4),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                          decoration: BoxDecoration(
+                            color: urgencyBg,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            urgencyLabel,
+                            style: GoogleFonts.inter(
+                              color: urgencyFg,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      ] else if (hasApplied)
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 11),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFFBEB),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFFFDE68A),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Contracts CTA (if connected)
+                    if (isConnected) ...[
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => SendContractScreen(
+                                caseModel: c,
+                                lawyer: widget.user,
                               ),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.access_time,
-                                  color: Color(0xFFD97706),
-                                  size: 15,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Awaiting Client Approval',
-                                  style: GoogleFonts.inter(
-                                    color: const Color(0xFFD97706),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _gold.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _gold.withValues(alpha: 0.2),
                             ),
                           ),
-                        )
-                      else
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => CaseDetailScreen(
-                                  caseModel: c,
-                                  viewer: widget.user,
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.edit_document,
+                                color: _gold,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Send Contract',
+                                  style: GoogleFonts.inter(
+                                    color: _navy,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
+                              const Icon(
+                                Icons.chevron_right,
+                                color: _gold,
+                                size: 16,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (c.budgetRange != null && c.budgetRange!.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Text(
+                            c.budgetRange!,
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF4B5563),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
                             ),
+                          ),
+                        ),
+                      ],
+                    ],
+
+                    // Action buttons
+                    Row(
+                      children: [
+                        if (isConnected) ...[
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {},
+                              icon: const Icon(
+                                Icons.chat_bubble_outline,
+                                size: 15,
+                              ),
+                              label: Text(
+                                'Chat',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _navy,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: () {},
+                            icon: const Icon(Icons.phone_outlined, size: 15),
+                            label: Text(
+                              'Call',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF16A34A),
+                              side: const BorderSide(color: Color(0xFFBBF7D0)),
+                              backgroundColor: const Color(0xFFF0FDF4),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ] else if (hasApplied)
+                          Expanded(
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 11),
                               decoration: BoxDecoration(
-                                color: _navy,
+                                color: const Color(0xFFFFFBEB),
                                 borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFFDE68A),
+                                ),
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Icon(
-                                    Icons.open_in_new,
-                                    color: Colors.white,
+                                    Icons.access_time,
+                                    color: Color(0xFFD97706),
                                     size: 15,
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    'View Case',
+                                    'Awaiting Client Approval',
                                     style: GoogleFonts.inter(
-                                      color: Colors.white,
+                                      color: const Color(0xFFD97706),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -2206,15 +2791,55 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                                 ],
                               ),
                             ),
+                          )
+                        else
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => CaseDetailScreen(
+                                    caseModel: c,
+                                    viewer: widget.user,
+                                  ),
+                                ),
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 11,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _navy,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.open_in_new,
+                                      color: Colors.white,
+                                      size: 15,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'View Case',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );

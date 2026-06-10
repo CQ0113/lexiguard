@@ -8,6 +8,7 @@ import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../../repositories/case_repository.dart';
+import '../../repositories/case_action_repository.dart';
 
 // Exact replica of the Figma-exported post-case.tsx
 // Design: #0B2447 navy, #D4AF37 gold, white cards, gray-50 bg
@@ -70,6 +71,7 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
   String _budget = 'RM 200 - 400/hr';
   List<PlatformFile> _files = [];
   bool _submitting = false;
+  String _submitStatus = '';
   final CaseRepository _caseRepository = CaseRepository();
 
   @override
@@ -114,7 +116,10 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
 
   Future<void> _handleSubmit() async {
     if (!_isValid) return;
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _submitStatus = _files.isNotEmpty ? 'Uploading attachments...' : 'Creating case...';
+    });
 
     // Map string category to CaseCategory enum
     CaseCategory cat;
@@ -162,6 +167,9 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
           );
           attachmentMetadata.add(attachment);
         }
+        if (mounted) {
+          setState(() => _submitStatus = 'Creating case...');
+        }
       } catch (error) {
         if (mounted) {
           setState(() => _submitting = false);
@@ -207,6 +215,19 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       try {
         await _caseRepository.createCase(newCase);
         storedInFirestore = true;
+        if (mounted) {
+          setState(() => _submitStatus = 'Finding suitable lawyers...');
+        }
+        try {
+          await CaseActionRepository().recommendLawyers(caseId: caseId);
+        } catch (error) {
+          debugPrint('Generating recommendations failed: $error');
+          try {
+            await _caseRepository.updateCaseRecommendationStatus(caseId, 'failed');
+          } catch (updateError) {
+            debugPrint('Failed to update recommendation status: $updateError');
+          }
+        }
       } catch (error) {
         for (final attachment in attachmentMetadata) {
           try {
@@ -458,9 +479,9 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                             ),
                             const SizedBox(width: 10),
                             Text(
-                              _files.isEmpty
-                                  ? 'Finding best lawyers...'
-                                  : 'Uploading attachments...',
+                              _submitStatus.isNotEmpty
+                                  ? _submitStatus
+                                  : 'Submitting...',
                               style: GoogleFonts.inter(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,

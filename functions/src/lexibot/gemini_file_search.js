@@ -1,7 +1,6 @@
 const { GoogleGenAI } = require("@google/genai");
 
 const {
-  RESPONSE_SCHEMA,
   SYSTEM_INSTRUCTION,
   questionPrompt,
 } = require("./prompt");
@@ -33,6 +32,30 @@ function extractCitations(groundingChunks) {
   return Array.from(bySource.values());
 }
 
+function parseJsonObject(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+
+  const withoutFence = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(withoutFence);
+  } catch (_error) {
+    const start = withoutFence.indexOf("{");
+    const end = withoutFence.lastIndexOf("}");
+    if (start < 0 || end <= start) return null;
+
+    try {
+      return JSON.parse(withoutFence.slice(start, end + 1));
+    } catch (_nestedError) {
+      return null;
+    }
+  }
+}
+
 async function generateGroundedAnswer({
   apiKey,
   question,
@@ -46,8 +69,6 @@ async function generateGroundedAnswer({
     contents: questionPrompt(question, responseLanguage),
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
       tools: [
         {
           fileSearch: {
@@ -70,10 +91,8 @@ async function generateGroundedAnswer({
     };
   }
 
-  let answer;
-  try {
-    answer = JSON.parse(response.text || "{}");
-  } catch (_error) {
+  const answer = parseJsonObject(response.text);
+  if (!answer) {
     return {
       status: "insufficient_sources",
       citations,
@@ -93,4 +112,5 @@ async function generateGroundedAnswer({
 module.exports = {
   extractCitations,
   generateGroundedAnswer,
+  parseJsonObject,
 };

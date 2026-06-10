@@ -12,7 +12,7 @@ const DEFAULT_MANIFEST = path.join(INGEST_DIR, 'manifest.json');
 const DEFAULT_STORE_STATE = path.join(INGEST_DIR, '.lexibot.local.json');
 const CONFIG_PATH = 'lexibot_config/tenancy_mvp';
 const SCOPE = 'peninsular_malaysia_residential_tenancy';
-const ANSWER_MODEL = 'gemini-3.5-flash';
+const ANSWER_MODEL = 'gemini-2.5-flash';
 
 function usage() {
   console.log(`

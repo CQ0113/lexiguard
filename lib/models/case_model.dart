@@ -9,6 +9,66 @@ enum CaseUrgency { low, medium, high }
 
 enum CaseCategory { property, family, criminal, commercial, employment, other }
 
+class LawyerRecommendation {
+  final String lawyerId;
+  final String lawyerName;
+  final String specialization;
+  final String practiceState;
+  final String practiceCity;
+  final int yearsExperience;
+  final List<String> languages;
+  final double hourlyRate;
+  final int matchPercentage;
+  final String matchReason;
+
+  const LawyerRecommendation({
+    required this.lawyerId,
+    required this.lawyerName,
+    required this.specialization,
+    required this.practiceState,
+    required this.practiceCity,
+    required this.yearsExperience,
+    required this.languages,
+    required this.hourlyRate,
+    required this.matchPercentage,
+    this.matchReason = '',
+  });
+
+  factory LawyerRecommendation.fromMap(Map<String, dynamic> map) {
+    return LawyerRecommendation(
+      lawyerId: map['lawyerId']?.toString() ?? '',
+      lawyerName: map['lawyerName']?.toString() ?? '',
+      specialization: map['specialization']?.toString() ?? '',
+      practiceState: map['practiceState']?.toString() ?? '',
+      practiceCity: map['practiceCity']?.toString() ?? '',
+      yearsExperience: (map['yearsExperience'] as num?)?.toInt() ?? 0,
+      languages: List<String>.from(map['languages'] as List? ?? []),
+      hourlyRate: (map['hourlyRate'] as num?)?.toDouble() ?? 0.0,
+      matchPercentage: (map['matchPercentage'] as num?)?.toInt() ?? 0,
+      matchReason: map['matchReason']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'lawyerId': lawyerId,
+      'lawyerName': lawyerName,
+      'specialization': specialization,
+      'practiceState': practiceState,
+      'practiceCity': practiceCity,
+      'yearsExperience': yearsExperience,
+      'languages': languages,
+      'hourlyRate': hourlyRate,
+      'matchPercentage': matchPercentage,
+      'matchReason': matchReason,
+    };
+  }
+
+  Map<String, dynamic> toMap() {
+    return toFirestore();
+  }
+}
+
 class CaseAttachment {
   final String id;
   final String fileName;
@@ -88,6 +148,10 @@ class CaseModel {
   final String? withdrawnBy;
   final List<String> interestedLawyerIds;
   final List<CaseAttachment> attachments;
+  final List<LawyerRecommendation> lawyerRecommendations;
+  final String? recommendationStatus;
+  final DateTime? recommendationGeneratedAt;
+  final String? recommendationModel;
 
   const CaseModel({
     required this.id,
@@ -110,6 +174,10 @@ class CaseModel {
     this.withdrawnBy,
     this.interestedLawyerIds = const [],
     this.attachments = const [],
+    this.lawyerRecommendations = const [],
+    this.recommendationStatus,
+    this.recommendationGeneratedAt,
+    this.recommendationModel,
   });
 
   factory CaseModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -159,6 +227,12 @@ class CaseModel {
         map['interestedLawyerIds'] as List? ?? [],
       ),
       attachments: _readAttachments(map['attachments']),
+      lawyerRecommendations: _readRecommendations(map['lawyerRecommendations']),
+      recommendationStatus: map['recommendationStatus']?.toString(),
+      recommendationGeneratedAt: _readDateTime(
+        map['recommendationGeneratedAt'],
+      ),
+      recommendationModel: map['recommendationModel']?.toString(),
     );
   }
 
@@ -186,6 +260,15 @@ class CaseModel {
       if (withdrawnBy != null) 'withdrawnBy': withdrawnBy,
       'interestedLawyerIds': interestedLawyerIds,
       'attachments': attachments.map((item) => item.toFirestore()).toList(),
+      'lawyerRecommendations': lawyerRecommendations
+          .map((item) => item.toFirestore())
+          .toList(),
+      'recommendationStatus': recommendationStatus,
+      if (recommendationGeneratedAt != null)
+        'recommendationGeneratedAt': Timestamp.fromDate(
+          recommendationGeneratedAt!,
+        ),
+      'recommendationModel': recommendationModel,
     };
   }
 
@@ -211,7 +294,20 @@ class CaseModel {
       'withdrawnBy': withdrawnBy,
       'interestedLawyerIds': interestedLawyerIds,
       'attachments': attachments.map((item) => item.toMap()).toList(),
+      'lawyerRecommendations': lawyerRecommendations
+          .map((item) => item.toMap())
+          .toList(),
+      'recommendationStatus': recommendationStatus,
+      'recommendationGeneratedAt': recommendationGeneratedAt?.toIso8601String(),
+      'recommendationModel': recommendationModel,
     };
+  }
+
+  static List<LawyerRecommendation> _readRecommendations(dynamic value) {
+    if (value is! List) return const [];
+    return value.whereType<Map>().map((item) {
+      return LawyerRecommendation.fromMap(Map<String, dynamic>.from(item));
+    }).toList();
   }
 
   static List<CaseAttachment> _readAttachments(dynamic value) {
