@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/firebase/firebase_initializer.dart';
+import '../data/dummy_data.dart';
 import '../models/user_model.dart';
+import '../repositories/lawyer_profile_repository.dart';
+import '../repositories/user_repository.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_auth_sync_service.dart';
 import 'admin_login_screen.dart';
@@ -36,11 +39,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final Color primaryBlue = const Color(0xFF0C1D36);
   final Color goldAccent = const Color(0xFFCFA92A);
   final FirebaseAuthSyncService _authSyncService = FirebaseAuthSyncService();
+  final UserRepository _userRepository = UserRepository();
+  final LawyerProfileRepository _lawyerProfileRepository =
+      LawyerProfileRepository();
   // Lazy — defers FirebaseAuth.instance until Firebase is confirmed ready.
   AuthService? _authServiceInstance;
   AuthService get _authService => _authServiceInstance ??= AuthService();
   bool _isSubmitting = false;
   bool _isGoogleSubmitting = false;
+
+  static const _devClientEmail = 'dev.client@lexiguard.local';
+  static const _devLawyerEmail = 'dev.lawyer@lexiguard.local';
+  static const _devAccountPassword = 'DevPassword123!';
 
   bool get showLawyerVerificationFields {
     return !isLogin && selectedRole == 'Lawyer';
@@ -236,6 +246,157 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _enterDevAccount(UserRole role) async {
+    if (_isSubmitting || _isGoogleSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      if (!FirebaseInitializer.isReady) {
+        _showInputError('Firebase is not available for dev account login.');
+        return;
+      }
+
+      final email = role == UserRole.client ? _devClientEmail : _devLawyerEmail;
+      final credential = await _signInOrCreateDevCredential(email);
+      final uid = credential.user?.uid;
+      if (uid == null) {
+        _showInputError('Dev account login failed. Please try again.');
+        return;
+      }
+
+      await _seedDevProfile(uid: uid, email: email, role: role);
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LiveDashboardRouterScreen(uid: uid),
+        ),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (mounted) {
+        _showInputError(_friendlyDevAccountError(error));
+      }
+    } catch (_) {
+      if (mounted) {
+        _showInputError('Could not enter dev account. Please try again.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  Future<UserCredential> _signInOrCreateDevCredential(String email) async {
+    try {
+      return await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: _devAccountPassword,
+      );
+    } on FirebaseAuthException catch (signInError) {
+      if (signInError.code != 'user-not-found' &&
+          signInError.code != 'invalid-credential') {
+        rethrow;
+      }
+
+      try {
+        return await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: _devAccountPassword,
+        );
+      } on FirebaseAuthException catch (createError) {
+        if (createError.code == 'email-already-in-use') {
+          return await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email,
+            password: _devAccountPassword,
+          );
+        }
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> _seedDevProfile({
+    required String uid,
+    required String email,
+    required UserRole role,
+  }) async {
+    final profile = _buildDevProfile(uid: uid, email: email, role: role);
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    await _userRepository.upsertUser(
+      uid: uid,
+      payload: {
+        ...profile.toMap(),
+        'id': uid,
+        'email': email,
+        'role': role == UserRole.lawyer ? 'lawyer' : 'client',
+        'updatedAt': now,
+        'createdAt': profile.createdAt?.toIso8601String() ?? now,
+      },
+    );
+
+    if (role == UserRole.lawyer) {
+      await _lawyerProfileRepository.upsertProfile(uid: uid, profile: profile);
+    }
+  }
+
+  UserModel _buildDevProfile({
+    required String uid,
+    required String email,
+    required UserRole role,
+  }) {
+    if (role == UserRole.client) {
+      final client = DummyData.users.firstWhere((u) => u.role == UserRole.client);
+      return UserModel(
+        id: uid,
+        name: client.name,
+        email: email,
+        phone: client.phone,
+        role: UserRole.client,
+        avatarUrl: client.avatarUrl,
+        createdAt: client.createdAt,
+      );
+    }
+
+    final lawyer = DummyData.firstVerifiedLawyer;
+    return UserModel(
+      id: uid,
+      name: lawyer.name,
+      email: email,
+      phone: lawyer.phone,
+      role: UserRole.lawyer,
+      avatarUrl: lawyer.avatarUrl,
+      createdAt: lawyer.createdAt,
+      barNumber: lawyer.barNumber,
+      specialization: lawyer.specialization,
+      hourlyRate: lawyer.hourlyRate,
+      rating: lawyer.rating,
+      yearsExperience: lawyer.yearsExperience,
+      barCouncilVerified: lawyer.barCouncilVerified,
+      verificationStatus: lawyer.verificationStatus,
+      verificationProvider: lawyer.verificationProvider,
+      verifiedAt: lawyer.verifiedAt,
+      lastVerifiedAt: lawyer.lastVerifiedAt,
+      nextReverifyAt: lawyer.nextReverifyAt,
+      verificationBadgeVisible: lawyer.verificationBadgeVisible,
+      legalFullName: lawyer.legalFullName,
+      firmName: lawyer.firmName,
+      jurisdiction: lawyer.jurisdiction,
+      practiceState: lawyer.practiceState,
+      practiceCity: lawyer.practiceCity,
+    );
+  }
+
+  String _friendlyDevAccountError(FirebaseAuthException error) {
+    if (error.code == 'wrong-password' || error.code == 'invalid-credential') {
+      return 'The dev Firebase account exists with a different password.';
+    }
+    return 'Could not enter dev account (${error.code}).';
   }
 
   Future<void> _onGoogleSignIn() async {
@@ -1016,6 +1177,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 20),
                         _buildGoogleSignInButton(),
+                        const SizedBox(height: 16),
+                        _buildMockLoginActions(),
                         const SizedBox(height: 32),
                       ],
                     ),
@@ -1025,6 +1188,73 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMockLoginActions() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Development quick enter',
+            style: GoogleFonts.inter(
+              color: primaryBlue,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMockEnterButton(
+                  label: 'Dev Client',
+                  icon: Icons.person_outline_rounded,
+                  onPressed: () => _enterDevAccount(UserRole.client),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMockEnterButton(
+                  label: 'Dev Lawyer',
+                  icon: Icons.balance_rounded,
+                  onPressed: () => _enterDevAccount(UserRole.lawyer),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMockEnterButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: (_isSubmitting || _isGoogleSubmitting) ? null : onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: primaryBlue,
+        backgroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        side: BorderSide(color: goldAccent.withValues(alpha: 0.45)),
+      ),
+      icon: Icon(icon, size: 17, color: goldAccent),
+      label: Text(
+        label,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700),
       ),
     );
   }
