@@ -877,6 +877,33 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   // Tracks which pending request cards are expanded (to show full message).
   final Set<String> _expandedRequests = {};
 
+  // Sorting & Filtering State
+  bool _showFilters = false;
+  String _selectedUrgencyFilter = 'All Urgencies';
+  String _selectedBudgetFilter = 'All Budgets';
+  String _selectedSort = 'Default';
+
+  int _urgencyValue(CaseUrgency u) {
+    switch (u) {
+      case CaseUrgency.high:
+        return 3;
+      case CaseUrgency.medium:
+        return 2;
+      case CaseUrgency.low:
+        return 1;
+    }
+  }
+
+  int _budgetValue(String? b) {
+    if (b == null) return 0;
+    if (b.contains('600+')) return 5;
+    if (b.contains('400 - 600')) return 4;
+    if (b.contains('200 - 400')) return 3;
+    if (b.contains('100 - 200')) return 2;
+    if (b.contains('Flexible') || b.contains('Negotiable')) return 1;
+    return 0;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -909,15 +936,94 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     } else {
       list = [..._connectedCases, ...openCases];
     }
+    
+    // Filter by text search query
     final q = _searchCtrl.text.trim().toLowerCase();
-    if (q.isEmpty) return list;
-    return list
-        .where(
-          (c) =>
-              c.title.toLowerCase().contains(q) ||
-              c.categoryLabel.toLowerCase().contains(q),
-        )
-        .toList();
+    if (q.isNotEmpty) {
+      list = list
+          .where(
+            (c) =>
+                c.title.toLowerCase().contains(q) ||
+                c.categoryLabel.toLowerCase().contains(q),
+          )
+          .toList();
+    }
+
+    // Filter by Urgency
+    if (_selectedUrgencyFilter != 'All Urgencies') {
+      final targetUrgency = _selectedUrgencyFilter.toLowerCase();
+      list = list.where((c) => c.urgency.name == targetUrgency).toList();
+    }
+
+    // Filter by Budget
+    if (_selectedBudgetFilter != 'All Budgets') {
+      list = list.where((c) => c.budgetRange == _selectedBudgetFilter).toList();
+    }
+
+    // Sort list
+    if (_selectedSort == 'Urgency (High to Low)') {
+      list.sort((a, b) => _urgencyValue(b.urgency).compareTo(_urgencyValue(a.urgency)));
+    } else if (_selectedSort == 'Urgency (Low to High)') {
+      list.sort((a, b) => _urgencyValue(a.urgency).compareTo(_urgencyValue(b.urgency)));
+    } else if (_selectedSort == 'Budget (High to Low)') {
+      list.sort((a, b) => _budgetValue(b.budgetRange).compareTo(_budgetValue(a.budgetRange)));
+    } else if (_selectedSort == 'Budget (Low to High)') {
+      list.sort((a, b) => _budgetValue(a.budgetRange).compareTo(_budgetValue(b.budgetRange)));
+    }
+
+    return list;
+  }
+
+  Widget _buildFilterDropdown({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            color: Colors.grey[500],
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              icon: Icon(
+                Icons.keyboard_arrow_down,
+                color: Colors.grey[400],
+                size: 16,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              borderRadius: BorderRadius.circular(8),
+              style: GoogleFonts.inter(
+                color: _navy,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              items: items
+                  .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+                  .toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -964,36 +1070,163 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
           ),
           const SizedBox(height: 16),
 
-          // ── Search ──────────────────────────────────────────────────────
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged: (_) => setState(() {}),
-              style: GoogleFonts.inter(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search cases or clients...',
-                hintStyle: GoogleFonts.inter(
-                  color: Colors.grey[400],
-                  fontSize: 13,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: Colors.grey[400],
-                  size: 18,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
+          // ── Search & Filter Controls ─────────────────────────────────────
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                  ),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: (_) => setState(() {}),
+                    style: GoogleFonts.inter(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: 'Search cases or clients...',
+                      hintStyle: GoogleFonts.inter(
+                        color: Colors.grey[400],
+                        fontSize: 13,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: Colors.grey[400],
+                        size: 18,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => setState(() => _showFilters = !_showFilters),
+                child: Container(
+                  height: 48,
+                  width: 48,
+                  decoration: BoxDecoration(
+                    color: _showFilters ? _navy : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _showFilters ? _navy : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.filter_list_rounded,
+                    color: _showFilters ? Colors.white : _navy,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
           ),
+          
+          if (_showFilters) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Filter & Sort Options',
+                        style: GoogleFonts.inter(
+                          color: _navy,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (_selectedUrgencyFilter != 'All Urgencies' ||
+                          _selectedBudgetFilter != 'All Budgets' ||
+                          _selectedSort != 'Default')
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedUrgencyFilter = 'All Urgencies';
+                              _selectedBudgetFilter = 'All Budgets';
+                              _selectedSort = 'Default';
+                            });
+                          },
+                          child: Text(
+                            'Clear All',
+                            style: GoogleFonts.inter(
+                              color: _gold,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildFilterDropdown(
+                    label: 'Sort By',
+                    value: _selectedSort,
+                    items: [
+                      'Default',
+                      'Urgency (High to Low)',
+                      'Urgency (Low to High)',
+                      'Budget (High to Low)',
+                      'Budget (Low to High)',
+                    ],
+                    onChanged: (v) => setState(() => _selectedSort = v ?? 'Default'),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildFilterDropdown(
+                          label: 'Urgency',
+                          value: _selectedUrgencyFilter,
+                          items: ['All Urgencies', 'High', 'Medium', 'Low'],
+                          onChanged: (v) =>
+                              setState(() => _selectedUrgencyFilter = v ?? 'All Urgencies'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildFilterDropdown(
+                          label: 'Budget',
+                          value: _selectedBudgetFilter,
+                          items: [
+                            'All Budgets',
+                            'RM 100 - 200/hr',
+                            'RM 200 - 400/hr',
+                            'RM 400 - 600/hr',
+                            'RM 600+/hr',
+                            'Flexible / Negotiable',
+                          ],
+                          onChanged: (v) =>
+                              setState(() => _selectedBudgetFilter = v ?? 'All Budgets'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
 
           // ── Tab filters + case list (share the live requests stream) ────────
@@ -2032,6 +2265,28 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                           ),
                         ),
                       ),
+                      if (c.budgetRange != null && c.budgetRange!.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Text(
+                            c.budgetRange!,
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF4B5563),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 12),
