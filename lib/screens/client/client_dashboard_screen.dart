@@ -52,7 +52,16 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       final result = await Navigator.of(context).push<CaseModel>(
         MaterialPageRoute(builder: (_) => PostCaseScreen(poster: widget.user)),
       );
-      if (result != null) setState(() {});
+      if (result != null) {
+        setState(() {});
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CaseDetailScreen(caseModel: result, viewer: widget.user),
+            ),
+          );
+        }
+      }
       return;
     }
 
@@ -370,7 +379,16 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     final result = await Navigator.of(context).push<CaseModel>(
       MaterialPageRoute(builder: (_) => PostCaseScreen(poster: widget.user)),
     );
-    if (result != null) setState(() {});
+    if (result != null) {
+      setState(() {});
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CaseDetailScreen(caseModel: result, viewer: widget.user),
+          ),
+        );
+      }
+    }
   }
 
   @override

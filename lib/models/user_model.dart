@@ -80,6 +80,7 @@ class UserModel {
   final String? jurisdiction;
   final String? practiceState;
   final String? practiceCity;
+  final List<String> languages;
 
   const UserModel({
     required this.id,
@@ -107,6 +108,7 @@ class UserModel {
     this.jurisdiction,
     this.practiceState,
     this.practiceCity,
+    this.languages = const [],
   });
 
   // ─── Firestore Deserialization ───────────────────────────────────────────────
@@ -156,6 +158,7 @@ class UserModel {
       if (jurisdiction != null) 'jurisdiction': jurisdiction,
       if (practiceState != null) 'practiceState': practiceState,
       if (practiceCity != null) 'practiceCity': practiceCity,
+      'languages': languages,
     };
   }
 
@@ -202,6 +205,7 @@ class UserModel {
       jurisdiction: map['jurisdiction'] as String?,
       practiceState: map['practiceState'] as String?,
       practiceCity: map['practiceCity'] as String?,
+      languages: _readStringList(map['languages']),
     );
   }
 
@@ -296,6 +300,17 @@ class UserModel {
     return null;
   }
 
+  static List<String> _readStringList(dynamic value) {
+    if (value is List) {
+      return value
+          .map((e) => e?.toString())
+          .where((e) => e != null && e.isNotEmpty)
+          .cast<String>()
+          .toList();
+    }
+    return const [];
+  }
+
   // Convert to Firestore document — replace with:
   // Future<void> save() => FirebaseFirestore.instance.collection('users').doc(id).set(toMap());
   Map<String, dynamic> toMap() {
@@ -323,6 +338,7 @@ class UserModel {
       'jurisdiction': jurisdiction,
       'practiceState': practiceState,
       'practiceCity': practiceCity,
+      'languages': languages,
     };
   }
 

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -61,6 +63,80 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   // `status`, `lawyerId` in sync after withdraw/decline/approve.
   StreamSubscription<CaseModel?>? _caseSub;
 
+  bool _hasTriggeredRecommendation = false;
+  bool _manualRecommendationBusy = false;
+  final Set<String> _clientRequestBusyLawyerIds = {};
+
+  bool _isAuthenticatedCaseOwner(CaseModel caseModel) {
+    if (!_isClient || widget.viewer.id != caseModel.clientId) return false;
+
+    // Tests and dummy-data previews can construct this screen before Firebase
+    // is configured. In the live app, require the Firebase Auth user to match.
+    if (!FirebaseInitializer.isReady) return widget.viewer.id.isNotEmpty;
+
+    final currentUser = FirebaseAuth.instance.currentUser;
+    return currentUser != null && currentUser.uid == widget.viewer.id;
+  }
+
+  bool _shouldGenerateRecommendations(CaseModel caseModel) {
+    final lawyerId = caseModel.lawyerId?.trim();
+    final recommendationStatus = caseModel.recommendationStatus?.trim();
+    final canStartForStatus =
+        recommendationStatus == null ||
+        recommendationStatus.isEmpty ||
+        recommendationStatus == 'failed';
+
+    return _isAuthenticatedCaseOwner(caseModel) &&
+        (lawyerId == null || lawyerId.isEmpty) &&
+        caseModel.status == CaseStatus.pending &&
+        canStartForStatus &&
+        caseModel.lawyerRecommendations.isEmpty;
+  }
+
+  void _triggerRecommendationIfNeeded(CaseModel caseModel) {
+    if (_hasTriggeredRecommendation) return;
+    if (!_shouldGenerateRecommendations(caseModel)) return;
+
+    _hasTriggeredRecommendation = true;
+    unawaited(_triggerLawyerRecommendations(caseModel.id));
+  }
+
+  Future<void> _triggerLawyerRecommendations(
+    String caseId, {
+    bool showFailureSnack = false,
+  }) async {
+    try {
+      await _actionHandler.recommendLawyers(caseId: caseId);
+    } catch (error) {
+      debugPrint('Error triggering recommendations on detail screen: $error');
+
+      if (FirebaseInitializer.isReady) {
+        await CaseRepository()
+            .updateCaseRecommendationStatus(caseId, 'failed')
+            .catchError((err) {
+              debugPrint('Failed to update case recommendation status: $err');
+            });
+      }
+
+      if (showFailureSnack && mounted) {
+        _showSnack(
+          'Could not start AI matching. Please try again.',
+          Colors.redAccent,
+        );
+      }
+    }
+  }
+
+  Future<void> _retryLawyerRecommendations() async {
+    if (_manualRecommendationBusy) return;
+
+    setState(() => _manualRecommendationBusy = true);
+    await _triggerLawyerRecommendations(_case.id, showFailureSnack: true);
+    if (mounted) {
+      setState(() => _manualRecommendationBusy = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -70,8 +146,15 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       _caseSub = CaseRepository().watchCase(_case.id).listen((updated) {
         if (!mounted || updated == null) return;
         setState(() => _case = updated);
+        _triggerRecommendationIfNeeded(updated);
       });
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _triggerRecommendationIfNeeded(_case);
+      }
+    });
   }
 
   @override
@@ -388,6 +471,10 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   if (_isCaseOwner) const SizedBox(height: 20),
                   if (_case.attachments.isNotEmpty) _buildAttachmentsCard(),
                   if (_case.attachments.isNotEmpty) const SizedBox(height: 20),
+                  if (_isCaseOwner) ...[
+                    _buildRecommendationsSection(),
+                    const SizedBox(height: 20),
+                  ],
                   if (!_isLawyer) _buildInterestedLawyersSection(),
                   const SizedBox(height: 20),
                   if (_case.progressPercent > 0) _buildProgressCard(),
@@ -712,6 +799,9 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.2,
+                        value: Platform.environment.containsKey('FLUTTER_TEST')
+                            ? 0.5
+                            : null,
                         color: actionTextColor,
                       ),
                     )
@@ -817,10 +907,17 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             children: [
               _cardHeader(Icons.group_outlined, 'Interested Lawyers'),
               const SizedBox(height: 12),
-              if (snapshot.connectionState == ConnectionState.waiting && allRequests.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Center(child: CircularProgressIndicator()),
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  allRequests.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: Platform.environment.containsKey('FLUTTER_TEST')
+                          ? 0.5
+                          : null,
+                    ),
+                  ),
                 )
               else if (pendingRequests.isEmpty)
                 Padding(
@@ -855,10 +952,10 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   Widget _lawyerTile(ConnectionRequestModel request) {
     final lawyer = request.lawyerSnapshot;
     final isVerified = lawyer.verificationStatus == 'auto_verified';
-    final verificationLabel = isVerified 
-        ? 'Verified' 
+    final verificationLabel = isVerified
+        ? 'Verified'
         : (lawyer.verificationStatus == 'pending' ? 'Pending' : 'Unverified');
-    
+
     return GestureDetector(
       onTap: () => LawyerProfileSheet.show(context, snapshot: lawyer),
       child: Container(
@@ -991,11 +1088,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             // Message Preview
             Text(
               request.message,
-              style: GoogleFonts.inter(
-                color: _navy,
-                fontSize: 13,
-                height: 1.4,
-              ),
+              style: GoogleFonts.inter(color: _navy, fontSize: 13, height: 1.4),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1015,7 +1108,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   ElevatedButton(
                     onPressed: () async {
                       try {
-                        final repo = widget.repository ?? ConnectionRequestRepository();
+                        final repo =
+                            widget.repository ?? ConnectionRequestRepository();
                         await repo.approveRequest(
                           requestId: request.id,
                           client: widget.viewer,
@@ -1027,9 +1121,9 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                         }
                       } catch (e) {
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed: $e')),
-                          );
+                          ScaffoldMessenger.of(
+                            context,
+                          ).showSnackBar(SnackBar(content: Text('Failed: $e')));
                         }
                       }
                     },
@@ -1456,5 +1550,525 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
+  }
+
+  Widget _buildRecommendationsSection() {
+    if (_case.status != CaseStatus.pending &&
+        _case.lawyerRecommendations.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final status = _case.recommendationStatus?.trim();
+    final hasRecommendations = _case.lawyerRecommendations.isNotEmpty;
+
+    if (status == 'generating') {
+      return _card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _cardHeader(Icons.auto_awesome, 'AI Lawyer Recommendations'),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    value: Platform.environment.containsKey('FLUTTER_TEST')
+                        ? 0.5
+                        : null,
+                    valueColor: const AlwaysStoppedAnimation<Color>(_navy),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Finding suitable lawyers...',
+                    style: GoogleFonts.inter(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (status == 'failed' && !hasRecommendations) {
+      return _card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _cardHeader(Icons.auto_awesome, 'AI Lawyer Recommendations'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: Colors.redAccent,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'AI matching could not be completed. You can still review lawyer interests below.',
+                    style: GoogleFonts.inter(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _manualRecommendationBusy
+                    ? null
+                    : _retryLawyerRecommendations,
+                icon: _manualRecommendationBusy
+                    ? SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          value:
+                              Platform.environment.containsKey('FLUTTER_TEST')
+                              ? 0.5
+                              : null,
+                        ),
+                      )
+                    : const Icon(Icons.refresh, size: 16),
+                label: Text(
+                  _manualRecommendationBusy ? 'Trying again...' : 'Try again',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _navy,
+                  side: const BorderSide(color: Color(0xFFE5E7EB)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (status == 'not_enough_lawyers' ||
+        (status == 'completed' && !hasRecommendations)) {
+      return _card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _cardHeader(Icons.auto_awesome, 'AI Lawyer Recommendations'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No suitable lawyers found. Try updating your case details or budget range to match more lawyers.',
+                    style: GoogleFonts.inter(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!hasRecommendations) {
+      return _card(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _cardHeader(Icons.auto_awesome, 'AI Lawyer Recommendations'),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.auto_awesome_outlined, color: _gold, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Recommendations have not been generated yet. AI matching will start automatically when this case is eligible.',
+                    style: GoogleFonts.inter(
+                      color: Colors.grey[600],
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.auto_awesome, color: _gold, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'AI Recommended Lawyers',
+              style: GoogleFonts.inter(
+                color: _navy,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ..._case.lawyerRecommendations.map(
+          (rec) => _recommendedLawyerCard(rec),
+        ),
+      ],
+    );
+  }
+
+  Widget _recommendedLawyerCard(LawyerRecommendation rec) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _navy,
+                ),
+                child: Center(
+                  child: Text(
+                    rec.lawyerName.isNotEmpty
+                        ? rec.lawyerName[0].toUpperCase()
+                        : 'L',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      rec.lawyerName,
+                      style: GoogleFonts.inter(
+                        color: _navy,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      rec.specialization,
+                      style: GoogleFonts.inter(
+                        color: Colors.grey[500],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: Text(
+                  '${rec.matchPercentage}% Match',
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF1D4ED8),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              _recMiniChip(
+                Icons.location_on_outlined,
+                '${rec.practiceCity}, ${rec.practiceState}',
+              ),
+              _recMiniChip(
+                Icons.work_history_outlined,
+                '${rec.yearsExperience} yrs exp',
+              ),
+              if (rec.languages.isNotEmpty)
+                _recMiniChip(
+                  Icons.translate_outlined,
+                  rec.languages.join(', '),
+                ),
+              _recMiniChip(
+                Icons.payments_outlined,
+                'RM ${rec.hourlyRate.toInt()}/hr',
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const SizedBox(height: 14),
+          if (rec.matchReason.trim().isNotEmpty) ...[
+            Text(
+              'Why they fit your case:',
+              style: GoogleFonts.inter(
+                color: _navy,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.check, color: Colors.green, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    rec.matchReason,
+                    style: GoogleFonts.inter(
+                      color: Colors.grey[700],
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
+          SizedBox(
+            width: double.infinity,
+            height: 38,
+            child: FirebaseInitializer.isReady
+                ? StreamBuilder<ConnectionRequestModel?>(
+                    stream: _repo.watchRequest(
+                      caseId: _case.id,
+                      lawyerId: rec.lawyerId,
+                    ),
+                    builder: (context, snapshot) =>
+                        _requestLawyerButton(rec, snapshot.data),
+                  )
+                : _requestLawyerButton(rec, null),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _requestLawyerButton(
+    LawyerRecommendation rec,
+    ConnectionRequestModel? request,
+  ) {
+    final busy = _clientRequestBusyLawyerIds.contains(rec.lawyerId);
+    final isPendingClientRequest =
+        request?.isClientInitiated == true &&
+        request?.status == ConnectionRequestStatus.pending;
+    final isApprovedRequest =
+        request?.status == ConnectionRequestStatus.approved;
+    final isPendingLawyerInterest =
+        request?.isLawyerInitiated == true &&
+        request?.status == ConnectionRequestStatus.pending;
+    final unavailable =
+        _case.status != CaseStatus.pending ||
+        (_case.lawyerId != null && _case.lawyerId!.isNotEmpty);
+
+    final disabled =
+        busy ||
+        isPendingClientRequest ||
+        isApprovedRequest ||
+        isPendingLawyerInterest ||
+        unavailable;
+
+    final label = busy
+        ? 'Sending...'
+        : isPendingClientRequest
+        ? 'Request sent'
+        : isApprovedRequest
+        ? 'Connected'
+        : isPendingLawyerInterest
+        ? 'Lawyer interested'
+        : unavailable
+        ? 'Unavailable'
+        : 'Request this lawyer';
+
+    return ElevatedButton(
+      onPressed: disabled ? null : () => _showRequestLawyerDialog(rec),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _gold,
+        foregroundColor: _navy,
+        disabledBackgroundColor: Colors.grey[200],
+        disabledForegroundColor: Colors.grey[500],
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 13),
+      ),
+    );
+  }
+
+  Widget _recMiniChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFF3F4F6)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: Colors.grey[500]),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showRequestLawyerDialog(LawyerRecommendation rec) async {
+    if (!_isAuthenticatedCaseOwner(_case)) {
+      _showSnack('Only the case owner can request a lawyer.', Colors.redAccent);
+      return;
+    }
+    if (_case.status != CaseStatus.pending ||
+        (_case.lawyerId != null && _case.lawyerId!.isNotEmpty)) {
+      _showSnack('This case is no longer open for requests.', Colors.redAccent);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Request Connection',
+          style: GoogleFonts.inter(color: _navy, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Would you like to request a connection with ${rec.lawyerName}? They will be notified to review your case details.',
+          style: GoogleFonts.inter(color: Colors.grey[700], fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: Colors.grey[500]),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _gold,
+              foregroundColor: _navy,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Send Request',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _clientRequestBusyLawyerIds.add(rec.lawyerId));
+    try {
+      final existingStatus = await _repo.sendClientRequestToLawyer(
+        targetCase: _case,
+        client: widget.viewer,
+        lawyer: rec,
+      );
+      if (!mounted) return;
+
+      switch (existingStatus) {
+        case ConnectionRequestStatus.pending:
+          _showSnack('Request already sent.', Colors.grey[700]!);
+          break;
+        case ConnectionRequestStatus.approved:
+          _showSnack(
+            'This lawyer is already connected to this case.',
+            Colors.grey[700]!,
+          );
+          break;
+        default:
+          _showSnack(
+            'Request sent to ${rec.lawyerName}!',
+            const Color(0xFF2E7D32),
+          );
+      }
+    } on CaseAlreadyConnectedException {
+      if (mounted) {
+        _showSnack(
+          'This case is already connected to a lawyer.',
+          Colors.redAccent,
+        );
+      }
+    } catch (error) {
+      debugPrint('Client lawyer request failed: $error');
+      if (mounted) {
+        _showSnack(
+          'Could not send request. Please try again.',
+          Colors.redAccent,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _clientRequestBusyLawyerIds.remove(rec.lawyerId));
+      }
+    }
   }
 }

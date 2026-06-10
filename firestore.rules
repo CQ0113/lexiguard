@@ -24,7 +24,10 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if isOwner(uid) || isReviewer() || isAdmin();
+      allow read: if isOwner(uid) || isReviewer() || isAdmin() ||
+          (isSignedIn() &&
+            resource.data.role == 'lawyer' &&
+            resource.data.verificationStatus == 'auto_verified');
       allow create: if isOwner(uid);
       allow update: if isOwner(uid) || isReviewer() || isAdmin();
       allow delete: if false;
@@ -93,35 +96,62 @@ service cloud.firestore {
             (resource.data.clientId == request.auth.uid &&
                 resource.data.lawyerId == null &&
               request.resource.data.lawyerId is string &&
-              request.resource.data.status == 'active')
+              request.resource.data.status == 'active') ||
+            // Requested lawyer accepting a client-initiated recommendation request
+            (isVerifiedLawyer() &&
+                resource.data.status == 'pending' &&
+                resource.data.lawyerId == null &&
+                request.resource.data.lawyerId == request.auth.uid &&
+                request.resource.data.status == 'active' &&
+                exists(/databases/$(database)/documents/connection_requests/$(caseId + '_' + request.auth.uid)) &&
+                get(/databases/$(database)/documents/connection_requests/$(caseId + '_' + request.auth.uid)).data.status == 'pending' &&
+                get(/databases/$(database)/documents/connection_requests/$(caseId + '_' + request.auth.uid)).data.initiatedByRole == 'client')
           );
 
       allow delete: if false;
     }
 
     match /connection_requests/{reqId} {
-      allow create: if isSignedIn()
-        && request.auth.uid == request.resource.data.lawyerId
-        && isVerifiedLawyer()
-        && request.resource.data.status == 'pending'
-        && reqId == request.resource.data.caseId + '_' + request.auth.uid
-        // Required fields present
-        && request.resource.data.caseId is string
-        && request.resource.data.clientId is string
-        && request.resource.data.message is string
-        && request.resource.data.message.size() >= 50
-        && request.resource.data.message.size() <= 500
-        && request.resource.data.lawyerSnapshot is map;
+      allow create: if isSignedIn() && (
+        // Lawyer expression of interest
+        (request.auth.uid == request.resource.data.lawyerId
+          && isVerifiedLawyer()
+          && request.resource.data.status == 'pending'
+          && reqId == request.resource.data.caseId + '_' + request.auth.uid
+          && request.resource.data.caseId is string
+          && request.resource.data.clientId is string
+          && request.resource.data.message is string
+          && request.resource.data.message.size() >= 50
+          && request.resource.data.message.size() <= 500
+          && request.resource.data.lawyerSnapshot is map
+          && request.resource.data.initiatedByRole == 'lawyer'
+          && request.resource.data.requestDirection == 'lawyer_to_client') ||
+        // Client request to a recommended lawyer
+        (request.auth.uid == request.resource.data.clientId
+          && request.resource.data.status == 'pending'
+          && reqId == request.resource.data.caseId + '_' + request.resource.data.lawyerId
+          && request.resource.data.caseId is string
+          && request.resource.data.clientId is string
+          && request.resource.data.lawyerId is string
+          && request.resource.data.message is string
+          && request.resource.data.lawyerSnapshot is map
+          && request.resource.data.caseSnapshot is map
+          && request.resource.data.initiatedByRole == 'client'
+          && request.resource.data.requestDirection == 'client_to_lawyer'
+          && get(/databases/$(database)/documents/cases/$(request.resource.data.caseId)).data.clientId == request.auth.uid
+          && get(/databases/$(database)/documents/cases/$(request.resource.data.caseId)).data.status == 'pending')
+      );
 
       allow get: if isSignedIn() && (
-        (resource == null && reqId.matches('.*_' + request.auth.uid)) ||
+        resource == null ||
         (resource != null && 'clientId' in resource.data && request.auth.uid == resource.data.clientId) ||
         (resource != null && 'lawyerId' in resource.data && request.auth.uid == resource.data.lawyerId)
       );
       
       allow list: if isSignedIn() && (
         ('clientId' in resource.data && request.auth.uid == resource.data.clientId) ||
-        ('lawyerId' in resource.data && request.auth.uid == resource.data.lawyerId)
+        ('lawyerId' in resource.data && request.auth.uid == resource.data.lawyerId) ||
+        (isVerifiedLawyer() && resource.data.status == 'pending')
       );
 
       allow update: if isSignedIn() && (
@@ -129,26 +159,56 @@ service cloud.firestore {
         (request.auth.uid == resource.data.clientId
           && resource.data.status == 'pending'
           && request.resource.data.status == 'approved'
-          && request.resource.data.clientReveal is map) ||
+          && request.resource.data.clientReveal is map
+          && (!('initiatedByRole' in resource.data) || resource.data.initiatedByRole == 'lawyer')) ||
         // Client declines
         (request.auth.uid == resource.data.clientId
           && resource.data.status == 'pending'
-          && request.resource.data.status == 'declined') ||
+          && request.resource.data.status == 'declined'
+          && (!('initiatedByRole' in resource.data) || resource.data.initiatedByRole == 'lawyer')) ||
         // Lawyer withdraws
         (request.auth.uid == resource.data.lawyerId
           && resource.data.status == 'pending'
-          && request.resource.data.status == 'withdrawn') ||
+          && request.resource.data.status == 'withdrawn'
+          && (!('initiatedByRole' in resource.data) || resource.data.initiatedByRole == 'lawyer')) ||
         // Lawyer re-sends after withdraw/expire (resets to pending from withdrawn or expired)
         (request.auth.uid == resource.data.lawyerId
           && resource.data.lawyerId == request.resource.data.lawyerId
           && resource.data.status in ['withdrawn', 'expired']
           && request.resource.data.status == 'pending'
-          && isVerifiedLawyer()) ||
+          && isVerifiedLawyer()
+          && request.resource.data.initiatedByRole == 'lawyer') ||
+        // Requested lawyer accepts client-initiated request
+        (request.auth.uid == resource.data.lawyerId
+          && resource.data.status == 'pending'
+          && resource.data.initiatedByRole == 'client'
+          && request.resource.data.status == 'approved') ||
+        // Requested lawyer declines client-initiated request
+        (request.auth.uid == resource.data.lawyerId
+          && resource.data.status == 'pending'
+          && resource.data.initiatedByRole == 'client'
+          && request.resource.data.status == 'declined') ||
+        // Client re-sends a previously terminal client-initiated request
+        (request.auth.uid == resource.data.clientId
+          && resource.data.initiatedByRole == 'client'
+          && resource.data.status in ['declined', 'withdrawn', 'expired']
+          && request.resource.data.status == 'pending'
+          && request.resource.data.initiatedByRole == 'client'
+          && request.resource.data.requestDirection == 'client_to_lawyer'
+          && request.resource.data.clientId == resource.data.clientId
+          && request.resource.data.lawyerId == resource.data.lawyerId
+          && request.resource.data.caseId == resource.data.caseId) ||
         // System auto-expire: client flips sibling pending requests to expired
         // when a client approves one request, the client also writes 'expired' to siblings
         (request.auth.uid == resource.data.clientId
           && resource.data.status == 'pending'
-          && request.resource.data.status == 'expired')
+          && request.resource.data.status == 'expired') ||
+        // Requested lawyer expires sibling pending requests after accepting a case
+        (isVerifiedLawyer()
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'expired'
+          && getAfter(/databases/$(database)/documents/cases/$(resource.data.caseId)).data.status == 'active'
+          && getAfter(/databases/$(database)/documents/cases/$(resource.data.caseId)).data.lawyerId == request.auth.uid)
       );
 
       allow delete: if false;
