@@ -15,12 +15,14 @@ class VaultDocumentRepository {
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _storage = storage ?? FirebaseStorage.instance;
+        _storageOverride = storage;
 
   static const String collectionName = 'vault_documents';
 
   final FirebaseFirestore _firestore;
-  final FirebaseStorage _storage;
+  final FirebaseStorage? _storageOverride;
+
+  FirebaseStorage get _storage => _storageOverride ?? FirebaseStorage.instance;
 
   CollectionReference<Map<String, dynamic>> get _documents =>
       _firestore.collection(collectionName);

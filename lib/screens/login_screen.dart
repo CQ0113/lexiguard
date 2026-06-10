@@ -147,13 +147,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  String _registrationMessageForStatus(VerificationStatus status) {
-    if (status == VerificationStatus.manualReviewRequired) {
-      return 'East Malaysia verification is currently manual review only. Our team will review your profile within 48 hours.';
-    }
-    return 'Verification submitted. You are now in pending sandbox mode.';
-  }
-
   UserModel _buildPendingLawyerFromForm() {
     final jurisdiction = selectedJurisdiction;
     final initialStatus = _initialStatusForJurisdiction(jurisdiction);
@@ -405,12 +398,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isGoogleSubmitting = true);
 
     try {
-      if (!FirebaseInitializer.isReady) {
-        _showInputError('Firebase is not available. Please try again later.');
-        return;
-      }
-
-      // Step 1: OAuth Ã¢â‚¬â€ checks if returning user or brand new.
+      // Step 1: OAuth — checks if returning user or brand new.
       final result = await _authService.authenticateWithGoogle(
         role: selectedRole,
       );
@@ -482,12 +470,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      // If Firebase is completely unavailable, allow local/demo mode.
-      if (!FirebaseInitializer.isReady) {
-        _navigateFallback(role, lawyerProfile);
-        return;
-      }
-
       final syncResult = await _authSyncService.syncSession(
         isLogin: isLogin,
         email: email,
@@ -532,12 +514,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final message = _friendlyAuthError(e.code);
       if (mounted) _showInputError(message);
     } catch (e) {
-      // For non-auth errors (network, Firestore, etc.): allow local fallback
-      // only for registration; login must always use real credentials.
-      if (!isLogin) {
-        _showInputError('Could not reach Firebase. Continuing in local mode.');
-        _navigateFallback(role, lawyerProfile);
-      } else {
+      if (mounted) {
         _showInputError('Could not connect to the server. Please try again.');
       }
     } finally {
@@ -550,10 +527,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _syncIssueMessage(SyncSessionResult result) {
     // Only show issues during registration — login doesn't trigger verification.
     if (isLogin) return null;
-    if (result.firebaseUnavailable) {
-      return 'Firebase is not configured on this device. Your verification will '
-          'not run until the app is set up with valid Firebase credentials.';
-    }
     if (result.verificationCallError != null) {
       return 'Account created, but verification could not start. The Cloud '
           'Function may not be deployed. Contact support if this persists.';

@@ -22,20 +22,12 @@ class CaseActionRepository implements CaseActionHandler {
 
   @override
   Future<void> withdrawCase({required String caseId}) async {
-    if (!FirebaseInitializer.isReady) {
-      throw StateError('Firebase is not configured.');
-    }
-
     final callable = _functions.httpsCallable('withdrawCase');
     await callable.call({'caseId': caseId});
   }
 
   @override
   Future<void> closeCase({required String caseId, String? reason}) async {
-    if (!FirebaseInitializer.isReady) {
-      throw StateError('Firebase is not configured.');
-    }
-
     final payload = <String, dynamic>{'caseId': caseId};
     final trimmed = reason?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {

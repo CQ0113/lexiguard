@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lei_guard/data/dummy_data.dart';
 import 'package:lei_guard/models/user_model.dart';
+import 'package:lei_guard/repositories/connection_request_repository.dart';
 import 'package:lei_guard/screens/shared/case_detail_screen.dart';
 
 void main() {
@@ -33,6 +35,8 @@ void main() {
         CaseDetailScreen(
           caseModel: DummyData.openCases.first,
           viewer: rejectedLawyer,
+          repository: ConnectionRequestRepository(firestore: FakeFirebaseFirestore()),
+          subscribeToLiveUpdates: false,
         ),
       ),
     );

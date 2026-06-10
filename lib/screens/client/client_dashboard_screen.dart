@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
@@ -16,6 +15,8 @@ import '../shared/profile_screen.dart';
 import '../shared/vault_tab_router_screen.dart';
 import 'connection_requests_screen.dart';
 import '../chat/chat_list_screen.dart';
+import '../../repositories/chat_repository.dart';
+import '../../repositories/vault_document_repository.dart';
 import 'client_signature_screen.dart';
 import 'lexibot_chat_screen.dart';
 
@@ -25,7 +26,19 @@ import 'lexibot_chat_screen.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 class ClientDashboardScreen extends StatefulWidget {
   final UserModel user;
-  const ClientDashboardScreen({super.key, required this.user});
+  final CaseRepository? caseRepository;
+  final ConnectionRequestRepository? connectionRequestRepository;
+  final ChatRepository? chatRepository;
+  final VaultDocumentRepository? vaultRepository;
+
+  const ClientDashboardScreen({
+    super.key,
+    required this.user,
+    this.caseRepository,
+    this.connectionRequestRepository,
+    this.chatRepository,
+    this.vaultRepository,
+  });
 
   @override
   State<ClientDashboardScreen> createState() => _ClientDashboardScreenState();
@@ -70,6 +83,34 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
     setState(() => _currentTab = idx);
   }
 
+  void _switchToTab(int index) {
+    if (index == 1 || index < 0 || index >= _tabs.length) return;
+    setState(() => _currentTab = index);
+  }
+
+  void _goHome() {
+    setState(() => _currentTab = 0);
+  }
+
+  void _showNotificationsSnackBar() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'You have no new notifications. You will be alerted when a lawyer connects or shares a document.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: _navy,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+  }
+
   Future<void> _logout() async {
     try {
       await FirebaseAuth.instance.signOut();
@@ -109,53 +150,65 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  // Logo circle
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.shield_outlined,
-                        color: _navy,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'LexiGuard',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                  GestureDetector(
+                    onTap: _goHome,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.shield_outlined,
+                              color: _navy,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'LexiGuard',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const Spacer(),
                   // Notification bell
-                  Stack(
-                    children: [
-                      const Icon(
-                        Icons.notifications_none_outlined,
-                        color: Colors.white70,
-                        size: 22,
-                      ),
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
+                  GestureDetector(
+                    onTap: _showNotificationsSnackBar,
+                    behavior: HitTestBehavior.opaque,
+                    child: Stack(
+                      children: [
+                        const Icon(
+                          Icons.notifications_none_outlined,
+                          color: Colors.white70,
+                          size: 22,
+                        ),
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const SizedBox(width: 16),
                   // Logout
@@ -181,13 +234,23 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
         children: [
           _ClientHomeTab(
             user: widget.user,
-            onOpenLexiBot: () => setState(() => _currentTab = 2),
+            onSwitchTab: _switchToTab,
+            onShowNotifications: _showNotificationsSnackBar,
+            caseRepository: widget.caseRepository,
+            connectionRequestRepository: widget.connectionRequestRepository,
           ), // Maps to index 0 (Home)
-          LexiBotChatScreen(
-            onRequestLawyer: () => _onTabTap(1),
+          ChatListScreen(
+            currentUser: widget.user,
+            repository: widget.chatRepository,
           ), // Maps to index 2 (Chat)
-          VaultTabRouterScreen(user: widget.user), // Maps to index 3 (Vault)
-          ClientSignatureScreen(clientUser: widget.user), // Maps to index 4 (Sign)
+          VaultTabRouterScreen(
+            user: widget.user,
+            repository: widget.vaultRepository,
+          ), // Maps to index 3 (Vault)
+          ClientSignatureScreen(
+            clientUser: widget.user,
+            repository: widget.vaultRepository,
+          ), // Maps to index 4 (Sign)
           ProfileScreen(
             user: widget.user,
             embedded: true,
@@ -256,8 +319,18 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 class _ClientHomeTab extends StatefulWidget {
   final UserModel user;
-  final VoidCallback onOpenLexiBot;
-  const _ClientHomeTab({required this.user, required this.onOpenLexiBot});
+  final ValueChanged<int> onSwitchTab;
+  final VoidCallback onShowNotifications;
+  final CaseRepository? caseRepository;
+  final ConnectionRequestRepository? connectionRequestRepository;
+
+  const _ClientHomeTab({
+    required this.user,
+    required this.onSwitchTab,
+    required this.onShowNotifications,
+    this.caseRepository,
+    this.connectionRequestRepository,
+  });
 
   @override
   State<_ClientHomeTab> createState() => _ClientHomeTabState();
@@ -266,14 +339,15 @@ class _ClientHomeTab extends StatefulWidget {
 class _ClientHomeTabState extends State<_ClientHomeTab> {
   static const _navy = Color(0xFF0B2447);
   static const _gold = Color(0xFFD4AF37);
-  final CaseRepository _caseRepository = CaseRepository();
+  late final CaseRepository _caseRepository;
   late final ConnectionRequestRepository _connRepo;
   late final Stream<List<ConnectionRequestModel>> _pendingStream;
 
   @override
   void initState() {
     super.initState();
-    _connRepo = ConnectionRequestRepository();
+    _caseRepository = widget.caseRepository ?? CaseRepository();
+    _connRepo = widget.connectionRequestRepository ?? ConnectionRequestRepository();
     _pendingStream = _connRepo.streamPendingForClient(widget.user.id);
   }
 
@@ -306,43 +380,6 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
       '1d ago',
     ),
   ];
-
-  CaseModel? get _activeCase {
-    try {
-      return DummyData.cases.firstWhere((c) => c.clientId == widget.user.id);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  List<CaseModel> get _myCases => [
-    ...DummyData.cases.where((c) => c.clientId == widget.user.id),
-    ...DummyData.openCases.where((c) => c.clientId == widget.user.id),
-  ];
-
-  List<CaseModel> _mergeCases(
-    List<CaseModel> primaryCases,
-    List<CaseModel> fallbackCases,
-  ) {
-    final merged = <String, CaseModel>{};
-
-    for (final caseModel in fallbackCases) {
-      merged[caseModel.id] = caseModel;
-    }
-
-    for (final caseModel in primaryCases) {
-      merged[caseModel.id] = caseModel;
-    }
-
-    final cases = merged.values.toList();
-    cases.sort((left, right) => right.createdAt.compareTo(left.createdAt));
-    return cases;
-  }
-
-  bool get _canUseFirestoreCases {
-    if (!FirebaseInitializer.isReady) return false;
-    return FirebaseAuth.instance.currentUser?.uid == widget.user.id;
-  }
 
   CaseModel? _activeCaseFrom(List<CaseModel> cases) {
     for (final caseModel in cases) {
@@ -392,6 +429,66 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     }
   }
 
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message, style: GoogleFonts.inter(color: Colors.white)),
+          backgroundColor: _navy,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+  }
+
+  void _openConnectionRequests() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ConnectionRequestsScreen(
+          client: widget.user,
+          repository: _connRepo,
+        ),
+      ),
+    );
+  }
+
+  void _openLexiBotEntry() {
+    widget.onSwitchTab(2);
+    _showSnackBar(
+      'LexiBot is active in your chat rooms to help draft responses, or will be available here soon!',
+    );
+  }
+
+  VoidCallback _quickActionTap(_QA action) {
+    switch (action.label) {
+      case 'Post Case':
+        return () => _openPostCase();
+      case 'LexiBot':
+        return _openLexiBotEntry;
+      case 'Find Lawyer':
+        return _openConnectionRequests;
+      case 'E-Sign':
+        return () => widget.onSwitchTab(4);
+    }
+    return () => _showSnackBar('${action.label} will be available soon.');
+  }
+
+  VoidCallback _activityTap(_ActivityItem item) {
+    switch (item.title) {
+      case 'Contract reviewed by AI':
+        return () => widget.onSwitchTab(4);
+      case 'New message from Pn. Aishah':
+        return () => widget.onSwitchTab(2);
+      case 'Document shared':
+        return () => widget.onSwitchTab(3);
+    }
+    return () => _showSnackBar('Activity details will be available soon.');
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<ConnectionRequestModel>>(
@@ -409,29 +506,17 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
   }
 
   Widget _buildWithPending(List<ConnectionRequestModel> pendingRequests) {
-    if (!_canUseFirestoreCases) {
-      return _buildContent(
-        myCases: _myCases,
-        activeCase: _activeCase,
-        pendingRequests: pendingRequests,
-      );
-    }
-
     return StreamBuilder<List<CaseModel>>(
       stream: _caseRepository.streamClientCases(clientId: widget.user.id),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return _buildContent(
-            myCases: _myCases,
-            activeCase: _activeCase,
-            pendingRequests: pendingRequests,
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF0B2447)),
           );
         }
 
-        final myCases = _mergeCases(
-          snapshot.data ?? const <CaseModel>[],
-          _myCases,
-        );
+        final myCases = snapshot.data ?? const <CaseModel>[];
         final activeCase = _activeCaseFrom(myCases);
         return _buildContent(
           myCases: myCases,
@@ -461,7 +546,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Selamat Pagi',
+                    'Welcome back',
                     style: GoogleFonts.inter(
                       color: Colors.grey[500],
                       fontSize: 13,
@@ -478,7 +563,8 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                 ],
               ),
               GestureDetector(
-                onTap: () {},
+                onTap: widget.onShowNotifications,
+                behavior: HitTestBehavior.opaque,
                 child: Stack(
                   children: [
                     Icon(
@@ -519,14 +605,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           // ── Pending lawyers banner (gold gradient, from client-dashboard.tsx) ─
           if (pendingCount > 0) ...[
             GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ConnectionRequestsScreen(
-                    client: widget.user,
-                    repository: _connRepo,
-                  ),
-                ),
-              ),
+              onTap: _openConnectionRequests,
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -648,12 +727,18 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
 
           // ── Active Case card (navy, from client-dashboard.tsx) ─────────
           if (activeCase != null) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _navy,
-                borderRadius: BorderRadius.circular(16),
+            GestureDetector(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => CaseDetailScreen(caseModel: activeCase, viewer: widget.user),
+                ),
               ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _navy,
+                  borderRadius: BorderRadius.circular(16),
+                ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -725,7 +810,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                   ),
                 ],
               ),
-            ),
+            )),
             const SizedBox(height: 24),
           ],
 
@@ -746,8 +831,9 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                 onTap: a.label == 'Post Case'
                     ? _openPostCase
                     : a.label == 'LexiBot'
-                    ? widget.onOpenLexiBot
-                    : () {},
+                        ? widget.onOpenLexiBot
+                        : () {},
+                behavior: HitTestBehavior.opaque,
                 child: Column(
                   children: [
                     Container(
@@ -786,12 +872,18 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              Text(
-                'View All',
-                style: GoogleFonts.inter(
-                  color: _gold,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              GestureDetector(
+                onTap: () => _showSnackBar(
+                  'Full activity history will be available soon.',
+                ),
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  'View All',
+                  style: GoogleFonts.inter(
+                    color: _gold,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -813,12 +905,17 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                Text(
-                  'View All',
-                  style: GoogleFonts.inter(
-                    color: _gold,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                GestureDetector(
+                  onTap: () =>
+                      _showSnackBar('Tap any case card to view case details.'),
+                  behavior: HitTestBehavior.opaque,
+                  child: Text(
+                    'View All',
+                    style: GoogleFonts.inter(
+                      color: _gold,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -834,68 +931,72 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
   Widget _activityCard(_ActivityItem item) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: _navy.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(12),
+      child: GestureDetector(
+        onTap: _activityTap(item),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-              child: Icon(item.icon, color: _navy, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _navy.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(item.icon, color: _navy, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: GoogleFonts.inter(
+                        color: _navy,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      item.subtitle,
+                      style: GoogleFonts.inter(
+                        color: Colors.grey[500],
+                        fontSize: 12,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Row(
                 children: [
+                  Icon(Icons.access_time, size: 12, color: Colors.grey[400]),
+                  const SizedBox(width: 3),
                   Text(
-                    item.title,
+                    item.time,
                     style: GoogleFonts.inter(
-                      color: _navy,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[400],
+                      fontSize: 11,
                     ),
-                  ),
-                  Text(
-                    item.subtitle,
-                    style: GoogleFonts.inter(
-                      color: Colors.grey[500],
-                      fontSize: 12,
-                    ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
-            ),
-            Row(
-              children: [
-                Icon(Icons.access_time, size: 12, color: Colors.grey[400]),
-                const SizedBox(width: 3),
-                Text(
-                  item.time,
-                  style: GoogleFonts.inter(
-                    color: Colors.grey[400],
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -982,257 +1083,6 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
         ),
       ),
     );
-  }
-}
-
-// ignore: unused_element
-class _ClientProfileTab extends StatelessWidget {
-  final UserModel user;
-  const _ClientProfileTab({required this.user});
-
-  static const _navy = Color(0xFF0B2447);
-  static const _gold = Color(0xFFD4AF37);
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'My Profile',
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            'Manage your account details and preferences.',
-            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: _navy,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: _gold, width: 2),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _initials(user.name),
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.name,
-                        style: GoogleFonts.inter(
-                          color: _navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        user.email,
-                        style: GoogleFonts.inter(
-                          color: Colors.grey[500],
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _gold.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'CLIENT',
-                    style: GoogleFonts.inter(
-                      color: _gold,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _sectionCard(
-            title: 'Personal information',
-            children: [
-              _profileRow('Full Name', user.name),
-              const SizedBox(height: 8),
-              _profileRow('Email', user.email),
-              const SizedBox(height: 8),
-              _profileRow('Phone', user.phone),
-              const SizedBox(height: 8),
-              _profileRow('Account ID', user.id),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _sectionCard(
-            title: 'Security',
-            children: [
-              _settingRow(
-                Icons.lock_outline,
-                'Change Password',
-                'Recommended monthly',
-              ),
-              const SizedBox(height: 8),
-              _settingRow(
-                Icons.verified_user_outlined,
-                'Two-Factor Authentication',
-                'Not enabled',
-              ),
-              const SizedBox(height: 8),
-              _settingRow(
-                Icons.notifications_none,
-                'Notification Preferences',
-                'Push and email alerts',
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionCard({required String title, required List<Widget> children}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
-    );
-  }
-
-  Widget _profileRow(String label, String value) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 92,
-          child: Text(
-            label,
-            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _settingRow(IconData icon, String title, String subtitle) {
-    return Row(
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: _navy.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 16, color: _navy),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.inter(
-                  color: _navy,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                subtitle,
-                style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-        Icon(Icons.chevron_right, color: Colors.grey[400], size: 18),
-      ],
-    );
-  }
-
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return 'U';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
-        .toUpperCase();
   }
 }
 

@@ -10,7 +10,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../../repositories/vault_document_repository.dart';
-import '../../core/firebase/firebase_initializer.dart';
 
 enum SendContractStep { fillDetails, aiReview }
 
@@ -173,32 +172,21 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
     }
 
     try {
-      if (FirebaseInitializer.isReady) {
-        await _repository.uploadDocumentBytes(
-          bytes: _fileBytes!,
-          fileName: _pickedFile!.name,
-          ownerUserId: widget.lawyer.id,
-          ownerRole: 'lawyer',
-          allowedUserIds: [widget.caseModel.clientId],
-          contentType: _pickedFile!.extension == 'pdf' ? 'application/pdf' : 'application/octet-stream',
-          isContract: true,
-          contractStatus: 'pending_signature',
-          contractType: _contractType,
-          contractTerms: terms,
-          onProgress: (value) {
-            setState(() => _uploadProgress = value);
-          },
-        );
-      } else {
-        // Mock upload progress in local mode
-        for (int i = 1; i <= 10; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 150));
-          if (!mounted) return;
-          setState(() {
-            _uploadProgress = i / 10;
-          });
-        }
-      }
+      await _repository.uploadDocumentBytes(
+        bytes: _fileBytes!,
+        fileName: _pickedFile!.name,
+        ownerUserId: widget.lawyer.id,
+        ownerRole: 'lawyer',
+        allowedUserIds: [widget.caseModel.clientId],
+        contentType: _pickedFile!.extension == 'pdf' ? 'application/pdf' : 'application/octet-stream',
+        isContract: true,
+        contractStatus: 'pending_signature',
+        contractType: _contractType,
+        contractTerms: terms,
+        onProgress: (value) {
+          setState(() => _uploadProgress = value);
+        },
+      );
 
       setState(() {
         _isUploading = false;

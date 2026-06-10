@@ -52,6 +52,7 @@ Module._load = function (request, parent, isMain) {
 const {
   _buildPrompt: buildPrompt,
   _rankByQuestion: rankByQuestion,
+  _toActDetailUrl: toActDetailUrl,
   _MOCK_CORPUS: MOCK_CORPUS,
 } = require("../src/chat/lexibot");
 
@@ -354,6 +355,28 @@ test("top-K result length is capped at min(5, corpus.length)", async () => {
   assert.ok(
     ranked.length <= Math.min(5, MOCK_CORPUS.length),
     `ranked.length ${ranked.length} exceeds cap`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// toActDetailUrl() — map stored PDF URLs to working AGC act pages
+// ---------------------------------------------------------------------------
+console.log("\ntoActDetailUrl()");
+
+test("builds act detail URL from actNo", () => {
+  assert.strictEqual(
+    toActDetailUrl("Act 265"),
+    "https://lom.agc.gov.my/act-detail.php?act=265&language=BI"
+  );
+});
+
+test("extracts act number from legacy PDF sourceUrl when actNo missing", () => {
+  assert.strictEqual(
+    toActDetailUrl(
+      "",
+      "https://lom.agc.gov.my/ilims/upload/portal/akta/outputp/act_137/Act%20137.pdf"
+    ),
+    "https://lom.agc.gov.my/act-detail.php?act=137&language=BI"
   );
 });
 

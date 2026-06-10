@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
@@ -25,7 +24,17 @@ import 'send_contract_screen.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 class LawyerDashboardScreen extends StatefulWidget {
   final UserModel user;
-  const LawyerDashboardScreen({super.key, required this.user});
+  final CaseRepository? caseRepository;
+  final ConnectionRequestRepository? connectionRequestRepository;
+  final ChatRepository? chatRepository;
+
+  const LawyerDashboardScreen({
+    super.key,
+    required this.user,
+    this.caseRepository,
+    this.connectionRequestRepository,
+    this.chatRepository,
+  });
 
   @override
   State<LawyerDashboardScreen> createState() => _LawyerDashboardScreenState();
@@ -36,6 +45,14 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
   static const _gold = Color(0xFFD4AF37);
 
   int _currentTab = 0;
+  late final Stream<List<CaseModel>> _openCasesStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _openCasesStream =
+        (widget.caseRepository ?? CaseRepository()).streamOpenCases();
+  }
 
   // Lawyer tabs (from mobile-shell.tsx lawyerTabs)
   static const _tabs = [
@@ -71,9 +88,21 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
 
   List<Widget> get _verifiedTabs {
     return [
-      _LawyerCRMTab(user: widget.user),
-      _LawyerMyCasesTab(user: widget.user),
-      ChatListScreen(currentUser: widget.user),
+      _LawyerCRMTab(
+        user: widget.user,
+        connectionRequestRepository: widget.connectionRequestRepository,
+        openCasesStream: _openCasesStream,
+        onViewAllLeads: () => setState(() => _currentTab = 1),
+      ),
+      _LawyerMyCasesTab(
+        user: widget.user,
+        caseRepository: widget.caseRepository,
+        connectionRequestRepository: widget.connectionRequestRepository,
+      ),
+      ChatListScreen(
+        currentUser: widget.user,
+        repository: widget.chatRepository,
+      ),
       _PlaceholderTab('Forms', Icons.description_outlined),
       _PlaceholderTab('Docs', Icons.folder_outlined),
       ProfileScreen(user: widget.user, embedded: true),
@@ -115,6 +144,10 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
     );
   }
 
+  void _goHome() {
+    setState(() => _currentTab = 0);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -130,28 +163,37 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.shield_outlined,
-                        color: _navy,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'LexiGuard',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                  GestureDetector(
+                    onTap: _goHome,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.shield_outlined,
+                              color: _navy,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'LexiGuard',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const Spacer(),
@@ -239,7 +281,16 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 class _LawyerCRMTab extends StatelessWidget {
   final UserModel user;
-  const _LawyerCRMTab({required this.user});
+  final ConnectionRequestRepository? connectionRequestRepository;
+  final Stream<List<CaseModel>>? openCasesStream;
+  final VoidCallback? onViewAllLeads;
+
+  const _LawyerCRMTab({
+    required this.user,
+    this.connectionRequestRepository,
+    this.openCasesStream,
+    this.onViewAllLeads,
+  });
 
   static const _navy = Color(0xFF0B2447);
   static const _gold = Color(0xFFD4AF37);
@@ -273,32 +324,6 @@ class _LawyerCRMTab extends StatelessWidget {
       '127 reviews',
       Icons.star_outline,
       Color(0xFFE6A817),
-    ),
-  ];
-
-  // Leads from lawyer-dashboard.tsx exactly
-  static const _leads = [
-    _Lead(
-      'Tan Wei Ming',
-      'Property Dispute — Penang',
-      'Hot Lead',
-      'Today',
-      'high',
-    ),
-    _Lead(
-      'Nurul Izzah',
-      'Divorce Proceedings',
-      'Follow Up',
-      'Yesterday',
-      'medium',
-    ),
-    _Lead('Siva a/l Rajan', 'Employment Termination', 'New', '2d ago', 'low'),
-    _Lead(
-      'Lim Boon Keat',
-      'Criminal Defense — KL',
-      'Hot Lead',
-      '3d ago',
-      'high',
     ),
   ];
 
@@ -385,10 +410,10 @@ class _LawyerCRMTab extends StatelessWidget {
           // ── Pending interest status (blue) ────────────────────────────────
           // Live count from Firestore — hide entirely when zero so we don't
           // show a fake banner when the lawyer has no pending requests.
-          if (FirebaseInitializer.isReady)
-            StreamBuilder<List<ConnectionRequestModel>>(
-              stream: ConnectionRequestRepository().streamForLawyer(user.id),
-              builder: (context, snap) {
+          StreamBuilder<List<ConnectionRequestModel>>(
+            stream: (connectionRequestRepository ?? ConnectionRequestRepository())
+                .streamForLawyer(user.id),
+            builder: (context, snap) {
                 final pendingCount = (snap.data ?? const [])
                     .where(
                       (r) =>
@@ -407,46 +432,82 @@ class _LawyerCRMTab extends StatelessWidget {
               },
             ),
 
-          // ── Stats 2×2 grid ────────────────────────────────────────────────
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.65,
-            children: _stats.map((s) => _statCard(s)).toList(),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Lead Pipeline chart ───────────────────────────────────────────
-          _pipelineChart(),
-          const SizedBox(height: 20),
-
-          // ── Recent Leads ──────────────────────────────────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Recent Leads',
-                style: GoogleFonts.inter(
-                  color: _navy,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+          // ── Stats + Recent Leads (live) ───────────────────────────────────
+          StreamBuilder<List<CaseModel>>(
+            stream: openCasesStream,
+            builder: (context, snap) {
+              final openCases = snap.data ?? const <CaseModel>[];
+              final recentLeads = openCases.take(4).toList();
+              final displayStats = [
+                _Stat(
+                  'Active Leads',
+                  '${openCases.length}',
+                  'in marketplace',
+                  Icons.group_outlined,
+                  const Color(0xFF0B2447),
                 ),
-              ),
-              Text(
-                'View All',
-                style: GoogleFonts.inter(
-                  color: _gold,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+                ..._stats.skip(1),
+              ];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.65,
+                    children: displayStats.map((s) => _statCard(s)).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  _pipelineChart(),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Recent Leads',
+                        style: GoogleFonts.inter(
+                          color: _navy,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: onViewAllLeads,
+                        behavior: HitTestBehavior.opaque,
+                        child: Text(
+                          'View All',
+                          style: GoogleFonts.inter(
+                            color: _gold,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (recentLeads.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          'No open cases yet',
+                          style: GoogleFonts.inter(
+                            color: Colors.grey[400],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ...recentLeads.map((c) => _caseLeadCard(context, c)),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 12),
-          ..._leads.map((l) => _leadCard(l)),
         ],
       ),
     );
@@ -777,124 +838,130 @@ class _LawyerCRMTab extends StatelessWidget {
     );
   }
 
-  Widget _leadCard(_Lead lead) {
+  Widget _caseLeadCard(BuildContext context, CaseModel c) {
+    final urgencyKey = c.urgency == CaseUrgency.high
+        ? 'high'
+        : c.urgency == CaseUrgency.medium
+            ? 'medium'
+            : 'low';
+    final urgencyLabel = c.urgency == CaseUrgency.high
+        ? 'Hot Lead'
+        : c.urgency == CaseUrgency.medium
+            ? 'Follow Up'
+            : 'New';
+    final diff = DateTime.now().difference(c.createdAt);
+    final dateLabel = diff.inDays == 0
+        ? 'Today'
+        : diff.inDays == 1
+            ? 'Yesterday'
+            : '${diff.inDays}d ago';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+      child: GestureDetector(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CaseDetailScreen(caseModel: c, viewer: user),
+          ),
         ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      lead.name,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          c.categoryLabel,
+                          style: GoogleFonts.inter(
+                            color: _navy,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          c.title,
+                          style: GoogleFonts.inter(
+                            color: Colors.grey[500],
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _urgencyBg(urgencyKey),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      urgencyLabel,
                       style: GoogleFonts.inter(
-                        color: _navy,
-                        fontSize: 14,
+                        color: _urgencyFg(urgencyKey),
+                        fontSize: 10,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    Text(
-                      lead.matter,
-                      style: GoogleFonts.inter(
-                        color: Colors.grey[500],
-                        fontSize: 12,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Divider(height: 1, color: Color(0xFFF3F4F6)),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.access_time, size: 12, color: Colors.grey[400]),
+                      const SizedBox(width: 4),
+                      Text(
+                        dateLabel,
+                        style: GoogleFonts.inter(
+                          color: Colors.grey[400],
+                          fontSize: 11,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                    ],
                   ),
-                  decoration: BoxDecoration(
-                    color: _urgencyBg(lead.urgency),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    lead.status,
+                  Text(
+                    'Tap to view →',
                     style: GoogleFonts.inter(
-                      color: _urgencyFg(lead.urgency),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                      color: _gold,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            const Divider(height: 1, color: Color(0xFFF3F4F6)),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.access_time, size: 12, color: Colors.grey[400]),
-                    const SizedBox(width: 4),
-                    Text(
-                      lead.date,
-                      style: GoogleFonts.inter(
-                        color: Colors.grey[400],
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: _navy.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.phone_outlined,
-                        color: _navy,
-                        size: 16,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: _gold.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.chat_bubble_outline,
-                        color: _gold,
-                        size: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
 }
 
 class _IncomingClientRequestsSection extends StatelessWidget {
@@ -1244,7 +1311,14 @@ class _IncomingClientRequestCardState
 // ─────────────────────────────────────────────────────────────────────────────
 class _LawyerMyCasesTab extends StatefulWidget {
   final UserModel user;
-  const _LawyerMyCasesTab({required this.user});
+  final CaseRepository? caseRepository;
+  final ConnectionRequestRepository? connectionRequestRepository;
+
+  const _LawyerMyCasesTab({
+    required this.user,
+    this.caseRepository,
+    this.connectionRequestRepository,
+  });
 
   @override
   State<_LawyerMyCasesTab> createState() => _LawyerMyCasesTabState();
@@ -1257,9 +1331,8 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   String _activeTab = 'all'; // all | active | pending
   final _searchCtrl = TextEditingController();
 
-  // Null when Firebase is not ready (demo-safe mode).
-  ConnectionRequestRepository? _connRepo;
-  CaseRepository? _caseRepo;
+  late final ConnectionRequestRepository _connRepo;
+  late final CaseRepository _caseRepo;
   // Tracks which pending request cards are expanded (to show full message).
   final Set<String> _expandedRequests = {};
 
@@ -1293,10 +1366,8 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   @override
   void initState() {
     super.initState();
-    if (FirebaseInitializer.isReady) {
-      _connRepo = ConnectionRequestRepository();
-      _caseRepo = CaseRepository();
-    }
+    _connRepo = widget.connectionRequestRepository ?? ConnectionRequestRepository();
+    _caseRepo = widget.caseRepository ?? CaseRepository();
   }
 
   @override
@@ -1428,7 +1499,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
         return StreamBuilder<List<CaseModel>>(
           stream: openCasesStream,
           builder: (context, openSnap) {
-            final openCases = openSnap.data ?? DummyData.openCases;
+            final openCases = openSnap.data ?? const <CaseModel>[];
             return _buildBody(context, openCases);
           },
         );
@@ -1778,13 +1849,8 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
   // ── Live pending connection-requests list ─────────────────────────────────
 
   Widget _pendingRequestsList() {
-    // Demo-safe: Firebase not configured.
-    if (_connRepo == null) {
-      return _pendingEmptyState();
-    }
-
     return StreamBuilder<List<ConnectionRequestModel>>(
-      stream: _connRepo!.streamForLawyer(widget.user.id),
+      stream: _connRepo.streamForLawyer(widget.user.id),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Padding(
@@ -2337,7 +2403,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     if (!mounted) return;
 
     try {
-      await _connRepo?.withdrawRequest(req.id);
+      await _connRepo.withdrawRequest(req.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2487,6 +2553,23 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     }
   }
 
+  void _showCallUnavailable(BuildContext context) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            'Direct calling is not available in this demo. Use Chat to contact the client.',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: _navy,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+  }
+
   Widget _myCaseCard(BuildContext context, CaseModel c, bool isConnected, {bool hasApplied = false}) {
     // Status bar config (from lawyer-my-cases.tsx)
     final statusBg = isConnected
@@ -2585,30 +2668,29 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                 ),
               ),
 
-              // Content
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    // Case info
-                    Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: isConnected ? _navy : Colors.grey[200],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: isConnected
-                              ? Center(
-                                  child: Text(
-                                    c.clientId.substring(0, 2).toUpperCase(),
-                                    style: GoogleFonts.inter(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Case info
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: isConnected ? _navy : Colors.grey[200],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: isConnected
+                            ? Center(
+                                child: Text(
+                                  c.clientId.substring(0, c.clientId.length >= 2 ? 2 : c.clientId.length).toUpperCase(),
+                                  style: GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 )
                               : Icon(
@@ -2773,6 +2855,15 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                       ),
                       if (c.budgetRange != null && c.budgetRange!.isNotEmpty) ...[
                         const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => _showCallUnavailable(context),
+                          icon: const Icon(Icons.phone_outlined, size: 15),
+                          label: Text(
+                            'Call',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -3198,20 +3289,6 @@ class _VerificationStatusTab extends StatelessWidget {
           const SizedBox(height: 14),
           OutlinedButton.icon(
             onPressed: () {
-              if (!FirebaseInitializer.isReady) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Reviewer console requires Firebase configuration.',
-                      style: GoogleFonts.inter(color: Colors.white),
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: const Color(0xFFB91C1C),
-                  ),
-                );
-                return;
-              }
-
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const ReviewerConsoleScreen(),
@@ -3328,230 +3405,6 @@ class _VerificationLockedTab extends StatelessWidget {
   }
 }
 
-// ignore: unused_element
-class _LawyerProfileTab extends StatelessWidget {
-  final UserModel user;
-  const _LawyerProfileTab({required this.user});
-
-  static const _navy = Color(0xFF0B2447);
-  static const _gold = Color(0xFFD4AF37);
-
-  String _displayExperience() {
-    final years = user.yearsExperience;
-    if (years == null) return 'Not provided';
-    return years == 1 ? '1 year' : '$years years';
-  }
-
-  String _displayHourlyRate() {
-    final rate = user.hourlyRate;
-    if (rate == null) return 'Not provided';
-    final amount = rate.toStringAsFixed(rate == rate.roundToDouble() ? 0 : 2);
-    return 'RM $amount / hour';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Lawyer Profile',
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(
-            'Your public and professional account details.',
-            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 13),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: _navy,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: _gold, width: 2),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _initials(user.name),
-                      style: GoogleFonts.inter(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user.legalFullName ?? user.name,
-                        style: GoogleFonts.inter(
-                          color: _navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        user.email,
-                        style: GoogleFonts.inter(
-                          color: Colors.grey[500],
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _gold.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'LAWYER',
-                    style: GoogleFonts.inter(
-                      color: _gold,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _sectionCard(
-            title: 'Professional information',
-            children: [
-              _profileRow('Legal Name', user.legalFullName ?? user.name),
-              const SizedBox(height: 8),
-              _profileRow('Bar Number', user.barNumber ?? 'Not provided'),
-              const SizedBox(height: 8),
-              _profileRow('Firm', user.firmName ?? 'Not provided'),
-              const SizedBox(height: 8),
-              _profileRow(
-                'Specialization',
-                user.specialization ?? 'Not provided',
-              ),
-              const SizedBox(height: 8),
-              _profileRow('Experience', _displayExperience()),
-              const SizedBox(height: 8),
-              _profileRow('Hourly Rate', _displayHourlyRate()),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _sectionCard(
-            title: 'Account and verification',
-            children: [
-              _profileRow('Status', user.verificationStatus.label),
-              const SizedBox(height: 8),
-              _profileRow('Jurisdiction', user.jurisdiction ?? 'peninsular'),
-              const SizedBox(height: 8),
-              _profileRow('Email', user.email),
-              const SizedBox(height: 8),
-              _profileRow('Phone', user.phone),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionCard({required String title, required List<Widget> children}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
-    );
-  }
-
-  Widget _profileRow(String label, String value) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 96,
-          child: Text(
-            label,
-            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return 'U';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
-        .toUpperCase();
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared placeholder tab for unimplemented tabs
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3602,7 +3455,3 @@ class _Stat {
   const _Stat(this.label, this.value, this.change, this.icon, this.color);
 }
 
-class _Lead {
-  final String name, matter, status, date, urgency;
-  const _Lead(this.name, this.matter, this.status, this.date, this.urgency);
-}

@@ -10,12 +10,14 @@ class CaseRepository {
     : _cases = (firestore ?? FirebaseFirestore.instance).collection(
         collectionName,
       ),
-      _storage = storage ?? FirebaseStorage.instance;
+      _storageOverride = storage;
 
   static const String collectionName = 'cases';
 
   final CollectionReference<Map<String, dynamic>> _cases;
-  final FirebaseStorage _storage;
+  final FirebaseStorage? _storageOverride;
+
+  FirebaseStorage get _storage => _storageOverride ?? FirebaseStorage.instance;
 
   Future<void> createCase(CaseModel caseModel) {
     return _cases.doc(caseModel.id).set(caseModel.toFirestore());
