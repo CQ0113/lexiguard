@@ -32,6 +32,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool isEditing = false;
   bool _isSaving = false;
 
+  static const List<String> _availableLanguages = [
+    'English',
+    'Malay',
+    'Mandarin',
+    'Tamil',
+    'Cantonese',
+    'Hokkien',
+    'Other',
+  ];
+  late List<String> _selectedLanguages;
+
   late final TextEditingController _fullNameController;
   late final TextEditingController _legalNameController;
   late final TextEditingController _firmController;
@@ -56,6 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _experienceController = TextEditingController();
     _hourlyRateController = TextEditingController();
     _phoneController = TextEditingController();
+    _selectedLanguages = List<String>.from(_user.languages);
     _syncControllers();
   }
 
@@ -88,6 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _experienceController.text = _user.yearsExperience?.toString() ?? '';
     _hourlyRateController.text = _formatNumber(_user.hourlyRate);
     _phoneController.text = _user.phone;
+    _selectedLanguages = List<String>.from(_user.languages);
   }
 
   void _toggleEditing() {
@@ -118,6 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'specialization': _specializationController.text.trim(),
         'yearsExperience': yearsExperience,
         'hourlyRate': hourlyRate,
+        'languages': _selectedLanguages,
       } else
         'name': _fullNameController.text.trim(),
     };
@@ -200,6 +214,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _identityCard(),
                 const SizedBox(height: 14),
                 if (_isLawyer) _lawyerProfessionalCard() else _clientInfoCard(),
+                if (_isLawyer) ...[const SizedBox(height: 14), _languagesCard()],
                 const SizedBox(height: 14),
                 _accountCard(),
                 const SizedBox(height: 14),
@@ -418,6 +433,120 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _languagesCard() {
+    return _sectionCard(
+      title: 'Languages spoken',
+      children: [
+        Text(
+          'Select the languages you can serve clients in.',
+          style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        if (!isEditing)
+          _selectedLanguages.isEmpty
+              ? Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.translate_rounded,
+                          size: 20, color: Colors.grey[400]),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'No languages selected yet — tap edit to add yours.',
+                          style: GoogleFonts.inter(
+                            color: Colors.grey[500],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _selectedLanguages
+                      .map(
+                        (lang) => Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _gold.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: _gold.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_rounded,
+                                  size: 18,
+                                  color: _navy.withValues(alpha: 0.7)),
+                              const SizedBox(width: 8),
+                              Text(
+                                lang,
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _navy,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _availableLanguages.map((lang) {
+              final selected = _selectedLanguages.contains(lang);
+              return FilterChip(
+                label: Text(
+                  lang,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? Colors.white : _navy,
+                  ),
+                ),
+                selected: selected,
+                onSelected: (value) {
+                  setState(() {
+                    if (value) {
+                      _selectedLanguages.add(lang);
+                    } else {
+                      _selectedLanguages.remove(lang);
+                    }
+                  });
+                },
+                selectedColor: _navy,
+                checkmarkColor: _gold,
+                backgroundColor: const Color(0xFFF8FAFC),
+                side: BorderSide(
+                  color: selected ? _navy : const Color(0xFFE5E7EB),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              );
+            }).toList(),
+          ),
+      ],
+    );
+  }
+
   Widget _accountCard() {
     return _sectionCard(
       title: _isLawyer ? 'Account and verification' : 'Account',
@@ -483,6 +612,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _card({required Widget child}) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,

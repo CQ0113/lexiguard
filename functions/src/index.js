@@ -1,13 +1,10 @@
-const {
-  onCall,
-  onRequest,
-  HttpsError,
-} = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
+const { GoogleGenAI } = require("@google/genai");
 
 const {
   lookupMalaysianBarCandidates,
@@ -28,6 +25,7 @@ const { writeAuditLog } = require("./lexibot/audit_log");
 
 initializeApp();
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
+const MAX_RECOMMENDATIONS = 3;
 
 function validateStartPayload(data) {
   if (!data || typeof data !== "object") {
@@ -81,6 +79,133 @@ function normalizeReason(value, maxLength) {
     );
   }
   return trimmed;
+}
+
+function readBudgetCeiling(value) {
+  const numbers = String(value || "")
+    .match(/\d+(?:\.\d+)?/g)
+    ?.map((item) => Number(item))
+    .filter((item) => Number.isFinite(item));
+  if (!numbers || numbers.length === 0) return null;
+  return Math.max(...numbers);
+}
+
+function localRecommendationScore(caseDetails, candidate) {
+  const category = String(caseDetails.category || "").toLowerCase();
+  const title = String(caseDetails.title || "").toLowerCase();
+  const description = String(caseDetails.description || "").toLowerCase();
+  const location = String(caseDetails.location || "").toLowerCase();
+  const specialization = String(candidate.specialization || "").toLowerCase();
+  const practiceState = String(candidate.practiceState || "").toLowerCase();
+  const practiceCity = String(candidate.practiceCity || "").toLowerCase();
+  const budgetCeiling = readBudgetCeiling(caseDetails.budgetRange);
+  const hourlyRate = Number(candidate.hourlyRate) || 0;
+
+  let score = 45;
+  const reasons = [];
+  const concerns = [];
+
+  if (
+    specialization.includes(category) ||
+    title.includes(specialization) ||
+    description.includes(specialization)
+  ) {
+    score += 25;
+    reasons.push("Practice area appears relevant to the case.");
+  }
+
+  if (
+    location &&
+    ((practiceCity && location.includes(practiceCity)) ||
+      (practiceState && location.includes(practiceState)))
+  ) {
+    score += 15;
+    reasons.push("Practice location matches the case location.");
+  }
+
+  const experienceBoost = Math.min(Number(candidate.yearsExperience) || 0, 15);
+  if (experienceBoost > 0) {
+    score += experienceBoost;
+    reasons.push(`${candidate.yearsExperience} years of legal experience.`);
+  }
+
+  if (budgetCeiling != null && hourlyRate > 0) {
+    if (hourlyRate <= budgetCeiling) {
+      score += 10;
+      reasons.push("Hourly rate appears within the stated budget range.");
+    } else {
+      concerns.push("Hourly rate may exceed the stated budget range.");
+    }
+  }
+
+  if (reasons.length === 0) {
+    reasons.push("Profile has enough information for an initial review.");
+  }
+
+  return {
+    matchScore: Math.max(40, Math.min(98, Math.round(score))),
+    matchReasons: reasons.slice(0, 3),
+    possibleConcerns: concerns,
+  };
+}
+
+function safeJsonParseObject(value) {
+  const text = String(value || "").trim();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return {};
+    try {
+      return JSON.parse(match[0]);
+    } catch (_) {
+      return {};
+    }
+  }
+}
+
+function buildFinalRecommendations({ candidates, caseDetails, aiRecommendations }) {
+  const aiByLawyerId = new Map();
+  for (const rec of Array.isArray(aiRecommendations) ? aiRecommendations : []) {
+    const lawyerId = String(rec?.lawyerId || "").trim();
+    if (lawyerId && !aiByLawyerId.has(lawyerId)) {
+      aiByLawyerId.set(lawyerId, rec);
+    }
+  }
+
+  return candidates
+    .map((candidate) => {
+      const aiRec = aiByLawyerId.get(candidate.lawyerId);
+      const localRec = localRecommendationScore(caseDetails, candidate);
+      return {
+        lawyerId: candidate.lawyerId,
+        lawyerName: candidate.name,
+        specialization: candidate.specialization,
+        practiceState: candidate.practiceState,
+        practiceCity: candidate.practiceCity,
+        yearsExperience: candidate.yearsExperience,
+        languages: candidate.languages,
+        hourlyRate: candidate.hourlyRate,
+        matchScore: Math.max(
+          0,
+          Math.min(
+            100,
+            Number(aiRec?.matchScore ?? localRec.matchScore) ||
+              localRec.matchScore,
+          ),
+        ),
+        matchReasons: Array.isArray(aiRec?.matchReasons) &&
+          aiRec.matchReasons.length > 0
+          ? aiRec.matchReasons.slice(0, 3)
+          : localRec.matchReasons,
+        possibleConcerns: Array.isArray(aiRec?.possibleConcerns)
+          ? aiRec.possibleConcerns.slice(0, 2)
+          : localRec.possibleConcerns,
+      };
+    })
+    .sort((left, right) => right.matchScore - left.matchScore)
+    .slice(0, MAX_RECOMMENDATIONS);
 }
 
 exports.startVerification = onCall({ invoker: "public" }, async (request) => {
@@ -287,143 +412,6 @@ exports.reviewVerificationRequest = onCall(
       queueStatus: "resolved",
       verificationStatus,
     };
-  },
-);
-
-exports.askLexiBot = onCall(
-  {
-    invoker: "public",
-    secrets: [geminiApiKey],
-    timeoutSeconds: 300,
-  },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Authentication is required.");
-    }
-
-    const data = request.data || {};
-    const question = String(data.question || "").trim();
-    const conversationId = String(data.conversationId || "").trim() || null;
-    if (!question) {
-      throw new HttpsError("invalid-argument", "question is required.");
-    }
-    if (question.length > 2000) {
-      throw new HttpsError(
-        "invalid-argument",
-        "question must not exceed 2000 characters.",
-      );
-    }
-
-    const db = getFirestore();
-    const configSnapshot = await db.doc("lexibot_config/tenancy_mvp").get();
-    if (!configSnapshot.exists) {
-      throw new HttpsError(
-        "failed-precondition",
-        "LexiBot has not been configured yet.",
-      );
-    }
-    const config = configSnapshot.data();
-    const assessment = assessQuestion(question);
-
-    if (assessment.scopeStatus !== "in_scope") {
-      const result = escalationResponse(assessment);
-      const auditId = await writeAuditLog(db, {
-        uid: request.auth.uid,
-        conversationId,
-        question,
-        assessment,
-        result,
-        config,
-      });
-      return { ...result, auditId };
-    }
-
-    if (config.enabled !== true) {
-      throw new HttpsError(
-        "failed-precondition",
-        "LexiBot is not enabled for client questions yet.",
-      );
-    }
-    if (!config.answerModel || !config.fileSearchStoreName) {
-      throw new HttpsError(
-        "failed-precondition",
-        "LexiBot retrieval configuration is incomplete.",
-      );
-    }
-
-    let grounded;
-    try {
-      grounded = await generateGroundedAnswer({
-        apiKey: geminiApiKey.value(),
-        question,
-        model: config.answerModel,
-        fileSearchStoreName: config.fileSearchStoreName,
-      });
-      if (grounded.status === "answered") {
-        grounded.citations = await resolveApprovedCitations(
-          db,
-          grounded.citations,
-        );
-        if (grounded.citations.length === 0) {
-          grounded.status = "insufficient_sources";
-          grounded.answer = null;
-          grounded.groundingChunkCount = 0;
-        }
-      }
-    } catch (error) {
-      logger.error("LexiBot Gemini request failed", {
-        uid: request.auth.uid,
-        message: error.message,
-      });
-      throw new HttpsError("internal", "LexiBot could not answer right now.");
-    }
-
-    const result =
-      grounded.status === "answered"
-        ? {
-            status: "answered",
-            scopeStatus: assessment.scopeStatus,
-            riskLevel: assessment.riskLevel,
-            answer: grounded.answer,
-            citations: grounded.citations,
-            groundingChunkCount: grounded.groundingChunkCount,
-          }
-        : {
-            status: "insufficient_sources",
-            scopeStatus: assessment.scopeStatus,
-            riskLevel: "medium",
-            answer: {
-              shortAnswer:
-                "I cannot answer this reliably from the approved tenancy sources available.",
-              whatTheSourceSays: "",
-              whatThisMeans:
-                "LexiBot did not retrieve enough approved evidence for a supported answer.",
-              evidenceToKeep: [],
-              whatYouCanDoNext: [
-                "Speak with a qualified Malaysian lawyer about your circumstances.",
-              ],
-              sourcesUsed: [],
-              needALawyer: "Yes, if you need guidance for your situation.",
-            },
-            citations: [],
-            groundingChunkCount: 0,
-          };
-
-    const auditId = await writeAuditLog(db, {
-      uid: request.auth.uid,
-      conversationId,
-      question,
-      assessment,
-      result,
-      config,
-    });
-    logger.info("LexiBot request processed", {
-      uid: request.auth.uid,
-      answerStatus: result.status,
-      groundingChunkCount: result.groundingChunkCount,
-    });
-
-    return { ...result, auditId };
   },
 );
 
@@ -746,3 +734,468 @@ exports.closeCase = onCall({ invoker: "public" }, async (request) => {
 
   return { caseId, status: "closed" };
 });
+exports.askLexiBot = onCall(
+  {
+    invoker: "public",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 300,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication is required.");
+    }
+
+    const data = request.data || {};
+    const question = String(data.question || "").trim();
+    const conversationId = String(data.conversationId || "").trim() || null;
+    if (!question) {
+      throw new HttpsError("invalid-argument", "question is required.");
+    }
+    if (question.length > 2000) {
+      throw new HttpsError(
+        "invalid-argument",
+        "question must not exceed 2000 characters.",
+      );
+    }
+
+    const db = getFirestore();
+    const configSnapshot = await db.doc("lexibot_config/tenancy_mvp").get();
+    if (!configSnapshot.exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        "LexiBot has not been configured yet.",
+      );
+    }
+    const config = configSnapshot.data();
+    const assessment = assessQuestion(question);
+
+    if (assessment.scopeStatus !== "in_scope") {
+      const result = escalationResponse(assessment);
+      const auditId = await writeAuditLog(db, {
+        uid: request.auth.uid,
+        conversationId,
+        question,
+        assessment,
+        result,
+        config,
+      });
+      return { ...result, auditId };
+    }
+
+    if (config.enabled !== true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "LexiBot is not enabled for client questions yet.",
+      );
+    }
+    if (!config.answerModel || !config.fileSearchStoreName) {
+      throw new HttpsError(
+        "failed-precondition",
+        "LexiBot retrieval configuration is incomplete.",
+      );
+    }
+
+    let grounded;
+    try {
+      grounded = await generateGroundedAnswer({
+        apiKey: geminiApiKey.value(),
+        question,
+        responseLanguage: assessment.responseLanguage,
+        model: config.answerModel,
+        fileSearchStoreName: config.fileSearchStoreName,
+      });
+      if (grounded.status === "answered") {
+        grounded.citations = await resolveApprovedCitations(db, grounded.citations);
+        if (grounded.citations.length === 0) {
+          grounded.status = "insufficient_sources";
+          grounded.answer = null;
+          grounded.groundingChunkCount = 0;
+        }
+      }
+    } catch (error) {
+      const status = error?.status || error?.statusCode || null;
+      logger.error("LexiBot Gemini request failed", {
+        uid: request.auth.uid,
+        errorMessage: error?.message || String(error),
+        name: error?.name || null,
+        status,
+        code: error?.code || null,
+        details: error?.details || null,
+        answerModel: config.answerModel,
+        fileSearchStoreName: config.fileSearchStoreName,
+      });
+      if (status === 503) {
+        const result = serviceUnavailableResponse(assessment);
+        const auditId = await writeAuditLog(db, {
+          uid: request.auth.uid,
+          conversationId,
+          question,
+          assessment,
+          result,
+          config,
+        });
+        return { ...result, auditId };
+      }
+      throw new HttpsError("internal", "LexiBot could not answer right now.");
+    }
+
+    const result =
+      grounded.status === "answered"
+        ? {
+            status: "answered",
+            scopeStatus: assessment.scopeStatus,
+            riskLevel: assessment.riskLevel,
+            responseLanguage: assessment.responseLanguage,
+            answer: grounded.answer,
+            citations: grounded.citations,
+            groundingChunkCount: grounded.groundingChunkCount,
+          }
+        : insufficientSourcesResponse(assessment);
+
+    const auditId = await writeAuditLog(db, {
+      uid: request.auth.uid,
+      conversationId,
+      question,
+      assessment,
+      result,
+      config,
+    });
+    logger.info("LexiBot request processed", {
+      uid: request.auth.uid,
+      answerStatus: result.status,
+      groundingChunkCount: result.groundingChunkCount,
+    });
+
+    return { ...result, auditId };
+  },
+);
+
+exports.recommendLawyersForCase = onCall(
+  {
+    invoker: "public",
+    secrets: [geminiApiKey],
+    timeoutSeconds: 120,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication is required.");
+    }
+
+    const data = request.data || {};
+    const caseId = String(data.caseId || "").trim();
+    if (!caseId) {
+      throw new HttpsError("invalid-argument", "caseId is required.");
+    }
+
+    const db = getFirestore();
+    const caseRef = db.collection("cases").doc(caseId);
+    const model = "gemini-2.5-flash";
+    let usedModel = model;
+
+    const reservation = await db.runTransaction(async (tx) => {
+      const caseSnap = await tx.get(caseRef);
+      if (!caseSnap.exists) {
+        throw new HttpsError("not-found", "Case not found.");
+      }
+
+      const caseData = caseSnap.data() || {};
+      if (caseData.clientId !== request.auth.uid) {
+        throw new HttpsError(
+          "permission-denied",
+          "Only the case owner can get recommendations.",
+        );
+      }
+
+      const lawyerId = String(caseData.lawyerId || "").trim();
+      if (lawyerId || caseData.status !== "pending") {
+        throw new HttpsError(
+          "failed-precondition",
+          "Recommendations can only be generated for pending unassigned cases.",
+        );
+      }
+
+      const existingRecommendations = Array.isArray(
+        caseData.lawyerRecommendations,
+      )
+        ? caseData.lawyerRecommendations
+        : [];
+      const recommendationStatus =
+        typeof caseData.recommendationStatus === "string"
+          ? caseData.recommendationStatus.trim()
+          : null;
+
+      if (recommendationStatus === "generating") {
+        return {
+          shouldGenerate: false,
+          status: "generating",
+          recommendations: existingRecommendations,
+        };
+      }
+
+      if (
+        recommendationStatus === "completed" &&
+        existingRecommendations.length > 0
+      ) {
+        return {
+          shouldGenerate: false,
+          status: "completed",
+          recommendations: existingRecommendations,
+        };
+      }
+
+      if (recommendationStatus === "not_enough_lawyers") {
+        return {
+          shouldGenerate: false,
+          status: "not_enough_lawyers",
+          recommendations: [],
+        };
+      }
+
+      const now = FieldValue.serverTimestamp();
+      tx.update(caseRef, {
+        recommendationStatus: "generating",
+        recommendationStartedAt: now,
+        recommendationModel: model,
+        updatedAt: now,
+      });
+
+      return {
+        shouldGenerate: true,
+        caseData,
+      };
+    });
+
+    if (!reservation.shouldGenerate) {
+      return {
+        status: reservation.status,
+        recommendations: reservation.recommendations || [],
+      };
+    }
+
+    const caseData = reservation.caseData;
+
+    try {
+    const lawyersSnap = await db.collection("users")
+      .where("role", "==", "lawyer")
+      .where("verificationStatus", "==", "auto_verified")
+      .get();
+
+    if (lawyersSnap.empty) {
+      const now = FieldValue.serverTimestamp();
+      await caseRef.update({
+        recommendationStatus: "not_enough_lawyers",
+        lawyerRecommendations: [],
+        recommendationGeneratedAt: now,
+        recommendationModel: model,
+        updatedAt: now,
+      });
+      return { status: "not_enough_lawyers", recommendations: [] };
+    }
+
+    const candidates = [];
+    lawyersSnap.forEach((doc) => {
+      const u = doc.data();
+      const lawyerId = doc.id;
+      if (!lawyerId) return;
+
+      candidates.push({
+        lawyerId,
+        name: u.name || "Anonymous Lawyer",
+        specialization: u.specialization || "General Practice",
+        yearsExperience: u.yearsExperience || 0,
+        practiceState: u.practiceState || "",
+        practiceCity: u.practiceCity || "",
+        languages: u.languages || [],
+        hourlyRate: u.hourlyRate || 0,
+        rating: u.rating || 0,
+        verificationStatus: u.verificationStatus || "unsubmitted",
+      });
+    });
+
+    if (candidates.length === 0) {
+      const now = FieldValue.serverTimestamp();
+      await caseRef.update({
+        recommendationStatus: "not_enough_lawyers",
+        lawyerRecommendations: [],
+        recommendationGeneratedAt: now,
+        recommendationModel: model,
+        updatedAt: now,
+      });
+      return { status: "not_enough_lawyers", recommendations: [] };
+    }
+
+    const caseDetails = {
+      caseId,
+      title: caseData.title || "",
+      description: caseData.description || "",
+      category: caseData.category || "",
+      location: caseData.location || "",
+      budgetRange: caseData.budgetRange || "",
+      urgency: caseData.urgency || "",
+    };
+
+    let aiRecommendations = [];
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey.value() });
+
+      const systemInstruction = `
+You are an expert legal matchmaking AI for LexiGuard.
+Your job is to recommend and rank the best-suited lawyers for a client's legal case.
+You must return a structured JSON response only, matching the requested schema.
+Rank the lawyers by suitability, from best match to worst match, returning exactly ${MAX_RECOMMENDATIONS} lawyers when enough candidates are available.
+
+Guidelines for Matching:
+1. Location Match: Compare case location with lawyer's practiceState and practiceCity.
+2. Experience Match: Favor higher yearsExperience, but do not make it the sole factor.
+3. Language Match: Prefer lawyers who speak languages matching the case details or typical local client needs if specified.
+4. Specialization Match: Match lawyer's specialization field with the case category, title, and description.
+5. Budget Fit: Compare the case budgetRange with the lawyer's hourlyRate.
+   - If a lawyer's hourly rate exceeds the budget range, you may still recommend them if they are an exceptional match in location/specialization, but you MUST state this clearly under 'possibleConcerns'.
+   - Do not invent any pricing details if they are missing.
+
+CRITICAL RULES:
+- Do not recommend any lawyerId that is not present in the candidates list.
+- Do not invent or hallucinate any lawyer details (languages, rates, names, experience, locations). Use only the provided lawyer data.
+- The output must be valid JSON only.
+`.trim();
+
+      const userPrompt = `
+Case Details:
+${JSON.stringify(caseDetails, null, 2)}
+
+Lawyer Candidates:
+${JSON.stringify(candidates, null, 2)}
+
+Generate the top ${MAX_RECOMMENDATIONS} recommendations based on the guidelines above.
+`;
+
+      const RECOMMENDATION_SCHEMA = {
+        type: "object",
+        properties: {
+          recommendations: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                lawyerId: { type: "string" },
+                matchScore: { type: "integer" },
+                matchReasons: {
+                  type: "array",
+                  items: { type: "string" }
+                },
+                possibleConcerns: {
+                  type: "array",
+                  items: { type: "string" }
+                }
+              },
+              required: ["lawyerId", "matchScore", "matchReasons", "possibleConcerns"]
+            }
+          }
+        },
+        required: ["recommendations"]
+      };
+
+      const recommendationModels = [
+        model,
+        "gemini-2.5-flash-lite",
+        "gemini-flash-lite-latest",
+      ];
+      let response;
+
+      for (const candidateModel of recommendationModels) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            response = await ai.models.generateContent({
+              model: candidateModel,
+              contents: userPrompt,
+              config: {
+                systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: RECOMMENDATION_SCHEMA,
+              },
+            });
+            usedModel = candidateModel;
+            break;
+          } catch (error) {
+            const status = error?.status || error?.error?.code;
+            const isTransient = status === 429 || status === 503;
+
+            logger.warn("Gemini recommendation attempt failed", {
+              model: candidateModel,
+              attempt: attempt + 1,
+              status,
+              message: error.message,
+            });
+
+            if (isTransient && attempt === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 800));
+            } else {
+              break;
+            }
+          }
+        }
+
+        if (response) break;
+      }
+
+      if (response) {
+        const text = response.text;
+        const parsed = JSON.parse(text || "{}");
+        if (Array.isArray(parsed.recommendations)) {
+          aiRecommendations = parsed.recommendations;
+        }
+      }
+    } catch (error) {
+      logger.warn("Gemini recommendations unavailable; using local scoring", {
+        message: error.message,
+      });
+    }
+
+      if (aiRecommendations.length === 0) {
+        usedModel = "local-scoring-fallback";
+      }
+
+      const slicedRecommendations = buildFinalRecommendations({
+        candidates,
+        caseDetails,
+        aiRecommendations,
+      });
+
+      const now = FieldValue.serverTimestamp();
+      if (slicedRecommendations.length === 0) {
+        await caseRef.update({
+          recommendationStatus: "not_enough_lawyers",
+          lawyerRecommendations: [],
+          recommendationGeneratedAt: now,
+          recommendationModel: usedModel,
+          updatedAt: now,
+        });
+
+        return { status: "not_enough_lawyers", recommendations: [] };
+      }
+
+      await caseRef.update({
+        recommendationStatus: "completed",
+        lawyerRecommendations: slicedRecommendations,
+        recommendationGeneratedAt: now,
+        recommendationModel: usedModel,
+        updatedAt: now,
+      });
+
+      return { status: "completed", recommendations: slicedRecommendations };
+
+    } catch (error) {
+      logger.error("Error generating lawyer recommendations via Gemini:", error);
+
+      const now = FieldValue.serverTimestamp();
+      await caseRef.update({
+        recommendationStatus: "failed",
+        recommendationGeneratedAt: now,
+        recommendationModel: usedModel,
+        updatedAt: now,
+      });
+
+      return { status: "failed", error: error.message };
+    }
+  }
+);

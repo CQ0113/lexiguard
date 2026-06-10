@@ -1,14 +1,19 @@
 const { FieldValue } = require("firebase-admin/firestore");
 
-async function writeAuditLog(
-  db,
-  { uid, conversationId, question, assessment, result, config },
-) {
+async function writeAuditLog(db, {
+  uid,
+  conversationId,
+  question,
+  assessment,
+  result,
+  config,
+}) {
   const ref = db.collection("lexibot_audit_logs").doc();
   await ref.set({
     uid,
     conversationId: conversationId || null,
     question,
+    responseLanguage: assessment.responseLanguage || "en",
     scopeStatus: assessment.scopeStatus,
     riskLevel: assessment.riskLevel,
     answerStatus: result.status,

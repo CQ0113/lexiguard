@@ -9,11 +9,18 @@ import 'package:lei_guard/repositories/connection_request_repository.dart';
 import 'package:lei_guard/screens/shared/case_detail_screen.dart';
 
 class _FakeCaseActionHandler implements CaseActionHandler {
+  final List<String> recommendationCaseIds = [];
+
   @override
   Future<void> withdrawCase({required String caseId}) async {}
 
   @override
   Future<void> closeCase({required String caseId, String? reason}) async {}
+
+  @override
+  Future<void> recommendLawyers({required String caseId}) async {
+    recommendationCaseIds.add(caseId);
+  }
 }
 
 void main() {
@@ -102,5 +109,147 @@ void main() {
 
     expect(find.text('Close case'), findsOneWidget);
     expect(find.text('Withdraw case'), findsNothing);
+  });
+
+  testWidgets('client auto-triggers recommendations once for eligible case', (
+    tester,
+  ) async {
+    const client = UserModel(
+      id: 'client_3',
+      name: 'Client C',
+      email: 'clientc@example.com',
+      phone: '+600000002',
+      role: UserRole.client,
+    );
+    final actionHandler = _FakeCaseActionHandler();
+
+    final pendingCase = CaseModel(
+      id: 'case_3',
+      clientId: client.id,
+      title: 'Needs recommendations',
+      description: 'Pending case description.',
+      category: CaseCategory.commercial,
+      status: CaseStatus.pending,
+      urgency: CaseUrgency.medium,
+      createdAt: DateTime.utc(2026, 5, 3),
+    );
+
+    await tester.pumpWidget(
+      wrap(
+        CaseDetailScreen(
+          caseModel: pendingCase,
+          viewer: client,
+          actionHandler: actionHandler,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(actionHandler.recommendationCaseIds, ['case_3']);
+
+    await tester.pumpWidget(
+      wrap(
+        CaseDetailScreen(
+          caseModel: pendingCase,
+          viewer: client,
+          actionHandler: actionHandler,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(actionHandler.recommendationCaseIds, ['case_3']);
+  });
+
+  testWidgets('client does not auto-trigger while recommendations generate', (
+    tester,
+  ) async {
+    const client = UserModel(
+      id: 'client_4',
+      name: 'Client D',
+      email: 'clientd@example.com',
+      phone: '+600000003',
+      role: UserRole.client,
+    );
+    final actionHandler = _FakeCaseActionHandler();
+
+    final pendingCase = CaseModel(
+      id: 'case_4',
+      clientId: client.id,
+      title: 'Generating recommendations',
+      description: 'Pending case description.',
+      category: CaseCategory.family,
+      status: CaseStatus.pending,
+      urgency: CaseUrgency.low,
+      createdAt: DateTime.utc(2026, 5, 4),
+      recommendationStatus: 'generating',
+    );
+
+    await tester.pumpWidget(
+      wrap(
+        CaseDetailScreen(
+          caseModel: pendingCase,
+          viewer: client,
+          actionHandler: actionHandler,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(actionHandler.recommendationCaseIds, isEmpty);
+    expect(find.text('Finding suitable lawyers...'), findsOneWidget);
+  });
+
+  testWidgets('client does not overwrite completed recommendations', (
+    tester,
+  ) async {
+    const client = UserModel(
+      id: 'client_5',
+      name: 'Client E',
+      email: 'cliente@example.com',
+      phone: '+600000004',
+      role: UserRole.client,
+    );
+    final actionHandler = _FakeCaseActionHandler();
+
+    final pendingCase = CaseModel(
+      id: 'case_5',
+      clientId: client.id,
+      title: 'Completed recommendations',
+      description: 'Pending case description.',
+      category: CaseCategory.property,
+      status: CaseStatus.pending,
+      urgency: CaseUrgency.high,
+      createdAt: DateTime.utc(2026, 5, 5),
+      recommendationStatus: 'completed',
+      lawyerRecommendations: const [
+        LawyerRecommendation(
+          lawyerId: 'lawyer_1',
+          lawyerName: 'Lawyer One',
+          specialization: 'Property',
+          practiceState: 'Selangor',
+          practiceCity: 'Shah Alam',
+          yearsExperience: 8,
+          languages: ['English'],
+          hourlyRate: 250,
+          matchPercentage: 92,
+          matchReason: 'Matches the property case category.',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrap(
+        CaseDetailScreen(
+          caseModel: pendingCase,
+          viewer: client,
+          actionHandler: actionHandler,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(actionHandler.recommendationCaseIds, isEmpty);
+    expect(find.text('Lawyer One'), findsOneWidget);
   });
 }

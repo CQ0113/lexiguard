@@ -18,6 +18,7 @@ import '../chat/chat_list_screen.dart';
 import '../../repositories/chat_repository.dart';
 import '../../repositories/vault_document_repository.dart';
 import 'client_signature_screen.dart';
+import 'lexibot_chat_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT SHELL — matches MobileShell + all client screens from Figma
@@ -65,7 +66,16 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
       final result = await Navigator.of(context).push<CaseModel>(
         MaterialPageRoute(builder: (_) => PostCaseScreen(poster: widget.user)),
       );
-      if (result != null) setState(() {});
+      if (result != null) {
+        setState(() {});
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CaseDetailScreen(caseModel: result, viewer: widget.user),
+            ),
+          );
+        }
+      }
       return;
     }
 
@@ -407,7 +417,16 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     final result = await Navigator.of(context).push<CaseModel>(
       MaterialPageRoute(builder: (_) => PostCaseScreen(poster: widget.user)),
     );
-    if (result != null) setState(() {});
+    if (result != null) {
+      setState(() {});
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CaseDetailScreen(caseModel: result, viewer: widget.user),
+          ),
+        );
+      }
+    }
   }
 
   void _showSnackBar(String message) {
@@ -809,7 +828,11 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: _quickActions.map((a) {
               return GestureDetector(
-                onTap: _quickActionTap(a),
+                onTap: a.label == 'Post Case'
+                    ? _openPostCase
+                    : a.label == 'LexiBot'
+                        ? widget.onOpenLexiBot
+                        : () {},
                 behavior: HitTestBehavior.opaque,
                 child: Column(
                   children: [
@@ -1058,6 +1081,40 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Placeholder for unfinished tabs
+// ─────────────────────────────────────────────────────────────────────────────
+class _PlaceholderTab extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  const _PlaceholderTab(this.label, this.icon);
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 48, color: Colors.grey[300]),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: Colors.grey[400],
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Text(
+            'Coming soon',
+            style: GoogleFonts.inter(color: Colors.grey[300], fontSize: 12),
+          ),
+        ],
       ),
     );
   }

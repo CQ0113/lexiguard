@@ -23,6 +23,7 @@ dependencies:
   dotted_border: ^2.1.0
   google_generative_ai: ^0.2.2
   syncfusion_flutter_pdf: ^33.2.8
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
