@@ -73,8 +73,7 @@ service cloud.firestore {
               request.resource.data.nextHearing is timestamp);
 
       allow update: if isSignedIn() &&
-          request.resource.data.clientId == resource.data.clientId &&
-          request.resource.data.createdAt == resource.data.createdAt && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['clientId', 'createdAt']) && (
             // Original: case owner or assigned lawyer may update freely
             ((resource.data.clientId == request.auth.uid ||
               resource.data.lawyerId == request.auth.uid) &&
@@ -320,6 +319,33 @@ service cloud.firestore {
 
         // Append-only — no edits or deletes.
         allow update, delete: if false;
+      }
+    }
+
+    match /lexibot_config/{configId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Admin SDK only
+    }
+
+    match /legal_sources/{sourceId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Admin SDK only
+
+      match /versions/{versionId} {
+        allow read: if isSignedIn();
+        allow write: if false; // Admin SDK only
+      }
+    }
+
+    match /lexibot_audit_logs/{logId} {
+      allow read, write: if false; // Admin SDK only
+    }
+
+    match /users/{uid}/lexibot_conversations/{conversationId} {
+      allow read, write: if isOwner(uid);
+
+      match /messages/{messageId} {
+        allow read, write: if isOwner(uid);
       }
     }
 

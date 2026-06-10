@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/firebase/firebase_initializer.dart';
 import '../services/lawyer_recommendation_service.dart';
@@ -40,6 +42,15 @@ class CaseActionRepository implements CaseActionHandler {
 
   @override
   Future<void> recommendLawyers({required String caseId}) async {
-    await _recommendationService.recommendLawyersForCase(caseId);
+    try {
+      final callable = _functions.httpsCallable('recommendLawyersForCase');
+      await callable.call({'caseId': caseId}).timeout(
+        const Duration(seconds: 120),
+        onTimeout: () => throw TimeoutException('Lawyer recommendation timed out.'),
+      );
+    } catch (e) {
+      debugPrint('Cloud function recommendLawyersForCase failed: $e. Falling back to local scoring service...');
+      await _recommendationService.recommendLawyersForCase(caseId);
+    }
   }
 }

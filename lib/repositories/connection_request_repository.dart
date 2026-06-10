@@ -379,14 +379,14 @@ class ConnectionRequestRepository {
       final current = ConnectionRequestStatusWire.fromWire(
         requestTxData['status']?.toString(),
       );
-      final freshRequest = ConnectionRequestModel.fromFirestore(reqSnap);
+      final freshRequest = ConnectionRequestModel.fromFirestore(requestTxSnap);
       if (!freshRequest.isLawyerInitiated) {
         throw InvalidStatusTransitionException(
           freshRequest.status,
           ConnectionRequestStatus.approved,
         );
       }
-      if (freshStatus != ConnectionRequestStatus.pending) {
+      if (freshRequest.status != ConnectionRequestStatus.pending) {
         throw InvalidStatusTransitionException(
           current,
           ConnectionRequestStatus.approved,

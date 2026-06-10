@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
@@ -52,6 +54,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   static const Color _navy = Color(0xFF0C1D36);
   static const Color _gold = Color(0xFFCFA92A);
   static const Color _bg = Color(0xFFF8FAFC);
+
+  bool get _isTest => !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
 
   late CaseModel _case;
 
@@ -885,9 +889,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.2,
-                        value: Platform.environment.containsKey('FLUTTER_TEST')
-                            ? 0.5
-                            : null,
+                        value: _isTest ? 0.5 : null,
                         color: actionTextColor,
                       ),
                     )
@@ -999,9 +1001,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   padding: const EdgeInsets.all(16.0),
                   child: Center(
                     child: CircularProgressIndicator(
-                      value: Platform.environment.containsKey('FLUTTER_TEST')
-                          ? 0.5
-                          : null,
+                      value: _isTest ? 0.5 : null,
                     ),
                   ),
                 )
@@ -1666,9 +1666,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    value: Platform.environment.containsKey('FLUTTER_TEST')
-                        ? 0.5
-                        : null,
+                    value: _isTest ? 0.5 : null,
                     valueColor: const AlwaysStoppedAnimation<Color>(_navy),
                   ),
                 ),
@@ -1728,10 +1726,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                         height: 14,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          value:
-                              Platform.environment.containsKey('FLUTTER_TEST')
-                              ? 0.5
-                              : null,
+                          value: _isTest ? 0.5 : null,
                         ),
                       )
                     : const Icon(Icons.refresh, size: 16),

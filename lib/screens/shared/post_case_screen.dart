@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../../repositories/case_repository.dart';
-import '../../repositories/case_action_repository.dart';
 
 // Exact replica of the Figma-exported post-case.tsx
 // Design: #0B2447 navy, #D4AF37 gold, white cards, gray-50 bg
@@ -205,19 +204,6 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       try {
         await _caseRepository.createCase(newCase);
         storedInFirestore = true;
-        if (mounted) {
-          setState(() => _submitStatus = 'Finding suitable lawyers...');
-        }
-        try {
-          await CaseActionRepository().recommendLawyers(caseId: caseId);
-        } catch (error) {
-          debugPrint('Generating recommendations failed: $error');
-          try {
-            await _caseRepository.updateCaseRecommendationStatus(caseId, 'failed');
-          } catch (updateError) {
-            debugPrint('Failed to update recommendation status: $updateError');
-          }
-        }
       } catch (error) {
         for (final attachment in attachmentMetadata) {
           try {
@@ -226,12 +212,12 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
             // The submission error is more useful to surface here.
           }
         }
+        if (mounted) {
+          setState(() => _submitting = false);
+          _showSnack('Case submission failed: $error');
+        }
+        return;
       }
-      if (mounted) {
-        setState(() => _submitting = false);
-        _showSnack('Case submission failed: $error');
-      }
-      return;
     }
 
     if (mounted) {

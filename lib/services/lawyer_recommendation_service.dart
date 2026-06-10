@@ -179,7 +179,7 @@ ${jsonEncode(lawyers)}
         ],
         'generationConfig': {'responseMimeType': 'application/json'},
       }),
-    );
+    ).timeout(const Duration(seconds: 15));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(

@@ -114,6 +114,7 @@ void main() {
   testWidgets('client auto-triggers recommendations once for eligible case', (
     tester,
   ) async {
+    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
     const client = UserModel(
       id: 'client_3',
       name: 'Client C',
@@ -139,7 +140,9 @@ void main() {
         CaseDetailScreen(
           caseModel: pendingCase,
           viewer: client,
+          repository: repo,
           actionHandler: actionHandler,
+          subscribeToLiveUpdates: false,
         ),
       ),
     );
@@ -152,7 +155,9 @@ void main() {
         CaseDetailScreen(
           caseModel: pendingCase,
           viewer: client,
+          repository: repo,
           actionHandler: actionHandler,
+          subscribeToLiveUpdates: false,
         ),
       ),
     );
@@ -164,6 +169,7 @@ void main() {
   testWidgets('client does not auto-trigger while recommendations generate', (
     tester,
   ) async {
+    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
     const client = UserModel(
       id: 'client_4',
       name: 'Client D',
@@ -190,7 +196,9 @@ void main() {
         CaseDetailScreen(
           caseModel: pendingCase,
           viewer: client,
+          repository: repo,
           actionHandler: actionHandler,
+          subscribeToLiveUpdates: false,
         ),
       ),
     );
@@ -203,6 +211,7 @@ void main() {
   testWidgets('client does not overwrite completed recommendations', (
     tester,
   ) async {
+    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
     const client = UserModel(
       id: 'client_5',
       name: 'Client E',
@@ -243,7 +252,9 @@ void main() {
         CaseDetailScreen(
           caseModel: pendingCase,
           viewer: client,
+          repository: repo,
           actionHandler: actionHandler,
+          subscribeToLiveUpdates: false,
         ),
       ),
     );

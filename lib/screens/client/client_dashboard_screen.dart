@@ -505,6 +505,19 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     );
   }
 
+  int _statusSortPriority(CaseStatus status) {
+    switch (status) {
+      case CaseStatus.pending:
+        return 0;
+      case CaseStatus.active:
+        return 1;
+      case CaseStatus.closed:
+        return 2;
+      case CaseStatus.withdrawn:
+        return 3;
+    }
+  }
+
   Widget _buildWithPending(List<ConnectionRequestModel> pendingRequests) {
     return StreamBuilder<List<CaseModel>>(
       stream: _caseRepository.streamClientCases(clientId: widget.user.id),
@@ -516,7 +529,16 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           );
         }
 
-        final myCases = snapshot.data ?? const <CaseModel>[];
+        final myCases = List<CaseModel>.from(snapshot.data ?? const <CaseModel>[]);
+        myCases.sort((a, b) {
+          final priorityA = _statusSortPriority(a.status);
+          final priorityB = _statusSortPriority(b.status);
+          if (priorityA != priorityB) {
+            return priorityA.compareTo(priorityB);
+          }
+          return b.createdAt.compareTo(a.createdAt);
+        });
+
         final activeCase = _activeCaseFrom(myCases);
         return _buildContent(
           myCases: myCases,
@@ -828,11 +850,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: _quickActions.map((a) {
               return GestureDetector(
-                onTap: a.label == 'Post Case'
-                    ? _openPostCase
-                    : a.label == 'LexiBot'
-                        ? widget.onOpenLexiBot
-                        : () {},
+                onTap: _quickActionTap(a),
                 behavior: HitTestBehavior.opaque,
                 child: Column(
                   children: [
@@ -906,8 +924,17 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () =>
-                      _showSnackBar('Tap any case card to view case details.'),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AllCasesScreen(
+                          cases: myCases,
+                          user: widget.user,
+                          caseRepository: _caseRepository,
+                        ),
+                      ),
+                    );
+                  },
                   behavior: HitTestBehavior.opaque,
                   child: Text(
                     'View All',
@@ -1062,17 +1089,35 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: c.status == CaseStatus.active
-                      ? _navy.withValues(alpha: 0.08)
-                      : Colors.grey[100],
+                  color: () {
+                    switch (c.status) {
+                      case CaseStatus.pending:
+                        return const Color(0xFFFEF3C7); // soft amber
+                      case CaseStatus.active:
+                        return const Color(0xFFD1FAE5); // soft green
+                      case CaseStatus.withdrawn:
+                        return const Color(0xFFFEE2E2); // soft red
+                      case CaseStatus.closed:
+                        return const Color(0xFFE5E7EB); // soft gray
+                    }
+                  }(),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  c.status.name.toUpperCase(),
+                  c.status == CaseStatus.active ? 'APPROVED' : c.status.name.toUpperCase(),
                   style: GoogleFonts.inter(
-                    color: c.status == CaseStatus.active
-                        ? _navy
-                        : Colors.grey[500],
+                    color: () {
+                      switch (c.status) {
+                        case CaseStatus.pending:
+                          return const Color(0xFFB45309); // dark amber
+                        case CaseStatus.active:
+                          return const Color(0xFF065F46); // dark green
+                        case CaseStatus.withdrawn:
+                          return const Color(0xFF991B1B); // dark red
+                        case CaseStatus.closed:
+                          return const Color(0xFF374151); // dark gray
+                      }
+                    }(),
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1115,6 +1160,350 @@ class _PlaceholderTab extends StatelessWidget {
             style: GoogleFonts.inter(color: Colors.grey[300], fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ALL CASES SCREEN — Popup Screen with Real-time Stream & Priority Sorting
+// ─────────────────────────────────────────────────────────────────────────────
+class AllCasesScreen extends StatefulWidget {
+  final List<CaseModel> cases;
+  final UserModel user;
+  final CaseRepository caseRepository;
+
+  const AllCasesScreen({
+    super.key,
+    required this.cases,
+    required this.user,
+    required this.caseRepository,
+  });
+
+  @override
+  State<AllCasesScreen> createState() => _AllCasesScreenState();
+}
+
+class _AllCasesScreenState extends State<AllCasesScreen> {
+  static const _navy = Color(0xFF0B2447);
+  static const _gold = Color(0xFFD4AF37);
+  String _selectedFilter = 'all';
+
+  int _statusSortPriority(CaseStatus status) {
+    switch (status) {
+      case CaseStatus.pending:
+        return 0;
+      case CaseStatus.active:
+        return 1;
+      case CaseStatus.closed:
+        return 2;
+      case CaseStatus.withdrawn:
+        return 3;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F2F7),
+      appBar: AppBar(
+        backgroundColor: _navy,
+        foregroundColor: Colors.white,
+        title: Text(
+          'My Cases',
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+            color: Colors.white,
+          ),
+        ),
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          // Filter Chips Row
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth > 720) {
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _filterChip('all', 'All', Icons.all_inbox_rounded),
+                      const SizedBox(width: 12),
+                      _filterChip('pending', 'Pending', Icons.pending_actions_rounded),
+                      const SizedBox(width: 12),
+                      _filterChip('approved', 'Approved', Icons.check_circle_rounded),
+                      const SizedBox(width: 12),
+                      _filterChip('withdrawn', 'Withdrawn', Icons.backspace_rounded),
+                      const SizedBox(width: 12),
+                      _filterChip('closed', 'Closed', Icons.lock_rounded),
+                    ],
+                  );
+                } else {
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        _filterChip('all', 'All', Icons.all_inbox_rounded),
+                        const SizedBox(width: 8),
+                        _filterChip('pending', 'Pending', Icons.pending_actions_rounded),
+                        const SizedBox(width: 8),
+                        _filterChip('approved', 'Approved', Icons.check_circle_rounded),
+                        const SizedBox(width: 8),
+                        _filterChip('withdrawn', 'Withdrawn', Icons.backspace_rounded),
+                        const SizedBox(width: 8),
+                        _filterChip('closed', 'Closed', Icons.lock_rounded),
+                      ],
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+          // Cases Stream Builder
+          Expanded(
+            child: StreamBuilder<List<CaseModel>>(
+              stream: widget.caseRepository.streamClientCases(clientId: widget.user.id),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: _navy),
+                  );
+                }
+
+                var cases = List<CaseModel>.from(snapshot.data ?? const <CaseModel>[]);
+
+                // 1. Sort cases: Priority-based sorting, then by createdAt descending
+                cases.sort((a, b) {
+                  final priorityA = _statusSortPriority(a.status);
+                  final priorityB = _statusSortPriority(b.status);
+                  if (priorityA != priorityB) {
+                    return priorityA.compareTo(priorityB);
+                  }
+                  return b.createdAt.compareTo(a.createdAt);
+                });
+
+                // 2. Filter cases based on chosen chip
+                if (_selectedFilter != 'all') {
+                  cases = cases.where((c) {
+                    if (_selectedFilter == 'pending') {
+                      return c.status == CaseStatus.pending;
+                    } else if (_selectedFilter == 'approved') {
+                      return c.status == CaseStatus.active;
+                    } else if (_selectedFilter == 'withdrawn') {
+                      return c.status == CaseStatus.withdrawn;
+                    } else if (_selectedFilter == 'closed') {
+                      return c.status == CaseStatus.closed;
+                    }
+                    return true;
+                  }).toList();
+                }
+
+                if (cases.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.gavel_outlined, size: 48, color: Colors.grey),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No cases found for this filter.',
+                          style: GoogleFonts.inter(
+                            color: Colors.grey[500],
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  itemCount: cases.length,
+                  itemBuilder: (context, index) {
+                    return _caseCard(cases[index]);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String filter, String label, IconData icon) {
+    final active = _selectedFilter == filter;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedFilter = filter;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? _navy : Colors.white,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: active ? _navy : const Color(0xFFE5E7EB),
+            width: 1.5,
+          ),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: _navy.withValues(alpha: 0.2),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  )
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  )
+                ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: active ? _gold : Colors.grey[500],
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                color: active ? Colors.white : Colors.grey[700],
+                fontSize: 12,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _caseCard(CaseModel c) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GestureDetector(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CaseDetailScreen(caseModel: c, viewer: widget.user),
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _navy.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.gavel_outlined, color: _navy, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      c.title,
+                      style: GoogleFonts.inter(
+                        color: _navy,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      c.categoryLabel,
+                      style: GoogleFonts.inter(
+                        color: Colors.grey[500],
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: () {
+                    switch (c.status) {
+                      case CaseStatus.pending:
+                        return const Color(0xFFFEF3C7); // soft amber
+                      case CaseStatus.active:
+                        return const Color(0xFFD1FAE5); // soft green
+                      case CaseStatus.withdrawn:
+                        return const Color(0xFFFEE2E2); // soft red
+                      case CaseStatus.closed:
+                        return const Color(0xFFE5E7EB); // soft gray
+                    }
+                  }(),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  c.status == CaseStatus.active ? 'APPROVED' : c.status.name.toUpperCase(),
+                  style: GoogleFonts.inter(
+                    color: () {
+                      switch (c.status) {
+                        case CaseStatus.pending:
+                          return const Color(0xFFB45309); // dark amber
+                        case CaseStatus.active:
+                          return const Color(0xFF065F46); // dark green
+                        case CaseStatus.withdrawn:
+                          return const Color(0xFF991B1B); // dark red
+                        case CaseStatus.closed:
+                          return const Color(0xFF374151); // dark gray
+                      }
+                    }(),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

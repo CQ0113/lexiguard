@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/firebase/firebase_initializer.dart';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
@@ -2668,29 +2669,30 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                 ),
               ),
 
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // Case info
-                  Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: isConnected ? _navy : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: isConnected
-                            ? Center(
-                                child: Text(
-                                  c.clientId.substring(0, c.clientId.length >= 2 ? 2 : c.clientId.length).toUpperCase(),
-                                  style: GoogleFonts.inter(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    // Case info
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: isConnected ? _navy : Colors.grey[200],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: isConnected
+                              ? Center(
+                                  child: Text(
+                                    c.clientId.substring(0, c.clientId.length >= 2 ? 2 : c.clientId.length).toUpperCase(),
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 )
                               : Icon(
@@ -2775,30 +2777,30 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                             ),
                           ),
                         ),
+                        if (c.budgetRange != null && c.budgetRange!.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                            ),
+                            child: Text(
+                              c.budgetRange!,
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFF4B5563),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 10),
-                  ],
-
-                  // Action buttons
-                  Row(
-                    children: [
-                      if (isConnected) ...[
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              final roomId = '${c.id}_${widget.user.id}';
-                              _openChatFromCase(context, roomId);
-                            },
-                            icon: const Icon(
-                              Icons.chat_bubble_outline,
-                              size: 15,
-                            ),
-                            label: Text(
-                              'Chat',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
                     const SizedBox(height: 12),
 
                     // Contracts CTA (if connected)
@@ -2853,37 +2855,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                           ),
                         ),
                       ),
-                      if (c.budgetRange != null && c.budgetRange!.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: () => _showCallUnavailable(context),
-                          icon: const Icon(Icons.phone_outlined, size: 15),
-                          label: Text(
-                            'Call',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF3F4F6),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
-                          ),
-                          child: Text(
-                            c.budgetRange!,
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFF4B5563),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
+                      const SizedBox(height: 10),
                     ],
 
                     // Action buttons
@@ -2892,7 +2864,10 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                         if (isConnected) ...[
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: () {},
+                              onPressed: () {
+                                final roomId = '${c.id}_${widget.user.id}';
+                                _openChatFromCase(context, roomId);
+                              },
                               icon: const Icon(
                                 Icons.chat_bubble_outline,
                                 size: 15,
@@ -2916,7 +2891,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                           ),
                           const SizedBox(width: 8),
                           OutlinedButton.icon(
-                            onPressed: () {},
+                            onPressed: () => _showCallUnavailable(context),
                             icon: const Icon(Icons.phone_outlined, size: 15),
                             label: Text(
                               'Call',
@@ -2957,7 +2932,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                                   Text(
                                     'Awaiting Client Approval',
                                     style: GoogleFonts.inter(
-                                      color: const Color(0xFFD97706),
+                                      color: Color(0xFFD97706),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w500,
                                     ),
