@@ -14,6 +14,9 @@ import '../shared/case_detail_screen.dart';
 import '../shared/profile_screen.dart';
 import '../shared/vault_tab_router_screen.dart';
 import 'reviewer_console_screen.dart';
+import '../chat/chat_list_screen.dart';
+import '../chat/chat_room_screen.dart';
+import '../../repositories/chat_repository.dart';
 import 'send_contract_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,7 +73,7 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
     return [
       _LawyerCRMTab(user: widget.user),
       _LawyerMyCasesTab(user: widget.user),
-      _PlaceholderTab('Chat', Icons.chat_bubble_outline_rounded),
+      ChatListScreen(currentUser: widget.user),
       _PlaceholderTab('Forms', Icons.description_outlined),
       _PlaceholderTab('Docs', Icons.folder_outlined),
       ProfileScreen(user: widget.user, embedded: true),
@@ -317,6 +320,37 @@ class _LawyerCRMTab extends StatelessWidget {
   List<CaseModel> get _activeCases =>
       DummyData.cases.where((c) => c.lawyerId == user.id).toList();
 
+  Future<void> _openChat(BuildContext context, String roomId) async {
+    final repo = ChatRepository();
+    try {
+      final room = await repo.ensureRoom(roomId);
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatRoomScreen(
+            currentUser: user,
+            room: room,
+            repository: repo,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open chat: $e',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -419,6 +453,7 @@ class _LawyerCRMTab extends StatelessWidget {
   }
 
   Widget _connectionCard(BuildContext context, CaseModel c) {
+    final roomId = '${c.id}_${user.id}';
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Container(
@@ -509,7 +544,7 @@ class _LawyerCRMTab extends StatelessWidget {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {},
+                    onPressed: () => _openChat(context, roomId),
                     icon: const Icon(Icons.chat_bubble_outline, size: 15),
                     label: Text(
                       'Chat',
@@ -2421,12 +2456,38 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
     );
   }
 
-  Widget _myCaseCard(
-    BuildContext context,
-    CaseModel c,
-    bool isConnected, {
-    bool hasApplied = false,
-  }) {
+  Future<void> _openChatFromCase(BuildContext context, String roomId) async {
+    final repo = ChatRepository();
+    try {
+      final room = await repo.ensureRoom(roomId);
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatRoomScreen(
+            currentUser: widget.user,
+            room: room,
+            repository: repo,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not open chat: $e',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+  }
+
+  Widget _myCaseCard(BuildContext context, CaseModel c, bool isConnected, {bool hasApplied = false}) {
     // Status bar config (from lawyer-my-cases.tsx)
     final statusBg = isConnected
         ? const Color(0xFFF0FDF4)
@@ -2634,6 +2695,28 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 10),
+                  ],
+
+                  // Action buttons
+                  Row(
+                    children: [
+                      if (isConnected) ...[
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              final roomId = '${c.id}_${widget.user.id}';
+                              _openChatFromCase(context, roomId);
+                            },
+                            icon: const Icon(
+                              Icons.chat_bubble_outline,
+                              size: 15,
+                            ),
+                            label: Text(
+                              'Chat',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                     const SizedBox(height: 12),
 
                     // Contracts CTA (if connected)

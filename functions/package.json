@@ -11,10 +11,11 @@
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
     "lint": "echo \"No function lint configured\"",
-    "test": "node --test test/*.js"
+    "test": "node test/lexibot.test.js"
   },
   "dependencies": {
     "@google/genai": "^2.6.0",
+    "dotenv": "^16.4.7",
     "firebase-admin": "^12.7.0",
     "firebase-functions": "^5.1.1"
   }

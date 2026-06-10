@@ -15,6 +15,7 @@ import '../shared/case_detail_screen.dart';
 import '../shared/profile_screen.dart';
 import '../shared/vault_tab_router_screen.dart';
 import 'connection_requests_screen.dart';
+import '../chat/chat_list_screen.dart';
 import 'client_signature_screen.dart';
 import 'lexibot_chat_screen.dart';
 

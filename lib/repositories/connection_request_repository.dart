@@ -366,20 +366,18 @@ class ConnectionRequestRepository {
     final caseRef = _db.collection('cases').doc(caseId);
     final siblingRefs = siblingIds.map((id) => _requests.doc(id)).toList();
 
-    await _db.runTransaction((tx) async {
-      // ── Reads ──────────────────────────────────────────────────────────────
-      final reqSnap = await tx.get(docRef);
-      final caseSnap = await tx.get(caseRef);
+    final now = Timestamp.fromDate(DateTime.now());
+    final reveal = ClientReveal.fromUser(client);
 
-      // Re-read siblings inside transaction.
-      final siblingSnaps = <DocumentSnapshot>[];
-      for (final ref in siblingRefs) {
-        siblingSnaps.add(await tx.get(ref));
+    await _db.runTransaction((tx) async {
+      final requestTxSnap = await tx.get(docRef);
+      if (!requestTxSnap.exists) {
+        throw StateError('Request $requestId does not exist.');
       }
 
-      // Guard: re-check status inside transaction.
-      final freshStatus = ConnectionRequestStatusWire.fromWire(
-        reqSnap.data()?['status']?.toString(),
+      final requestTxData = requestTxSnap.data()!;
+      final current = ConnectionRequestStatusWire.fromWire(
+        requestTxData['status']?.toString(),
       );
       final freshRequest = ConnectionRequestModel.fromFirestore(reqSnap);
       if (!freshRequest.isLawyerInitiated) {
@@ -390,15 +388,16 @@ class ConnectionRequestRepository {
       }
       if (freshStatus != ConnectionRequestStatus.pending) {
         throw InvalidStatusTransitionException(
-          freshStatus,
+          current,
           ConnectionRequestStatus.approved,
         );
       }
 
-      final now = Timestamp.fromDate(DateTime.now());
-      final reveal = ClientReveal.fromUser(client);
+      final caseSnap = await tx.get(caseRef);
+      final siblingSnaps = await Future.wait(
+        siblingRefs.map(tx.get),
+      );
 
-      // ── Writes ─────────────────────────────────────────────────────────────
       // 1. Flip request to approved.
       tx.update(docRef, {
         'status': ConnectionRequestStatus.approved.wireValue,
@@ -408,29 +407,55 @@ class ConnectionRequestRepository {
       });
 
       // 2. Claim the case.
-      final caseUpdate = <String, dynamic>{
-        'lawyerId': lawyerId,
-        'status': 'active',
-      };
       if (caseSnap.exists) {
-        tx.update(caseRef, caseUpdate);
+        tx.update(caseRef, {
+          'lawyerId': lawyerId,
+          'status': 'active',
+        });
       }
 
-      // 3. Expire siblings.
+      // 3. Expire siblings (only if still pending).
       for (final snap in siblingSnaps) {
-        if (snap.exists) {
-          final snapData = snap.data() as Map<String, dynamic>?;
-          final sibStatus = ConnectionRequestStatusWire.fromWire(
-            snapData?['status']?.toString(),
-          );
-          if (sibStatus == ConnectionRequestStatus.pending) {
-            tx.update(snap.reference, {
-              'status': ConnectionRequestStatus.expired.wireValue,
-              'updatedAt': now,
-            });
-          }
-        }
+        if (!snap.exists) continue;
+        final siblingStatus = ConnectionRequestStatusWire.fromWire(
+          snap.data()?['status']?.toString(),
+        );
+        if (siblingStatus != ConnectionRequestStatus.pending) continue;
+        tx.update(snap.reference, {
+          'status': ConnectionRequestStatus.expired.wireValue,
+          'updatedAt': now,
+        });
       }
+
+      // 4. Create (or merge) the chat room.
+      final lawyerSnapshotMap =
+          requestTxData['lawyerSnapshot'] as Map<String, dynamic>? ?? {};
+      final caseTitle = caseSnap.exists
+          ? (caseSnap.data()?['title']?.toString() ?? '')
+          : '';
+      final chatRoomRef = _db.collection('chat_rooms').doc(requestId);
+      tx.set(
+        chatRoomRef,
+        {
+          'id': requestId,
+          'caseId': caseId,
+          'clientId': client.id,
+          'lawyerId': lawyerId,
+          'participants': [client.id, lawyerId],
+          'clientName': reveal.name,
+          'lawyerName': lawyerSnapshotMap['name']?.toString() ?? '',
+          if (lawyerSnapshotMap['avatarUrl'] != null)
+            'lawyerAvatarUrl': lawyerSnapshotMap['avatarUrl'].toString(),
+          'caseTitle': caseTitle,
+          'lastMessageText': '',
+          'lastMessageType': 'text',
+          'lastSenderId': '',
+          'lastMessageAt': now,
+          'createdAt': now,
+          'unreadCounts': {client.id: 0, lawyerId: 0},
+        },
+        SetOptions(merge: true),
+      );
     });
   }
 
