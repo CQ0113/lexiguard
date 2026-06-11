@@ -18,6 +18,7 @@ import '../../repositories/connection_request_repository.dart';
 import '../../widgets/express_interest_sheet.dart';
 import '../chat/chat_room_screen.dart';
 import '../../widgets/lawyer_profile_sheet.dart';
+import '../../services/case_matching_service.dart';
 
 class CaseDetailScreen extends StatefulWidget {
   final CaseModel caseModel;
@@ -36,6 +37,8 @@ class CaseDetailScreen extends StatefulWidget {
   /// When false, the screen renders from [caseModel] only (widget tests).
   final bool subscribeToLiveUpdates;
 
+  final MatchResult? matchResult;
+
   const CaseDetailScreen({
     super.key,
     required this.caseModel,
@@ -44,6 +47,7 @@ class CaseDetailScreen extends StatefulWidget {
     this.actionHandler,
     this.caseRepository,
     this.subscribeToLiveUpdates = true,
+    this.matchResult,
   });
 
   @override
@@ -477,6 +481,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   if (_isLawyer && !widget.viewer.canAccessMarketplace)
                     _buildVerificationLockNotice(),
                   const SizedBox(height: 20),
+                  if (_isLawyer) _buildLawyerMatchAnalysisCard(),
                   _buildDescriptionCard(),
                   const SizedBox(height: 20),
                   _buildDetailsCard(),
@@ -748,6 +753,78 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
               ),
             ],
           ),
+      ],
+    );
+  }
+
+  Widget _buildLawyerMatchAnalysisCard() {
+    final match = widget.matchResult;
+    if (match == null || match.matchPercentage <= 0) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFDF5),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFFDE68A)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.auto_awesome, color: Color(0xFFD97706), size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'AI Match Analysis',
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFF0C1D36),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: Text(
+                      '${match.matchPercentage}% Match',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFFB45309),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                match.matchReason,
+                style: GoogleFonts.inter(
+                  color: Colors.grey[700],
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
       ],
     );
   }

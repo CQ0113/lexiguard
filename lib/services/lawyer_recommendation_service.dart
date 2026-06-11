@@ -166,28 +166,42 @@ ${jsonEncode(lawyers)}
       {'key': apiKey},
     );
 
-    final response = await _httpClient.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'contents': [
-          {
-            'parts': [
-              {'text': prompt},
-            ],
-          },
-        ],
-        'generationConfig': {'responseMimeType': 'application/json'},
-      }),
-    ).timeout(const Duration(seconds: 15));
+    final requestBody = jsonEncode({
+      'contents': [
+        {
+          'parts': [
+            {'text': prompt},
+          ],
+        },
+      ],
+      'generationConfig': {'responseMimeType': 'application/json'},
+    });
 
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    // Retry with exponential backoff for transient errors (503, 429, etc.)
+    const maxAttempts = 3;
+    http.Response? response;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      response = await _httpClient.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: requestBody,
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode >= 200 && response.statusCode < 300) break;
+
+      // Retry on 503 (overloaded) or 429 (rate limited), but not other errors
+      if ((response.statusCode == 503 || response.statusCode == 429) &&
+          attempt < maxAttempts) {
+        await Future<void>.delayed(Duration(seconds: 2 * attempt));
+        continue;
+      }
+
       throw StateError(
         'Gemini API failed with ${response.statusCode}: ${response.body}',
       );
     }
 
-    final payload = jsonDecode(response.body) as Map<String, dynamic>;
+    final payload = jsonDecode(response!.body) as Map<String, dynamic>;
     final text =
         payload['candidates']?[0]?['content']?['parts']?[0]?['text']
             ?.toString() ??
