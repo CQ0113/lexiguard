@@ -14,10 +14,12 @@ import '../shared/case_detail_screen.dart';
 import '../shared/profile_screen.dart';
 import '../shared/vault_tab_router_screen.dart';
 import 'reviewer_console_screen.dart';
+import 'dart:async';
 import '../chat/chat_list_screen.dart';
 import '../chat/chat_room_screen.dart';
 import '../../repositories/chat_repository.dart';
 import 'send_contract_screen.dart';
+import '../../services/case_matching_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LAWYER SHELL — matches MobileShell + all lawyer screens from Figma
@@ -47,12 +49,72 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
 
   int _currentTab = 0;
   late final Stream<List<CaseModel>> _openCasesStream;
+  Map<String, MatchResult> _caseMatches = {};
+  bool _isLoadingMatches = false;
+  List<String> _lastCaseIds = [];
+  StreamSubscription<List<CaseModel>>? _openCasesSubscription;
 
   @override
   void initState() {
     super.initState();
     _openCasesStream =
         (widget.caseRepository ?? CaseRepository()).streamOpenCases();
+    if (_isVerifiedLawyer) {
+      _openCasesSubscription = _openCasesStream.listen((cases) {
+        _calculateMatches(cases);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _openCasesSubscription?.cancel();
+    super.dispose();
+  }
+
+  bool _listsEqual(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  void _calculateMatches(List<CaseModel> openCases) async {
+    if (_isLoadingMatches) return;
+    final caseIds = openCases.map((c) => c.id).toList();
+    if (_listsEqual(caseIds, _lastCaseIds)) return;
+    _lastCaseIds = caseIds;
+
+    if (openCases.isEmpty) {
+      setState(() {
+        _caseMatches = {};
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingMatches = true;
+    });
+
+    try {
+      final matchingService = CaseMatchingService();
+      final results = await matchingService.matchCasesToLawyer(
+        lawyer: widget.user,
+        cases: openCases,
+      );
+      if (!mounted) return;
+      setState(() {
+        _caseMatches = {for (final res in results) res.caseId: res};
+        _isLoadingMatches = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMatches = false;
+      });
+      debugPrint('Error calculating case matches: $e');
+    }
   }
 
   // Lawyer tabs (from mobile-shell.tsx lawyerTabs)
@@ -94,11 +156,15 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
         connectionRequestRepository: widget.connectionRequestRepository,
         openCasesStream: _openCasesStream,
         onViewAllLeads: () => setState(() => _currentTab = 1),
+        caseMatches: _caseMatches,
+        isLoadingMatches: _isLoadingMatches,
       ),
       _LawyerMyCasesTab(
         user: widget.user,
         caseRepository: widget.caseRepository,
         connectionRequestRepository: widget.connectionRequestRepository,
+        caseMatches: _caseMatches,
+        isLoadingMatches: _isLoadingMatches,
       ),
       ChatListScreen(
         currentUser: widget.user,
@@ -285,12 +351,16 @@ class _LawyerCRMTab extends StatelessWidget {
   final ConnectionRequestRepository? connectionRequestRepository;
   final Stream<List<CaseModel>>? openCasesStream;
   final VoidCallback? onViewAllLeads;
+  final Map<String, MatchResult> caseMatches;
+  final bool isLoadingMatches;
 
   const _LawyerCRMTab({
     required this.user,
     this.connectionRequestRepository,
     this.openCasesStream,
     this.onViewAllLeads,
+    this.caseMatches = const {},
+    this.isLoadingMatches = false,
   });
 
   static const _navy = Color(0xFF0B2447);
@@ -862,7 +932,11 @@ class _LawyerCRMTab extends StatelessWidget {
       child: GestureDetector(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => CaseDetailScreen(caseModel: c, viewer: user),
+            builder: (_) => CaseDetailScreen(
+              caseModel: c, 
+              viewer: user,
+              matchResult: caseMatches[c.id],
+            ),
           ),
         ),
         child: Container(
@@ -907,23 +981,80 @@ class _LawyerCRMTab extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _urgencyBg(urgencyKey),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      urgencyLabel,
-                      style: GoogleFonts.inter(
-                        color: _urgencyFg(urgencyKey),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isLoadingMatches)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            'Matching...',
+                            style: GoogleFonts.inter(
+                              color: Colors.grey[500],
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      else if (caseMatches.containsKey(c.id))
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFFDE68A)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.auto_awesome,
+                                size: 10,
+                                color: Color(0xFFD97706),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                '${caseMatches[c.id]!.matchPercentage}% Match',
+                                style: GoogleFonts.inter(
+                                  color: const Color(0xFFB45309),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _urgencyBg(urgencyKey),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          urgencyLabel,
+                          style: GoogleFonts.inter(
+                            color: _urgencyFg(urgencyKey),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -1314,11 +1445,15 @@ class _LawyerMyCasesTab extends StatefulWidget {
   final UserModel user;
   final CaseRepository? caseRepository;
   final ConnectionRequestRepository? connectionRequestRepository;
+  final Map<String, MatchResult> caseMatches;
+  final bool isLoadingMatches;
 
   const _LawyerMyCasesTab({
     required this.user,
     this.caseRepository,
     this.connectionRequestRepository,
+    this.caseMatches = const {},
+    this.isLoadingMatches = false,
   });
 
   @override
@@ -2625,7 +2760,11 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
       child: GestureDetector(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => CaseDetailScreen(caseModel: c, viewer: widget.user),
+            builder: (_) => CaseDetailScreen(
+              caseModel: c, 
+              viewer: widget.user,
+              matchResult: widget.caseMatches[c.id],
+            ),
           ),
         ),
         child: Container(
@@ -2777,6 +2916,59 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                             ),
                           ),
                         ),
+                        if (widget.isLoadingMatches) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              'Matching...',
+                              style: GoogleFonts.inter(
+                                color: Colors.grey[500],
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ] else if (widget.caseMatches.containsKey(c.id)) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFFDE68A)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.auto_awesome,
+                                  size: 10,
+                                  color: Color(0xFFD97706),
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  '${widget.caseMatches[c.id]!.matchPercentage}% Match',
+                                  style: GoogleFonts.inter(
+                                    color: const Color(0xFFB45309),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         if (c.budgetRange != null && c.budgetRange!.isNotEmpty) ...[
                           const SizedBox(width: 8),
                           Container(
@@ -2949,6 +3141,7 @@ class _LawyerMyCasesTabState extends State<_LawyerMyCasesTab> {
                                   builder: (_) => CaseDetailScreen(
                                     caseModel: c,
                                     viewer: widget.user,
+                                    matchResult: widget.caseMatches[c.id],
                                   ),
                                 ),
                               ),
