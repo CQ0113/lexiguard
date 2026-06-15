@@ -64,7 +64,7 @@ void main() {
         .where((c) {
           final deco = c.decoration;
           if (deco is BoxDecoration) {
-            return deco.color == const Color(0xFFF0F0F5);
+            return deco.color == const Color(0xFFF1F5F9);
           }
           return false;
         })
@@ -232,6 +232,71 @@ void main() {
     expect(find.text('[attachment]'), findsNothing);
   });
 
+  // ── Expiring link message ─────────────────────────────────────────────────
+
+  testWidgets('renders active expiring secure link with lock icon and countdown', (
+    tester,
+  ) async {
+    final expiringMsg = ChatMessage(
+      id: 'msg_expiring_active',
+      roomId: 'case_1_lawyer_1',
+      senderId: 'lawyer_1',
+      senderRole: UserRole.lawyer,
+      type: MessageType.text,
+      text: '🔒 Secure Expiring Link...',
+      createdAt: DateTime.now(),
+      expiresAt: DateTime.now().add(const Duration(hours: 2)),
+      attachmentName: 'confidential_agreement.pdf',
+      attachmentDownloadUrl: 'https://fake.storage/confidential.pdf',
+    );
+
+    await tester.pumpWidget(
+      wrap(MessageBubble(message: expiringMsg, isOwn: false)),
+    );
+    await tester.pump();
+
+    // Title and document name should be visible
+    expect(find.text('Secure Expiring Link'), findsOneWidget);
+    expect(find.text('confidential_agreement.pdf'), findsOneWidget);
+
+    // Timer text containing duration left should be visible (e.g. "1h 59m 59s left")
+    expect(find.textContaining('left'), findsOneWidget);
+    expect(find.textContaining('1h 59m'), findsOneWidget);
+
+    // Lock clock icon should be present
+    expect(find.byIcon(Icons.lock_clock_outlined), findsOneWidget);
+  });
+
+  testWidgets('renders expired secure link with expired message and disabled tap', (
+    tester,
+  ) async {
+    final expiredMsg = ChatMessage(
+      id: 'msg_expiring_expired',
+      roomId: 'case_1_lawyer_1',
+      senderId: 'lawyer_1',
+      senderRole: UserRole.lawyer,
+      type: MessageType.text,
+      text: '🔒 Secure Expiring Link...',
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+      expiresAt: DateTime.now().subtract(const Duration(hours: 1)),
+      attachmentName: 'expired_agreement.pdf',
+      attachmentDownloadUrl: 'https://fake.storage/expired.pdf',
+    );
+
+    await tester.pumpWidget(
+      wrap(MessageBubble(message: expiredMsg, isOwn: true)),
+    );
+    await tester.pump();
+
+    // Expired Title should be visible
+    expect(find.text('Expired Secure Link'), findsOneWidget);
+    expect(find.text('expired_agreement.pdf'), findsOneWidget);
+    expect(find.text('Expired'), findsOneWidget);
+
+    // Lock outline icon should be present
+    expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+  });
+
   // ── Long-press timestamp ──────────────────────────────────────────────────
 
   testWidgets('long-press on bubble toggles timestamp visibility', (
@@ -250,8 +315,12 @@ void main() {
     // Timestamp should not be visible initially.
     expect(find.text(expectedTimestamp), findsNothing);
 
-    // Long-press the bubble.
+    // Long-press the bubble to open the options sheet.
     await tester.longPress(find.byType(GestureDetector).first);
+    await tester.pumpAndSettle();
+
+    // Tap the 'Message Details' option in the modal bottom sheet.
+    await tester.tap(find.text('Message Details'));
     await tester.pumpAndSettle();
 
     // Timestamp should now be visible.

@@ -20,6 +20,8 @@ import '../chat/chat_room_screen.dart';
 import '../../repositories/chat_repository.dart';
 import 'send_contract_screen.dart';
 import '../../services/case_matching_service.dart';
+import '../shared/dynamic_legal_form_page.dart';
+import '../shared/legal_template_library_page.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LAWYER SHELL — matches MobileShell + all lawyer screens from Figma
@@ -170,7 +172,7 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
         currentUser: widget.user,
         repository: widget.chatRepository,
       ),
-      _PlaceholderTab('Forms', Icons.description_outlined),
+      const LegalTemplateLibraryPage(embedded: true),
       _PlaceholderTab('Docs', Icons.folder_outlined),
       ProfileScreen(user: widget.user, embedded: true),
     ];

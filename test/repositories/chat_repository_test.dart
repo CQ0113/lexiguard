@@ -289,4 +289,65 @@ void main() {
       expect(counts[_clientId], 0);
     });
   });
+
+  // ── deleteMessage / editMessage ─────────────────────────────────────────────
+
+  group('deleteMessage and editMessage', () {
+    test('deleteMessage removes the message document from the subcollection', () async {
+      await _seedRoom(fakeDb);
+
+      final ref = fakeDb.collection('chat_rooms').doc(_roomId).collection('messages');
+      await ref.doc('m1').set({
+        'id': 'm1',
+        'roomId': _roomId,
+        'senderId': _clientId,
+        'senderRole': 'client',
+        'type': 'text',
+        'text': 'Initial text',
+        'createdAt': DateTime.utc(2026, 5, 10),
+      });
+
+      // Assert exists first
+      var snap = await ref.doc('m1').get();
+      expect(snap.exists, true);
+
+      // Delete
+      await repo.deleteMessage(roomId: _roomId, messageId: 'm1');
+
+      // Assert removed
+      snap = await ref.doc('m1').get();
+      expect(snap.exists, false);
+    });
+
+    test('editMessage updates the text content of the message document', () async {
+      await _seedRoom(fakeDb);
+
+      final ref = fakeDb.collection('chat_rooms').doc(_roomId).collection('messages');
+      await ref.doc('m1').set({
+        'id': 'm1',
+        'roomId': _roomId,
+        'senderId': _clientId,
+        'senderRole': 'client',
+        'type': 'text',
+        'text': 'Initial text',
+        'createdAt': DateTime.utc(2026, 5, 10),
+      });
+
+      // Edit
+      await repo.editMessage(roomId: _roomId, messageId: 'm1', newText: '  Edited text  ');
+
+      // Assert text updated and trimmed
+      final snap = await ref.doc('m1').get();
+      expect(snap.data()?['text'], 'Edited text');
+    });
+
+    test('editMessage throws ArgumentError if newText is empty or whitespace', () async {
+      await _seedRoom(fakeDb);
+
+      await expectLater(
+        repo.editMessage(roomId: _roomId, messageId: 'm1', newText: '   '),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+  });
 }

@@ -39,9 +39,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final Color primaryBlue = const Color(0xFF0C1D36);
   final Color goldAccent = const Color(0xFFCFA92A);
   final FirebaseAuthSyncService _authSyncService = FirebaseAuthSyncService();
-  final UserRepository _userRepository = UserRepository();
-  final LawyerProfileRepository _lawyerProfileRepository =
-      LawyerProfileRepository();
+  
+  UserRepository? _userRepositoryInstance;
+  UserRepository get _userRepository => _userRepositoryInstance ??= UserRepository();
+
+  LawyerProfileRepository? _lawyerProfileRepositoryInstance;
+  LawyerProfileRepository get _lawyerProfileRepository =>
+      _lawyerProfileRepositoryInstance ??= LawyerProfileRepository();
+
   // Lazy — defers FirebaseAuth.instance until Firebase is confirmed ready.
   AuthService? _authServiceInstance;
   AuthService get _authService => _authServiceInstance ??= AuthService();

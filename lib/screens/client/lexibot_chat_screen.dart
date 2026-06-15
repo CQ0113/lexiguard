@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../repositories/lexibot_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -11,11 +13,15 @@ import '../../services/lexibot_service.dart';
 class LexiBotChatScreen extends StatefulWidget {
   const LexiBotChatScreen({
     super.key,
+    this.conversationId,
+    this.repository,
     LexiBotClient? client,
     VoidCallback? onRequestLawyer,
   }) : _client = client,
        _onRequestLawyer = onRequestLawyer;
 
+  final String? conversationId;
+  final LexiBotRepository? repository;
   final LexiBotClient? _client;
   final VoidCallback? _onRequestLawyer;
 
@@ -31,6 +37,7 @@ class _LexiBotChatScreenState extends State<LexiBotChatScreen> {
   final ScrollController _scrollController = ScrollController();
   late final LexiBotClient _client;
   late final String _conversationId;
+  late final LexiBotRepository _repo;
   final List<_ChatMessage> _messages = const [
     _ChatMessage.notice(
       'I answer general Peninsular Malaysia residential tenancy questions '
@@ -41,11 +48,28 @@ class _LexiBotChatScreenState extends State<LexiBotChatScreen> {
   ].toList();
   bool _isSending = false;
 
+  bool get _useHistory {
+    try {
+      return FirebaseAuth.instance.currentUser != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String get _userId {
+    try {
+      return FirebaseAuth.instance.currentUser?.uid ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _client = widget._client ?? LexiBotService();
-    _conversationId =
+    _repo = widget.repository ?? LexiBotRepository();
+    _conversationId = widget.conversationId ??
         'flutter-${DateTime.now().microsecondsSinceEpoch.toString()}';
   }
 
@@ -60,45 +84,97 @@ class _LexiBotChatScreenState extends State<LexiBotChatScreen> {
     final question = _questionController.text.trim();
     if (question.isEmpty || _isSending) return;
 
-    setState(() {
-      _messages.add(_ChatMessage.question(question));
+    if (_useHistory) {
+      setState(() {
+        _isSending = true;
+      });
       _questionController.clear();
-      _isSending = true;
-    });
-    _scrollToLatest();
+      _scrollToLatest();
 
-    try {
-      final response = await _client.askQuestion(
-        question: question,
-        conversationId: _conversationId,
-      );
-      if (!mounted) return;
-      setState(() => _messages.add(_ChatMessage.answer(response)));
-    } on FirebaseFunctionsException catch (error) {
-      if (!mounted) return;
-      setState(() => _messages.add(_ChatMessage.error(_callableError(error))));
-    } on TimeoutException {
-      if (!mounted) return;
-      setState(() {
-        _messages.add(
-          const _ChatMessage.error(
-            'LexiBot is taking too long to answer. Please try again later.',
-          ),
+      final questionId = 'q-${DateTime.now().millisecondsSinceEpoch}';
+      final answerId = 'a-${DateTime.now().millisecondsSinceEpoch}';
+      final errorId = 'e-${DateTime.now().millisecondsSinceEpoch}';
+
+      try {
+        await _repo.createConversation(_userId, _conversationId, question);
+        await _repo.saveMessage(_userId, _conversationId, questionId, {
+          'type': 'question',
+          'text': question,
+        });
+
+        final response = await _client.askQuestion(
+          question: question,
+          conversationId: _conversationId,
         );
-      });
-    } catch (_) {
-      if (!mounted) return;
+
+        await _repo.saveMessage(_userId, _conversationId, answerId, {
+          'type': 'answer',
+          'response': response.toMap(),
+        });
+      } on FirebaseFunctionsException catch (error) {
+        await _repo.saveMessage(_userId, _conversationId, errorId, {
+          'type': 'error',
+          'text': _callableError(error),
+        });
+      } on TimeoutException {
+        await _repo.saveMessage(_userId, _conversationId, errorId, {
+          'type': 'error',
+          'text': 'LexiBot is taking too long to answer. Please try again later.',
+        });
+      } catch (_) {
+        await _repo.saveMessage(_userId, _conversationId, errorId, {
+          'type': 'error',
+          'text': 'LexiBot could not answer right now. Please try again later.',
+        });
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isSending = false;
+          });
+          _scrollToLatest();
+        }
+      }
+    } else {
       setState(() {
-        _messages.add(
-          const _ChatMessage.error(
-            'LexiBot could not answer right now. Please try again later.',
-          ),
-        );
+        _messages.add(_ChatMessage.question(question));
+        _questionController.clear();
+        _isSending = true;
       });
-    } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
-        _scrollToLatest();
+      _scrollToLatest();
+
+      try {
+        final response = await _client.askQuestion(
+          question: question,
+          conversationId: _conversationId,
+        );
+        if (!mounted) return;
+        setState(() => _messages.add(_ChatMessage.answer(response)));
+      } on FirebaseFunctionsException catch (error) {
+        if (!mounted) return;
+        setState(() => _messages.add(_ChatMessage.error(_callableError(error))));
+      } on TimeoutException {
+        if (!mounted) return;
+        setState(() {
+          _messages.add(
+            const _ChatMessage.error(
+              'LexiBot is taking too long to answer. Please try again later.',
+            ),
+          );
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _messages.add(
+            const _ChatMessage.error(
+              'LexiBot could not answer right now. Please try again later.',
+            ),
+          );
+        });
+      } finally {
+        if (mounted) {
+          setState(() => _isSending = false);
+          _scrollToLatest();
+        }
       }
     }
   }
@@ -130,6 +206,68 @@ class _LexiBotChatScreenState extends State<LexiBotChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_useHistory) {
+      return Column(
+        children: [
+          _buildHeader(),
+          Expanded(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _repo.streamMessages(_userId, _conversationId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator(color: _navy));
+                }
+                final list = snapshot.data ?? [];
+                final messages = <_ChatMessage>[
+                  const _ChatMessage.notice(
+                    'I answer general Peninsular Malaysia residential tenancy questions '
+                    'using approved legal sources. I cannot replace a lawyer or advise on '
+                    'urgent situations. For lockouts, violence, police or court deadlines, '
+                    'contact a lawyer promptly. You may ask in English, Bahasa Melayu or 中文.',
+                  ),
+                ];
+
+                for (final doc in list) {
+                  final typeStr = doc['type'] as String?;
+                  final text = doc['text'] as String?;
+                  final respMap = doc['response'] as Map<dynamic, dynamic>?;
+
+                  if (typeStr == 'question') {
+                    messages.add(_ChatMessage.question(text ?? ''));
+                  } else if (typeStr == 'answer' && respMap != null) {
+                    messages.add(_ChatMessage.answer(
+                      LexiBotResponse.fromMap(Map<String, dynamic>.from(respMap)),
+                    ));
+                  } else if (typeStr == 'error') {
+                    messages.add(_ChatMessage.error(text ?? ''));
+                  }
+                }
+
+                // Auto-scroll to latest on new message
+                _scrollToLatest();
+
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                  itemCount: messages.length + (_isSending ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == messages.length) {
+                      return const _ThinkingCard();
+                    }
+                    return _MessageCard(
+                      message: messages[index],
+                      onRequestLawyer: widget._onRequestLawyer,
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          _buildComposer(),
+        ],
+      );
+    }
+
     return Column(
       children: [
         _buildHeader(),

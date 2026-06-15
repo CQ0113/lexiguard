@@ -154,6 +154,30 @@ void main() {
       expect(restored.senderRole, UserRole.lawyer);
     });
 
+    test('round-trips an expiring message with expiresAt', () async {
+      final msg = ChatMessage(
+        id: 'msg_expiring',
+        roomId: 'room_1',
+        senderId: 'client_1',
+        senderRole: UserRole.client,
+        type: MessageType.text,
+        text: 'Secure Expiring Link text',
+        createdAt: DateTime.utc(2026, 5, 10, 9, 0),
+        expiresAt: DateTime.utc(2026, 5, 10, 10, 0),
+        attachmentName: 'contract.pdf',
+        attachmentDownloadUrl: 'https://fake.storage/contract.pdf',
+      );
+      final snap = await _writeAndRead(fakeDb, msg.toMap());
+      final restored = ChatMessage.fromFirestore(snap);
+
+      expect(restored.id, msg.id);
+      expect(restored.type, MessageType.text);
+      expect(restored.expiresAt, isNotNull);
+      expect(restored.expiresAt!.millisecondsSinceEpoch, msg.expiresAt!.millisecondsSinceEpoch);
+      expect(restored.attachmentName, 'contract.pdf');
+      expect(restored.attachmentDownloadUrl, 'https://fake.storage/contract.pdf');
+    });
+
     test('missing optional fields fall back gracefully', () async {
       // Minimal doc — just enough for the factory not to throw.
       final snap = await _writeAndRead(fakeDb, {
@@ -169,6 +193,7 @@ void main() {
       expect(restored.mimeType, isNull);
       // createdAt falls back to epoch when absent.
       expect(restored.createdAt, DateTime.fromMillisecondsSinceEpoch(0));
+      expect(restored.expiresAt, isNull);
     });
   });
 

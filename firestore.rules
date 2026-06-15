@@ -20,6 +20,7 @@ service cloud.firestore {
     function isVerifiedLawyer() {
       return isSignedIn() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        ('verificationStatus' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verificationStatus == 'auto_verified';
     }
 
@@ -317,8 +318,16 @@ service cloud.firestore {
                             || (request.resource.data.attachmentStoragePath is string
                                 && request.resource.data.attachmentName is string));
 
-        // Append-only — no edits or deletes.
-        allow update, delete: if false;
+        // Support message editing and deleting by the original sender.
+        allow update: if request.auth.uid == resource.data.senderId
+                      && request.resource.data.senderId == resource.data.senderId
+                      && request.resource.data.roomId == resource.data.roomId
+                      && request.resource.data.type == resource.data.type
+                      && (!('expiresAt' in resource.data) || request.resource.data.expiresAt == resource.data.expiresAt)
+                      && (request.resource.data.text is string
+                          && request.resource.data.text.size() > 0
+                          && request.resource.data.text.size() <= 4000);
+        allow delete: if request.auth.uid == resource.data.senderId;
       }
     }
 

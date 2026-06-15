@@ -19,6 +19,7 @@ import '../../widgets/express_interest_sheet.dart';
 import '../chat/chat_room_screen.dart';
 import '../../widgets/lawyer_profile_sheet.dart';
 import '../../services/case_matching_service.dart';
+import '../../widgets/network_avatar.dart';
 
 class CaseDetailScreen extends StatefulWidget {
   final CaseModel caseModel;
@@ -1142,32 +1143,14 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             Row(
               children: [
                 // Avatar
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: _gold, width: 2),
-                    image: lawyer.avatarUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(lawyer.avatarUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                    color: _navy,
-                  ),
-                  child: lawyer.avatarUrl == null
-                      ? Center(
-                          child: Text(
-                            lawyer.name[0],
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                        )
-                      : null,
+                NetworkAvatar(
+                  size: 48,
+                  name: lawyer.name,
+                  url: lawyer.avatarUrl,
+                  borderColor: _gold,
+                  borderWidth: 2,
+                  backgroundColor: _navy,
+                  fontSize: 18,
                 ),
                 const SizedBox(width: 14),
                 Expanded(

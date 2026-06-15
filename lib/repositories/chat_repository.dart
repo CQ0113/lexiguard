@@ -101,6 +101,9 @@ class ChatRepository {
     required UserRole senderRole,
     required String text,
     required String recipientId,
+    DateTime? expiresAt,
+    String? attachmentName,
+    String? attachmentDownloadUrl,
   }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
@@ -121,6 +124,9 @@ class ChatRepository {
       'type': MessageType.text.wireValue,
       'text': trimmed,
       'createdAt': FieldValue.serverTimestamp(),
+      if (expiresAt != null) 'expiresAt': Timestamp.fromDate(expiresAt),
+      if (attachmentName != null) 'attachmentName': attachmentName,
+      if (attachmentDownloadUrl != null) 'attachmentDownloadUrl': attachmentDownloadUrl,
     });
 
     // 2. Update room last-message preview and increment recipient unread slot.
@@ -228,6 +234,78 @@ class ChatRepository {
     }
 
     return storagePath;
+  }
+
+  /// Sends a vault document directly as a chat attachment message by referencing
+  /// its existing GCS storage path and download URL, avoiding unnecessary downloads.
+  Future<String> sendVaultAttachmentMessage({
+    required String roomId,
+    required String senderId,
+    required UserRole senderRole,
+    required String recipientId,
+    required String downloadUrl,
+    required String storagePath,
+    required String fileName,
+    required String mimeType,
+    required MessageType type,
+    required int sizeBytes,
+  }) async {
+    final messageRef = _messages(roomId).doc();
+    final messageId = messageRef.id;
+
+    final String lastMessageText = type == MessageType.image ? '📷 Photo' : '📎 $fileName';
+
+    final roomRef = _rooms.doc(roomId);
+    final batch = _db.batch();
+
+    batch.set(messageRef, {
+      'id': messageId,
+      'roomId': roomId,
+      'senderId': senderId,
+      'senderRole': senderRole == UserRole.lawyer ? 'lawyer' : 'client',
+      'type': type.wireValue,
+      'attachmentStoragePath': storagePath,
+      'attachmentDownloadUrl': downloadUrl,
+      'attachmentName': fileName,
+      'attachmentSize': sizeBytes,
+      'mimeType': mimeType,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    batch.update(roomRef, {
+      'lastMessageText': lastMessageText,
+      'lastMessageType': type.wireValue,
+      'lastSenderId': senderId,
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'unreadCounts.$recipientId': FieldValue.increment(1),
+    });
+
+    await batch.commit();
+    return storagePath;
+  }
+
+  /// Deletes a message document from the subcollection.
+  Future<void> deleteMessage({
+    required String roomId,
+    required String messageId,
+  }) async {
+    await _messages(roomId).doc(messageId).delete();
+  }
+
+  /// Updates the text content of a message.
+  /// Throws [ArgumentError] if the trimmed new text is empty.
+  Future<void> editMessage({
+    required String roomId,
+    required String messageId,
+    required String newText,
+  }) async {
+    final trimmed = newText.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(newText, 'newText', 'Edited message text must not be empty.');
+    }
+    await _messages(roomId).doc(messageId).update({
+      'text': trimmed,
+    });
   }
 
   /// Resets the caller's unread counter to zero.

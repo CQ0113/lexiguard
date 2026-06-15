@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/connection_request_model.dart' show LawyerSnapshot;
+import 'network_avatar.dart';
 
 /// Fullscreen-ish modal that shows the full [LawyerSnapshot] profile.
 ///
@@ -125,32 +126,14 @@ class _LawyerProfileSheetContent extends StatelessWidget {
             children: [
               const SizedBox(height: 4),
               // Large avatar
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: _gold, width: 3),
-                  color: Colors.white.withValues(alpha: 0.15),
-                  image: snapshot.avatarUrl != null
-                      ? DecorationImage(
-                          image: NetworkImage(snapshot.avatarUrl!),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: snapshot.avatarUrl == null
-                    ? Center(
-                        child: Text(
-                          initial,
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 30,
-                          ),
-                        ),
-                      )
-                    : null,
+              NetworkAvatar(
+                size: 80,
+                name: snapshot.name,
+                url: snapshot.avatarUrl,
+                borderColor: _gold,
+                borderWidth: 3,
+                backgroundColor: Colors.white.withValues(alpha: 0.15),
+                fontSize: 30,
               ),
               const SizedBox(height: 14),
               // Name

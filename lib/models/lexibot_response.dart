@@ -9,6 +9,14 @@ class LexiBotCitation {
     required this.sourceUrl,
   });
 
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'sourceId': sourceId,
+      'sourceUrl': sourceUrl,
+    };
+  }
+
   factory LexiBotCitation.fromMap(Map<String, dynamic> map) {
     return LexiBotCitation(
       title: map['title']?.toString() ?? '',
@@ -36,6 +44,18 @@ class LexiBotAnswer {
     required this.sourcesUsed,
     required this.needALawyer,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'shortAnswer': shortAnswer,
+      'whatTheSourceSays': whatTheSourceSays,
+      'whatThisMeans': whatThisMeans,
+      'evidenceToKeep': evidenceToKeep,
+      'whatYouCanDoNext': whatYouCanDoNext,
+      'sourcesUsed': sourcesUsed,
+      'needALawyer': needALawyer,
+    };
+  }
 
   factory LexiBotAnswer.fromMap(Map<String, dynamic> map) {
     return LexiBotAnswer(
@@ -81,6 +101,19 @@ class LexiBotResponse {
       status == 'out_of_scope' ||
       status == 'insufficient_sources' ||
       riskLevel == 'high';
+
+  Map<String, dynamic> toMap() {
+    return {
+      'status': status,
+      'scopeStatus': scopeStatus,
+      'riskLevel': riskLevel,
+      'responseLanguage': responseLanguage,
+      'answer': answer.toMap(),
+      'citations': citations.map((c) => c.toMap()).toList(),
+      'groundingChunkCount': groundingChunkCount,
+      'auditId': auditId,
+    };
+  }
 
   factory LexiBotResponse.fromMap(Map<String, dynamic> map) {
     final answerData = map['answer'];

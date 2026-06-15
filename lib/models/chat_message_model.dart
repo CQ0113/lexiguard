@@ -69,6 +69,8 @@ class ChatMessage {
 
   final DateTime createdAt;
 
+  final DateTime? expiresAt;
+
   const ChatMessage({
     required this.id,
     required this.roomId,
@@ -82,6 +84,7 @@ class ChatMessage {
     this.attachmentSize,
     this.mimeType,
     required this.createdAt,
+    this.expiresAt,
   });
 
   // ── Firestore deserialization ───────────────────────────────────────────────
@@ -116,6 +119,7 @@ class ChatMessage {
       createdAt:
           _readDateTime(map['createdAt']) ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      expiresAt: _readDateTime(map['expiresAt']),
     );
   }
 
@@ -137,6 +141,7 @@ class ChatMessage {
       if (attachmentSize != null) 'attachmentSize': attachmentSize,
       if (mimeType != null) 'mimeType': mimeType,
       'createdAt': Timestamp.fromDate(createdAt),
+      if (expiresAt != null) 'expiresAt': Timestamp.fromDate(expiresAt!),
     };
   }
 
@@ -155,8 +160,10 @@ class ChatMessage {
     int? attachmentSize,
     String? mimeType,
     DateTime? createdAt,
+    DateTime? expiresAt,
     bool clearText = false,
     bool clearAttachmentDownloadUrl = false,
+    bool clearExpiresAt = false,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -174,6 +181,7 @@ class ChatMessage {
       attachmentSize: attachmentSize ?? this.attachmentSize,
       mimeType: mimeType ?? this.mimeType,
       createdAt: createdAt ?? this.createdAt,
+      expiresAt: clearExpiresAt ? null : (expiresAt ?? this.expiresAt),
     );
   }
 

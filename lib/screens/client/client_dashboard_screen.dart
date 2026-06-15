@@ -8,6 +8,7 @@ import '../../models/case_model.dart';
 import '../../models/user_model.dart';
 import '../../repositories/case_repository.dart';
 import '../../repositories/connection_request_repository.dart';
+import '../../widgets/network_avatar.dart';
 import '../login_screen.dart';
 import '../shared/post_case_screen.dart';
 import '../shared/case_detail_screen.dart';
@@ -19,6 +20,7 @@ import '../../repositories/chat_repository.dart';
 import '../../repositories/vault_document_repository.dart';
 import 'client_signature_screen.dart';
 import 'lexibot_chat_screen.dart';
+import 'lexibot_history_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLIENT SHELL — matches MobileShell + all client screens from Figma
@@ -457,9 +459,10 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
   }
 
   void _openLexiBotEntry() {
-    widget.onSwitchTab(2);
-    _showSnackBar(
-      'LexiBot is active in your chat rooms to help draft responses, or will be available here soon!',
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const LexiBotHistoryScreen(),
+      ),
     );
   }
 
@@ -689,36 +692,14 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                       children: [
                         ...pendingRequests.take(3).map((req) {
                           final snap = req.lawyerSnapshot;
-                          final initial = snap.name.isNotEmpty
-                              ? snap.name[0].toUpperCase()
-                              : '?';
-                          return Container(
-                            width: 28,
-                            height: 28,
-                            margin: const EdgeInsets.only(right: 4),
-                            decoration: BoxDecoration(
-                              color: _navy,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: _gold, width: 2),
-                              image: snap.avatarUrl != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(snap.avatarUrl!),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : null,
-                            ),
-                            child: snap.avatarUrl == null
-                                ? Center(
-                                    child: Text(
-                                      initial,
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  )
-                                : null,
+                          return NetworkAvatar(
+                            size: 28,
+                            name: snap.name,
+                            url: snap.avatarUrl,
+                            borderColor: _gold,
+                            borderWidth: 2,
+                            backgroundColor: _navy,
+                            fontSize: 9,
                           );
                         }),
                         const SizedBox(width: 4),
