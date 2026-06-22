@@ -18,6 +18,7 @@ import 'dart:async';
 import '../chat/chat_list_screen.dart';
 import '../chat/chat_room_screen.dart';
 import '../../repositories/chat_repository.dart';
+import '../../repositories/vault_document_repository.dart';
 import 'send_contract_screen.dart';
 import '../../services/case_matching_service.dart';
 import '../shared/dynamic_legal_form_page.dart';
@@ -56,6 +57,16 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
   List<String> _lastCaseIds = [];
   StreamSubscription<List<CaseModel>>? _openCasesSubscription;
 
+  StreamSubscription? _chatSub;
+  StreamSubscription? _connSub;
+  StreamSubscription? _vaultSub;
+
+  int? _prevChatTime;
+  int? _prevConnCount;
+  int? _prevVaultCount;
+
+  final List<String> _unreadNotifications = [];
+
   @override
   void initState() {
     super.initState();
@@ -65,12 +76,70 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
       _openCasesSubscription = _openCasesStream.listen((cases) {
         _calculateMatches(cases);
       });
+      _setupRealtimeAlerts();
     }
+  }
+
+  void _setupRealtimeAlerts() {
+    final chatRepo = widget.chatRepository ?? ChatRepository();
+    _chatSub = chatRepo.streamRoomsForUser(widget.user.id).listen((rooms) {
+      if (rooms.isEmpty) return;
+      final latestTime = rooms.first.updatedAt.millisecondsSinceEpoch;
+      if (_prevChatTime != null && latestTime > _prevChatTime!) {
+        _showRealtimeAlert('New message received in chat!');
+      }
+      _prevChatTime = latestTime;
+    });
+
+    final connRepo = widget.connectionRequestRepository ?? ConnectionRequestRepository();
+    _connSub = connRepo.streamForLawyer(widget.user.id).listen((requests) {
+      final count = requests.length;
+      if (_prevConnCount != null && count > _prevConnCount!) {
+        _showRealtimeAlert('New match or connection update!');
+      }
+      _prevConnCount = count;
+    });
+
+    final vaultRepo = VaultDocumentRepository();
+    _vaultSub = vaultRepo.streamAccessibleDocuments(userId: widget.user.id).listen((docs) {
+      final count = docs.length;
+      if (_prevVaultCount != null && count > _prevVaultCount!) {
+        _showRealtimeAlert('New document update in vault!');
+      }
+      _prevVaultCount = count;
+    });
+  }
+
+  void _showRealtimeAlert(String message) {
+    if (!mounted) return;
+    setState(() {
+      _unreadNotifications.insert(0, message);
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: _gold,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 4),
+        ),
+      );
   }
 
   @override
   void dispose() {
     _openCasesSubscription?.cancel();
+    _chatSub?.cancel();
+    _connSub?.cancel();
+    _vaultSub?.cancel();
     super.dispose();
   }
 
@@ -217,6 +286,36 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
     setState(() => _currentTab = 0);
   }
 
+  void _showNotificationsSnackBar() {
+    final hasUnread = _unreadNotifications.isNotEmpty;
+    final contentText = hasUnread
+        ? 'Recent Alerts:\n${_unreadNotifications.take(3).join('\n')}${_unreadNotifications.length > 3 ? '\n...' : ''}'
+        : 'You have no new notifications.';
+
+    if (hasUnread) {
+      setState(() {
+        _unreadNotifications.clear();
+      });
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            contentText,
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: _navy,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -266,6 +365,33 @@ class _LawyerDashboardScreenState extends State<LawyerDashboardScreen> {
                     ),
                   ),
                   const Spacer(),
+                  GestureDetector(
+                    onTap: _showNotificationsSnackBar,
+                    behavior: HitTestBehavior.opaque,
+                    child: Stack(
+                      children: [
+                        const Icon(
+                          Icons.notifications_none_outlined,
+                          color: Colors.white70,
+                          size: 22,
+                        ),
+                        if (_unreadNotifications.isNotEmpty)
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
                   GestureDetector(
                     onTap: _logout,
                     child: const Icon(

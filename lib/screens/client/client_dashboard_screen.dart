@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
@@ -52,6 +53,84 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
 
   int _currentTab = 0;
 
+  StreamSubscription? _chatSub;
+  StreamSubscription? _connSub;
+  StreamSubscription? _vaultSub;
+
+  int? _prevChatTime;
+  int? _prevConnCount;
+  int? _prevVaultCount;
+
+  final List<String> _unreadNotifications = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _setupRealtimeAlerts();
+  }
+
+  void _setupRealtimeAlerts() {
+    final chatRepo = widget.chatRepository ?? ChatRepository();
+    _chatSub = chatRepo.streamRoomsForUser(widget.user.id).listen((rooms) {
+      if (rooms.isEmpty) return;
+      final latestTime = rooms.first.updatedAt.millisecondsSinceEpoch;
+      if (_prevChatTime != null && latestTime > _prevChatTime!) {
+        _showRealtimeAlert('New message received in chat!');
+      }
+      _prevChatTime = latestTime;
+    });
+
+    final connRepo = widget.connectionRequestRepository ?? ConnectionRequestRepository();
+    _connSub = connRepo.streamPendingForClient(widget.user.id).listen((requests) {
+      final count = requests.length;
+      if (_prevConnCount != null && count > _prevConnCount!) {
+        _showRealtimeAlert('New lawyer connection request!');
+      }
+      _prevConnCount = count;
+    });
+
+    final vaultRepo = widget.vaultRepository ?? VaultDocumentRepository();
+    _vaultSub = vaultRepo.streamClientDocuments(clientId: widget.user.id).listen((docs) {
+      final count = docs.length;
+      if (_prevVaultCount != null && count > _prevVaultCount!) {
+        _showRealtimeAlert('New document update in your vault!');
+      }
+      _prevVaultCount = count;
+    });
+  }
+
+  void _showRealtimeAlert(String message) {
+    if (!mounted) return;
+    setState(() {
+      _unreadNotifications.insert(0, message);
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: _gold,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+  }
+
+  @override
+  void dispose() {
+    _chatSub?.cancel();
+    _connSub?.cancel();
+    _vaultSub?.cancel();
+    super.dispose();
+  }
+
   // Bottom nav tabs (following your exact 6 tabs)
   static const _tabs = [
     _Tab(Icons.grid_view_rounded, 'Home'),
@@ -95,12 +174,23 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
   }
 
   void _showNotificationsSnackBar() {
+    final hasUnread = _unreadNotifications.isNotEmpty;
+    final contentText = hasUnread
+        ? 'Recent Alerts:\n${_unreadNotifications.take(3).join('\n')}${_unreadNotifications.length > 3 ? '\n...' : ''}'
+        : 'You have no new notifications. You will be alerted when a lawyer connects or shares a document.';
+
+    if (hasUnread) {
+      setState(() {
+        _unreadNotifications.clear();
+      });
+    }
+
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           content: Text(
-            'You have no new notifications. You will be alerted when a lawyer connects or shares a document.',
+            contentText,
             style: GoogleFonts.inter(color: Colors.white),
           ),
           backgroundColor: _navy,
@@ -197,18 +287,19 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
                           color: Colors.white70,
                           size: 22,
                         ),
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
+                        if (_unreadNotifications.isNotEmpty)
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ),
