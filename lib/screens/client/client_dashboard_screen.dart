@@ -58,8 +58,8 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
   StreamSubscription? _vaultSub;
 
   int? _prevChatTime;
-  int? _prevConnCount;
-  int? _prevVaultCount;
+  int? _prevConnTime;
+  int? _prevVaultTime;
 
   final List<String> _unreadNotifications = [];
 
@@ -82,20 +82,36 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
 
     final connRepo = widget.connectionRequestRepository ?? ConnectionRequestRepository();
     _connSub = connRepo.streamPendingForClient(widget.user.id).listen((requests) {
-      final count = requests.length;
-      if (_prevConnCount != null && count > _prevConnCount!) {
+      if (requests.isEmpty) return;
+      int maxTime = 0;
+      for (var r in requests) {
+        final t = r.updatedAt.millisecondsSinceEpoch;
+        if (t > maxTime) maxTime = t;
+      }
+      if (_prevConnTime != null && maxTime > _prevConnTime!) {
         _showRealtimeAlert('New lawyer connection request!');
       }
-      _prevConnCount = count;
+      if (_prevConnTime == null || maxTime > _prevConnTime!) {
+        _prevConnTime = maxTime;
+      }
     });
 
     final vaultRepo = widget.vaultRepository ?? VaultDocumentRepository();
     _vaultSub = vaultRepo.streamClientDocuments(clientId: widget.user.id).listen((docs) {
-      final count = docs.length;
-      if (_prevVaultCount != null && count > _prevVaultCount!) {
+      if (docs.isEmpty) return;
+      int maxTime = 0;
+      for (var d in docs) {
+        final t = d.createdAt?.millisecondsSinceEpoch ?? 0;
+        final st = d.signedAt?.millisecondsSinceEpoch ?? 0;
+        if (t > maxTime) maxTime = t;
+        if (st > maxTime) maxTime = st;
+      }
+      if (_prevVaultTime != null && maxTime > _prevVaultTime!) {
         _showRealtimeAlert('New document update in your vault!');
       }
-      _prevVaultCount = count;
+      if (_prevVaultTime == null || maxTime > _prevVaultTime!) {
+        _prevVaultTime = maxTime;
+      }
     });
   }
 
