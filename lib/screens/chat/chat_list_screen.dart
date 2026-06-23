@@ -15,11 +15,7 @@ import 'chat_room_screen.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ChatListScreen extends StatefulWidget {
-  const ChatListScreen({
-    super.key,
-    required this.currentUser,
-    this.repository,
-  });
+  const ChatListScreen({super.key, required this.currentUser, this.repository});
 
   final UserModel currentUser;
 
@@ -48,6 +44,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
       _repo = widget.repository;
     } else {
       _repo = ChatRepository();
+    }
+    _backfillApprovedRooms();
+  }
+
+  Future<void> _backfillApprovedRooms() async {
+    final repo = _repo;
+    if (repo == null) return;
+    try {
+      if (widget.currentUser.role == UserRole.client) {
+        await repo.syncClientRevealForApprovedConnections(widget.currentUser);
+      }
+      await repo.ensureRoomsForApprovedConnections(widget.currentUser.id);
+    } catch (error) {
+      debugPrint('Unable to backfill approved chat rooms: $error');
     }
   }
 
@@ -88,7 +98,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   ),
                   // Small online/active indicator pill
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE0F2FE),
                       borderRadius: BorderRadius.circular(12),
@@ -128,11 +141,22 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 },
                 decoration: InputDecoration(
                   hintText: 'Search chats or cases...',
-                  hintStyle: GoogleFonts.inter(color: Colors.grey[400], fontSize: 14),
-                  prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF64748B), size: 20),
+                  hintStyle: GoogleFonts.inter(
+                    color: Colors.grey[400],
+                    fontSize: 14,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF64748B),
+                    size: 20,
+                  ),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, color: Color(0xFF64748B), size: 18),
+                          icon: const Icon(
+                            Icons.clear_rounded,
+                            color: Color(0xFF64748B),
+                            size: 18,
+                          ),
                           onPressed: () {
                             _searchController.clear();
                             setState(() {
@@ -176,10 +200,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
               final rawRooms = snapshot.data ?? const [];
               final query = _searchQuery.toLowerCase().trim();
               final rooms = rawRooms.where((room) {
-                final otherName = (widget.currentUser.role == UserRole.client
-                        ? room.lawyerName
-                        : room.clientName)
-                    .toLowerCase();
+                final otherName =
+                    (widget.currentUser.role == UserRole.client
+                            ? room.lawyerName
+                            : room.clientName)
+                        .toLowerCase();
                 final caseTitle = room.caseTitle.toLowerCase();
                 return otherName.contains(query) || caseTitle.contains(query);
               }).toList();
@@ -228,11 +253,9 @@ class _RoomRow extends StatelessWidget {
 
   bool get _isClient => currentUser.role == UserRole.client;
 
-  String get _otherName =>
-      _isClient ? room.lawyerName : room.clientName;
+  String get _otherName => _isClient ? room.lawyerName : room.clientName;
 
-  String? get _otherAvatarUrl =>
-      _isClient ? room.lawyerAvatarUrl : null;
+  String? get _otherAvatarUrl => _isClient ? room.lawyerAvatarUrl : null;
 
   int get _unread => room.unreadCounts[currentUser.id] ?? 0;
 
@@ -262,13 +285,15 @@ class _RoomRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: hasUnread
-                    ? _gold.withOpacity(0.35)
+                    ? _gold.withValues(alpha: 0.35)
                     : const Color(0xFFE2E8F0),
                 width: hasUnread ? 1.5 : 1.0,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(hasUnread ? 0.04 : 0.02),
+                  color: Colors.black.withValues(
+                    alpha: hasUnread ? 0.04 : 0.02,
+                  ),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -287,7 +312,10 @@ class _RoomRow extends StatelessWidget {
                   ),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -298,7 +326,9 @@ class _RoomRow extends StatelessWidget {
                             size: 48,
                             name: _otherName,
                             url: _otherAvatarUrl,
-                            borderColor: hasUnread ? _gold : const Color(0xFFE2E8F0),
+                            borderColor: hasUnread
+                                ? _gold
+                                : const Color(0xFFE2E8F0),
                             borderWidth: 1.5,
                             backgroundColor: _navy,
                           ),
@@ -311,7 +341,10 @@ class _RoomRow extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: const Color(0xFF22C55E), // Online green
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
                               ),
                             ),
                           ),
@@ -334,8 +367,9 @@ class _RoomRow extends StatelessWidget {
                                     style: GoogleFonts.inter(
                                       color: _navy,
                                       fontSize: 14.5,
-                                      fontWeight:
-                                          hasUnread ? FontWeight.w800 : FontWeight.w600,
+                                      fontWeight: hasUnread
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -357,11 +391,16 @@ class _RoomRow extends StatelessWidget {
 
                             // Styled Legal Case Tag
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF1F5F9),
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -443,7 +482,9 @@ class _RoomRow extends StatelessWidget {
               child: Container(
                 decoration: const BoxDecoration(
                   color: _gold,
-                  borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
+                  borderRadius: BorderRadius.horizontal(
+                    right: Radius.circular(4),
+                  ),
                 ),
               ),
             ),
@@ -539,7 +580,9 @@ class _EmptyState extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                isSearch ? Icons.search_off_rounded : Icons.chat_bubble_outline_rounded,
+                isSearch
+                    ? Icons.search_off_rounded
+                    : Icons.chat_bubble_outline_rounded,
                 size: 32,
                 color: const Color(0xFF64748B),
               ),
@@ -604,10 +647,7 @@ class _ErrorState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                color: Colors.grey[500],
-                fontSize: 12,
-              ),
+              style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 16),

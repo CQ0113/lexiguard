@@ -178,6 +178,18 @@ function buildFinalRecommendations({ candidates, caseDetails, aiRecommendations 
     .map((candidate) => {
       const aiRec = aiByLawyerId.get(candidate.lawyerId);
       const localRec = localRecommendationScore(caseDetails, candidate);
+      const matchScore = Math.max(
+        0,
+        Math.min(
+          100,
+          Number(aiRec?.matchScore ?? localRec.matchScore) ||
+            localRec.matchScore,
+        ),
+      );
+      const matchReasons = Array.isArray(aiRec?.matchReasons) &&
+        aiRec.matchReasons.length > 0
+        ? aiRec.matchReasons.slice(0, 3)
+        : localRec.matchReasons;
       return {
         lawyerId: candidate.lawyerId,
         lawyerName: candidate.name,
@@ -187,18 +199,10 @@ function buildFinalRecommendations({ candidates, caseDetails, aiRecommendations 
         yearsExperience: candidate.yearsExperience,
         languages: candidate.languages,
         hourlyRate: candidate.hourlyRate,
-        matchScore: Math.max(
-          0,
-          Math.min(
-            100,
-            Number(aiRec?.matchScore ?? localRec.matchScore) ||
-              localRec.matchScore,
-          ),
-        ),
-        matchReasons: Array.isArray(aiRec?.matchReasons) &&
-          aiRec.matchReasons.length > 0
-          ? aiRec.matchReasons.slice(0, 3)
-          : localRec.matchReasons,
+        matchScore,
+        matchPercentage: matchScore,
+        matchReasons,
+        matchReason: matchReasons.join(" "),
         possibleConcerns: Array.isArray(aiRec?.possibleConcerns)
           ? aiRec.possibleConcerns.slice(0, 2)
           : localRec.possibleConcerns,
@@ -883,6 +887,7 @@ exports.recommendLawyersForCase = onCall(
 
     const data = request.data || {};
     const caseId = String(data.caseId || "").trim();
+    const forceRefresh = data.forceRefresh === true;
     if (!caseId) {
       throw new HttpsError("invalid-argument", "caseId is required.");
     }
@@ -933,6 +938,7 @@ exports.recommendLawyersForCase = onCall(
       }
 
       if (
+        !forceRefresh &&
         recommendationStatus === "completed" &&
         existingRecommendations.length > 0
       ) {
@@ -943,7 +949,7 @@ exports.recommendLawyersForCase = onCall(
         };
       }
 
-      if (recommendationStatus === "not_enough_lawyers") {
+      if (!forceRefresh && recommendationStatus === "not_enough_lawyers") {
         return {
           shouldGenerate: false,
           status: "not_enough_lawyers",

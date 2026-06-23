@@ -60,7 +60,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   static const Color _gold = Color(0xFFCFA92A);
   static const Color _bg = Color(0xFFF8FAFC);
 
-  bool get _isTest => !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+  bool get _isTest =>
+      !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
 
   late CaseModel _case;
 
@@ -84,6 +85,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   bool _hasTriggeredRecommendation = false;
   bool _manualRecommendationBusy = false;
   final Set<String> _clientRequestBusyLawyerIds = {};
+
+  final TextEditingController _closeReasonCtrl = TextEditingController();
 
   bool _isAuthenticatedCaseOwner(CaseModel caseModel) {
     if (!_isClient || widget.viewer.id != caseModel.clientId) return false;
@@ -122,9 +125,13 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   Future<void> _triggerLawyerRecommendations(
     String caseId, {
     bool showFailureSnack = false,
+    bool forceRefresh = false,
   }) async {
     try {
-      await _actionHandler.recommendLawyers(caseId: caseId);
+      await _actionHandler.recommendLawyers(
+        caseId: caseId,
+        forceRefresh: forceRefresh,
+      );
     } catch (error) {
       debugPrint('Error triggering recommendations on detail screen: $error');
 
@@ -155,6 +162,20 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     }
   }
 
+  Future<void> _refreshLawyerRecommendations() async {
+    if (_manualRecommendationBusy) return;
+
+    setState(() => _manualRecommendationBusy = true);
+    await _triggerLawyerRecommendations(
+      _case.id,
+      showFailureSnack: true,
+      forceRefresh: true,
+    );
+    if (mounted) {
+      setState(() => _manualRecommendationBusy = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -178,6 +199,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
 
   @override
   void dispose() {
+    _closeReasonCtrl.dispose();
     _caseSub?.cancel();
     super.dispose();
   }
@@ -196,6 +218,11 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       _case.status == CaseStatus.active &&
       _case.lawyerId != null &&
       _case.lawyerId!.isNotEmpty;
+
+  bool get _canRefreshRecommendations =>
+      _isAuthenticatedCaseOwner(_case) &&
+      _case.status == CaseStatus.pending &&
+      (_case.lawyerId == null || _case.lawyerId!.trim().isEmpty);
 
   UserModel _resolveClientUser() {
     try {
@@ -366,7 +393,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   }
 
   Future<void> _confirmCloseCase() async {
-    final reasonCtrl = TextEditingController();
+    _closeReasonCtrl.clear();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -387,7 +414,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: reasonCtrl,
+              controller: _closeReasonCtrl,
               maxLength: 200,
               maxLines: 3,
               style: GoogleFonts.inter(fontSize: 13),
@@ -430,10 +457,9 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       ),
     );
 
-    final reason = reasonCtrl.text.trim();
-    reasonCtrl.dispose();
-
     if (confirmed != true || !mounted) return;
+
+    final reason = _closeReasonCtrl.text.trim();
 
     await _runCaseAction('close', () async {
       try {
@@ -499,26 +525,46 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                   const SizedBox(height: 20),
                   if (_case.progressPercent > 0) _buildProgressCard(),
                   if (_case.progressPercent > 0) const SizedBox(height: 20),
-                  const SizedBox(height: 80), // space for FAB
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: _isLawyer
+      bottomNavigationBar: _isLawyer
           ? (requestStream != null
-              ? StreamBuilder<ConnectionRequestModel?>(
-                  stream: requestStream,
-                  builder: (ctx, snapshot) {
-                    final request = snapshot.data;
-                    return _buildLawyerFAB(request);
-                  },
-                )
-              : _buildLawyerFAB(null))
+                ? StreamBuilder<ConnectionRequestModel?>(
+                    stream: requestStream,
+                    builder: (ctx, snapshot) {
+                      final request = snapshot.data;
+                      return _buildLawyerBottomAction(request);
+                    },
+                  )
+                : _buildLawyerBottomAction(null))
           : _buildClientChatFAB(),
     );
+  }
+
+  Widget _buildLawyerBottomAction(ConnectionRequestModel? request) {
+    if (!_shouldShowLawyerAction(request)) {
+      return const SizedBox.shrink();
+    }
+
+    return _bottomActionSurface(_buildLawyerFAB(request));
+  }
+
+  bool _shouldShowLawyerAction(ConnectionRequestModel? request) {
+    if (!widget.viewer.canAccessMarketplace) return true;
+
+    final assignedLawyerId = _case.lawyerId;
+    if (assignedLawyerId != null && assignedLawyerId.isNotEmpty) {
+      return true;
+    }
+
+    if (request != null) return true;
+
+    return _case.status == CaseStatus.pending;
   }
 
   // ── Client "Chat with lawyer" FAB ────────────────────────────────────────
@@ -527,13 +573,14 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   // approved requests for the client and checks for a match on this case.
   Widget _buildClientChatFAB() {
     return StreamBuilder<List<ConnectionRequestModel>>(
-      stream: _repo.streamHistoryForClient(widget.viewer.id),
+      stream: _repo.streamApprovedForClient(widget.viewer.id),
       builder: (context, snapshot) {
         final requests = snapshot.data ?? const [];
         ConnectionRequestModel? approved;
         try {
           approved = requests.firstWhere(
-            (r) => r.caseId == _case.id &&
+            (r) =>
+                r.caseId == _case.id &&
                 r.status == ConnectionRequestStatus.approved,
           );
         } catch (_) {
@@ -542,12 +589,14 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
 
         if (approved == null) return const SizedBox.shrink();
 
-        return _fab(
-          label: 'Chat with lawyer',
-          icon: Icons.chat_bubble_outline,
-          bg: _gold,
-          fg: _navy,
-          onPressed: () => _openClientChat(approved!.id),
+        return _bottomActionSurface(
+          _fab(
+            label: 'Chat with lawyer',
+            icon: Icons.chat_bubble_outline,
+            bg: _gold,
+            fg: _navy,
+            onPressed: () => _openClientChat(approved!.id),
+          ),
         );
       },
     );
@@ -555,46 +604,48 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
 
   Future<void> _openLawyerChat(String roomId) async {
     final chatRepo = ChatRepository();
-    final room = await chatRepo.fetchRoom(roomId);
-    if (!mounted) return;
-    if (room == null) {
+    try {
+      final room = await chatRepo.ensureRoom(roomId);
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatRoomScreen(
+            currentUser: widget.viewer,
+            room: room,
+            repository: chatRepo,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
       _showSnack(
         'Chat room not found. It may have been created before chat was enabled.',
         Colors.grey[700]!,
       );
-      return;
     }
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatRoomScreen(
-          currentUser: widget.viewer,
-          room: room,
-          repository: chatRepo,
-        ),
-      ),
-    );
   }
 
   Future<void> _openClientChat(String roomId) async {
     final chatRepo = ChatRepository();
-    final room = await chatRepo.fetchRoom(roomId);
-    if (!mounted) return;
-    if (room == null) {
+    try {
+      final room = await chatRepo.ensureRoom(roomId);
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatRoomScreen(
+            currentUser: widget.viewer,
+            room: room,
+            repository: chatRepo,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
       _showSnack(
         'Chat room not found. It may have been created before chat was enabled.',
         Colors.grey[700]!,
       );
-      return;
     }
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatRoomScreen(
-          currentUser: widget.viewer,
-          room: room,
-          repository: chatRepo,
-        ),
-      ),
-    );
   }
 
   Widget _buildVerificationLockNotice() {
@@ -649,7 +700,7 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
   Widget _buildSliverAppBar() {
     final urgencyColor = _urgencyColor(_case.urgency);
     return SliverAppBar(
-      expandedHeight: 200,
+      expandedHeight: 220,
       pinned: true,
       backgroundColor: _navy,
       leading: IconButton(
@@ -677,24 +728,27 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
+              padding: const EdgeInsets.fromLTRB(20, 36, 20, 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
                       _chip(
                         _case.categoryLabel,
                         _categoryColor(_case.category),
                       ),
-                      const SizedBox(width: 8),
                       _chip(_case.urgencyLabel, urgencyColor),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Text(
                     _case.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
                       color: Colors.white,
                       fontSize: 20,
@@ -731,36 +785,51 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
 
   // ── Status Row ───────────────────────────────────────────────────────────
   Widget _buildStatusRow() {
-    return Row(
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         _statusPill(_case.status),
-        const Spacer(),
         if (_case.interestedLawyerIds.isNotEmpty)
-          Row(
-            children: [
-              const Icon(
-                Icons.group_outlined,
-                color: Color(0xFFCFA92A),
-                size: 16,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '${_case.interestedLawyerIds.length} lawyer${_case.interestedLawyerIds.length > 1 ? 's' : ''} interested',
-                style: GoogleFonts.inter(
-                  color: _gold,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
+          _interestedLawyersPill(_case.interestedLawyerIds.length),
       ],
+    );
+  }
+
+  Widget _interestedLawyersPill(int count) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _gold.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _gold.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.group_outlined, color: Color(0xFFCFA92A), size: 15),
+          const SizedBox(width: 5),
+          Text(
+            '$count lawyer${count > 1 ? 's' : ''} interested',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              color: _gold,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildLawyerMatchAnalysisCard() {
     final match = widget.matchResult;
-    if (match == null || match.matchPercentage <= 0) return const SizedBox.shrink();
+    if (match == null || match.matchPercentage <= 0) {
+      return const SizedBox.shrink();
+    }
 
     return Column(
       children: [
@@ -784,19 +853,30 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.auto_awesome, color: Color(0xFFD97706), size: 18),
+                  const Icon(
+                    Icons.auto_awesome,
+                    color: Color(0xFFD97706),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
-                  Text(
-                    'AI Match Analysis',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF0C1D36),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+                  Expanded(
+                    child: Text(
+                      'AI Match Analysis',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF0C1D36),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 10),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFEF3C7),
                       borderRadius: BorderRadius.circular(12),
@@ -1042,11 +1122,15 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                     size: 20,
                   ),
                   const SizedBox(width: 10),
-                  Text(
-                    'No lawyers have expressed interest yet.',
-                    style: GoogleFonts.inter(
-                      color: Colors.grey[400],
-                      fontSize: 13,
+                  Expanded(
+                    child: Text(
+                      'No lawyers have expressed interest yet.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: Colors.grey[400],
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],
@@ -1094,11 +1178,15 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                         size: 20,
                       ),
                       const SizedBox(width: 10),
-                      Text(
-                        'No lawyers have expressed interest yet.',
-                        style: GoogleFonts.inter(
-                          color: Colors.grey[400],
-                          fontSize: 13,
+                      Expanded(
+                        child: Text(
+                          'No lawyers have expressed interest yet.',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(
+                            color: Colors.grey[400],
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -1380,7 +1468,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     // Connected (assigned to self OR request approved) — open chat
     if ((assignedLawyerId != null && assignedLawyerId == widget.viewer.id) ||
         request?.status == ConnectionRequestStatus.approved) {
-      final roomId = request?.id ??
+      final roomId =
+          request?.id ??
           ConnectionRequestRepository.docIdFor(
             caseId: _case.id,
             lawyerId: widget.viewer.id,
@@ -1512,6 +1601,27 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
     );
   }
 
+  Widget _bottomActionSurface(Widget child) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.grey[200]!)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: child,
+      ),
+    );
+  }
+
   // ── Helper widgets ────────────────────────────────────────────────────────
   Widget _card({required Widget child}) {
     return Container(
@@ -1538,12 +1648,16 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
       children: [
         Icon(icon, color: _navy, size: 18),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            color: _navy,
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
           ),
         ),
       ],
@@ -1831,6 +1945,13 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
                 ),
               ],
             ),
+            if (_canRefreshRecommendations) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _recommendationRefreshButton(),
+              ),
+            ],
           ],
         ),
       );
@@ -1870,14 +1991,20 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
           children: [
             const Icon(Icons.auto_awesome, color: _gold, size: 18),
             const SizedBox(width: 8),
-            Text(
-              'AI Recommended Lawyers',
-              style: GoogleFonts.inter(
-                color: _navy,
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
+            Expanded(
+              child: Text(
+                'AI Recommended Lawyers',
+                style: GoogleFonts.inter(
+                  color: _navy,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
               ),
             ),
+            if (_canRefreshRecommendations) ...[
+              const SizedBox(width: 8),
+              _recommendationRefreshButton(compact: true),
+            ],
           ],
         ),
         const SizedBox(height: 12),
@@ -1885,6 +2012,51 @@ class _CaseDetailScreenState extends State<CaseDetailScreen> {
           (rec) => _recommendedLawyerCard(rec),
         ),
       ],
+    );
+  }
+
+  Widget _recommendationRefreshButton({bool compact = false}) {
+    final icon = _manualRecommendationBusy
+        ? SizedBox(
+            width: compact ? 13 : 14,
+            height: compact ? 13 : 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              value: _isTest ? 0.5 : null,
+              valueColor: const AlwaysStoppedAnimation<Color>(_navy),
+            ),
+          )
+        : Icon(Icons.refresh_rounded, size: compact ? 15 : 16);
+
+    final label = _manualRecommendationBusy
+        ? (compact ? 'Refreshing' : 'Refreshing matches...')
+        : (compact ? 'Refresh' : 'Refresh matches');
+
+    return OutlinedButton.icon(
+      onPressed: _manualRecommendationBusy
+          ? null
+          : _refreshLawyerRecommendations,
+      icon: icon,
+      label: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.inter(
+          fontWeight: FontWeight.w600,
+          fontSize: compact ? 11 : 12,
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _navy,
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 9 : 12,
+          vertical: compact ? 7 : 9,
+        ),
+        minimumSize: Size(compact ? 0 : 120, compact ? 34 : 38),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
     );
   }
 

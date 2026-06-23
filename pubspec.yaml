@@ -24,6 +24,7 @@ dependencies:
   google_generative_ai: ^0.2.2
   syncfusion_flutter_pdf: ^33.2.8
   http: ^1.6.0
+  cupertino_icons: ^1.0.9
 
 dev_dependencies:
   flutter_test:

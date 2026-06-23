@@ -16,7 +16,6 @@ class LexiBotHistoryScreen extends StatefulWidget {
 
 class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
   static const _navy = Color(0xFF0B2447);
-  static const _gold = Color(0xFFD4AF37);
   static const _slate = Color(0xFF64748B);
 
   late final LexiBotRepository _repo;
@@ -77,7 +76,10 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text('Delete', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+            child: Text(
+              'Delete',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -89,10 +91,15 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Chat deleted successfully.', style: GoogleFonts.inter()),
+              content: Text(
+                'Chat deleted successfully.',
+                style: GoogleFonts.inter(),
+              ),
               backgroundColor: _navy,
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         }
@@ -100,10 +107,15 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to delete chat: $e', style: GoogleFonts.inter()),
+              content: Text(
+                'Failed to delete chat: $e',
+                style: GoogleFonts.inter(),
+              ),
               backgroundColor: Colors.red[700],
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
           );
         }
@@ -129,9 +141,13 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
       return 'Just now';
     } else if (difference.inHours < 1) {
       return '${difference.inMinutes}m ago';
-    } else if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+    } else if (dt.year == now.year &&
+        dt.month == now.month &&
+        dt.day == now.day) {
       return DateFormat('h:mm a').format(dt);
-    } else if (dt.year == now.year && dt.month == now.month && dt.day == now.day - 1) {
+    } else if (dt.year == now.year &&
+        dt.month == now.month &&
+        dt.day == now.day - 1) {
       return 'Yesterday at ${DateFormat('h:mm a').format(dt)}';
     } else {
       return DateFormat('dd MMM, h:mm a').format(dt);
@@ -142,9 +158,7 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
   Widget build(BuildContext context) {
     if (_userId.isEmpty) {
       return const Scaffold(
-        body: Center(
-          child: Text('Please log in to view chat history.'),
-        ),
+        body: Center(child: Text('Please log in to view chat history.')),
       );
     }
 
@@ -198,7 +212,7 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
               ),
             ),
           ),
-          
+
           // Chat History List
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
@@ -245,17 +259,23 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
+                            color: Colors.black.withValues(alpha: 0.02),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),
                         ],
                       ),
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
                         leading: CircleAvatar(
-                          backgroundColor: _navy.withOpacity(0.08),
-                          child: const Icon(Icons.smart_toy_outlined, color: _navy),
+                          backgroundColor: _navy.withValues(alpha: 0.08),
+                          child: const Icon(
+                            Icons.smart_toy_outlined,
+                            color: _navy,
+                          ),
                         ),
                         title: Text(
                           title,
@@ -278,7 +298,11 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
                           ),
                         ),
                         trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 22),
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            color: Colors.red,
+                            size: 22,
+                          ),
                           onPressed: () => _deleteConversation(id, title),
                         ),
                         onTap: () => _openChatScreen(id),
@@ -305,7 +329,7 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: _navy.withOpacity(0.05),
+              color: _navy.withValues(alpha: 0.05),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -326,11 +350,7 @@ class _LexiBotHistoryScreenState extends State<LexiBotHistoryScreen> {
           const SizedBox(height: 8),
           Text(
             'Start a new conversation with LexiBot to ask residential tenancy questions.',
-            style: GoogleFonts.inter(
-              color: _slate,
-              fontSize: 13,
-              height: 1.5,
-            ),
+            style: GoogleFonts.inter(color: _slate, fontSize: 13, height: 1.5),
             textAlign: TextAlign.center,
           ),
         ],

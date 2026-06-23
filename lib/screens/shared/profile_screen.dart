@@ -217,14 +217,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _identityCard(),
                 const SizedBox(height: 14),
                 if (_isLawyer) _lawyerProfessionalCard() else _clientInfoCard(),
-                if (_isLawyer) ...[const SizedBox(height: 14), _languagesCard()],
+                if (_isLawyer) ...[
+                  const SizedBox(height: 14),
+                  _languagesCard(),
+                ],
                 const SizedBox(height: 14),
                 _accountCard(),
                 if (!widget.readOnly) ...[
                   const SizedBox(height: 14),
                   _securityCard(),
                 ],
-                if (isEditing && !widget.readOnly) ...[const SizedBox(height: 18), _saveButton()],
+                if (isEditing && !widget.readOnly) ...[
+                  const SizedBox(height: 18),
+                  _saveButton(),
+                ],
               ],
             ),
           ),
@@ -294,7 +300,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         icon: Icon(isEditing ? Icons.close_rounded : Icons.edit_outlined),
         color: color,
         style: IconButton.styleFrom(
-          hoverColor: Colors.white.withOpacity(0.1),
+          hoverColor: Colors.white.withValues(alpha: 0.1),
         ),
       ),
     );
@@ -306,7 +312,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         : _fullNameController.text;
 
     final nameText = displayName.isEmpty ? _user.name : displayName;
-    final isVerified = _user.verificationStatus == VerificationStatus.autoVerified;
+    final isVerified =
+        _user.verificationStatus == VerificationStatus.autoVerified;
 
     return Container(
       width: double.infinity,
@@ -319,7 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -339,7 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
+                  color: Colors.black.withValues(alpha: 0.15),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
@@ -364,7 +371,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // User Details Column
           Expanded(
             child: Column(
@@ -416,7 +423,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12),
+        color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -466,7 +473,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           validator: _required('Legal name is required.'),
         ),
         _gap,
-        _readOnlyRow('Bar Number', _user.barNumber ?? 'Not provided', Icons.badge_outlined),
+        _readOnlyRow(
+          'Bar Number',
+          _user.barNumber ?? 'Not provided',
+          Icons.badge_outlined,
+        ),
         _gap,
         _editableRow(
           label: 'Firm',
@@ -519,18 +530,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _selectedLanguages.isEmpty
               ? Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 18,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: const Color(0xFFE5E7EB), width: 1),
+                    border: Border.all(
+                      color: const Color(0xFFE5E7EB),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.translate_rounded,
-                          size: 20, color: Colors.grey[400]),
+                      Icon(
+                        Icons.translate_rounded,
+                        size: 20,
+                        color: Colors.grey[400],
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -551,20 +569,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       .map(
                         (lang) => Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
-                            color: _gold.withOpacity(0.08),
+                            color: _gold.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: _gold.withOpacity(0.25),
+                              color: _gold.withValues(alpha: 0.25),
                             ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.check_circle_rounded,
-                                  size: 16,
-                                  color: _navy.withOpacity(0.7)),
+                              Icon(
+                                Icons.check_circle_rounded,
+                                size: 16,
+                                color: _navy.withValues(alpha: 0.7),
+                              ),
                               const SizedBox(width: 6),
                               Text(
                                 lang,
@@ -614,8 +636,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 side: BorderSide(
                   color: selected ? _navy : const Color(0xFFE5E7EB),
                 ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               );
             }).toList(),
           ),
@@ -628,7 +649,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       title: _isLawyer ? 'Account and verification' : 'Account',
       children: [
         if (_isLawyer) ...[
-          _readOnlyRow('Status', _user.verificationStatus.label, Icons.verified_user_outlined),
+          _readOnlyRow(
+            'Status',
+            _user.verificationStatus.label,
+            Icons.verified_user_outlined,
+          ),
           _gap,
         ],
         _readOnlyRow('Email', _user.email, Icons.email_outlined),
@@ -710,7 +735,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -743,7 +768,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 11, fontWeight: FontWeight.w500),
+          style: GoogleFonts.inter(
+            color: Colors.grey[600],
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         const SizedBox(height: 6),
         TextFormField(
@@ -826,7 +855,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: _navy.withOpacity(0.06),
+                color: _navy.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, size: 18, color: _navy),
@@ -854,7 +883,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: Colors.grey[400], size: 20),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.grey[400],
+              size: 20,
+            ),
           ],
         ),
       ),
@@ -875,7 +908,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         style: FilledButton.styleFrom(
           backgroundColor: _navy,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           elevation: 0,
         ),
       ),
@@ -885,7 +920,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _loadingOverlay() {
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withOpacity(0.16),
+        color: Colors.black.withValues(alpha: 0.16),
         child: const Center(
           child: CircularProgressIndicator(
             valueColor: AlwaysStoppedAnimation<Color>(_gold),
@@ -1001,7 +1036,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
         .toUpperCase();
   }
-
 }
 
 class _EmailChangeDialog extends StatefulWidget {

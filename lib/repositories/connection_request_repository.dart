@@ -227,7 +227,7 @@ class ConnectionRequestRepository {
         'updatedAt': now,
         'respondedAt': null,
         'declineReason': null,
-        'clientReveal': null,
+        'clientReveal': ClientReveal(name: client.name).toMap(),
         'lawyerSnapshot': LawyerSnapshot(
           name: lawyer.lawyerName,
           specialization: lawyer.specialization,
@@ -394,9 +394,7 @@ class ConnectionRequestRepository {
       }
 
       final caseSnap = await tx.get(caseRef);
-      final siblingSnaps = await Future.wait(
-        siblingRefs.map(tx.get),
-      );
+      final siblingSnaps = await Future.wait(siblingRefs.map(tx.get));
 
       // 1. Flip request to approved.
       tx.update(docRef, {
@@ -408,10 +406,7 @@ class ConnectionRequestRepository {
 
       // 2. Claim the case.
       if (caseSnap.exists) {
-        tx.update(caseRef, {
-          'lawyerId': lawyerId,
-          'status': 'active',
-        });
+        tx.update(caseRef, {'lawyerId': lawyerId, 'status': 'active'});
       }
 
       // 3. Expire siblings (only if still pending).
@@ -434,28 +429,24 @@ class ConnectionRequestRepository {
           ? (caseSnap.data()?['title']?.toString() ?? '')
           : '';
       final chatRoomRef = _db.collection('chat_rooms').doc(requestId);
-      tx.set(
-        chatRoomRef,
-        {
-          'id': requestId,
-          'caseId': caseId,
-          'clientId': client.id,
-          'lawyerId': lawyerId,
-          'participants': [client.id, lawyerId],
-          'clientName': reveal.name,
-          'lawyerName': lawyerSnapshotMap['name']?.toString() ?? '',
-          if (lawyerSnapshotMap['avatarUrl'] != null)
-            'lawyerAvatarUrl': lawyerSnapshotMap['avatarUrl'].toString(),
-          'caseTitle': caseTitle,
-          'lastMessageText': '',
-          'lastMessageType': 'text',
-          'lastSenderId': '',
-          'lastMessageAt': now,
-          'createdAt': now,
-          'unreadCounts': {client.id: 0, lawyerId: 0},
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(chatRoomRef, {
+        'id': requestId,
+        'caseId': caseId,
+        'clientId': client.id,
+        'lawyerId': lawyerId,
+        'participants': [client.id, lawyerId],
+        'clientName': reveal.name,
+        'lawyerName': lawyerSnapshotMap['name']?.toString() ?? '',
+        if (lawyerSnapshotMap['avatarUrl'] != null)
+          'lawyerAvatarUrl': lawyerSnapshotMap['avatarUrl'].toString(),
+        'caseTitle': caseTitle,
+        'lastMessageText': '',
+        'lastMessageType': 'text',
+        'lastSenderId': '',
+        'lastMessageAt': now,
+        'createdAt': now,
+        'unreadCounts': {client.id: 0, lawyerId: 0},
+      }, SetOptions(merge: true));
     });
   }
 
@@ -602,6 +593,42 @@ class ConnectionRequestRepository {
           });
         }
       }
+
+      final requestData = freshRequestSnap.data()!;
+      final lawyerSnapshotMap =
+          requestData['lawyerSnapshot'] as Map<String, dynamic>? ?? {};
+      final clientRevealMap =
+          requestData['clientReveal'] as Map<String, dynamic>? ?? {};
+      final caseSnapshotMap =
+          requestData['caseSnapshot'] as Map<String, dynamic>? ?? {};
+      final clientName = clientRevealMap['name']?.toString().trim();
+      final caseTitle = caseData['title']?.toString().trim();
+      final snapshotTitle = caseSnapshotMap['title']?.toString().trim();
+      final chatRoomRef = _db.collection('chat_rooms').doc(requestId);
+      tx.set(chatRoomRef, {
+        'id': requestId,
+        'caseId': request.caseId,
+        'clientId': request.clientId,
+        'lawyerId': lawyer.id,
+        'participants': [request.clientId, lawyer.id],
+        'clientName': clientName == null || clientName.isEmpty
+            ? 'Client'
+            : clientName,
+        'lawyerName': lawyerSnapshotMap['name']?.toString() ?? lawyer.name,
+        if (lawyerSnapshotMap['avatarUrl'] != null)
+          'lawyerAvatarUrl': lawyerSnapshotMap['avatarUrl'].toString(),
+        'caseTitle': caseTitle == null || caseTitle.isEmpty
+            ? (snapshotTitle == null || snapshotTitle.isEmpty
+                  ? request.caseId
+                  : snapshotTitle)
+            : caseTitle,
+        'lastMessageText': '',
+        'lastMessageType': 'text',
+        'lastSenderId': '',
+        'lastMessageAt': now,
+        'createdAt': now,
+        'unreadCounts': {request.clientId: 0, lawyer.id: 0},
+      }, SetOptions(merge: true));
     });
   }
 
@@ -662,6 +689,21 @@ class ConnectionRequestRepository {
         );
   }
 
+  /// All connection requests for a client, newest update first.
+  Stream<List<ConnectionRequestModel>> streamForClient(String clientId) {
+    return _requests.where('clientId', isEqualTo: clientId).snapshots().map((
+      snapshot,
+    ) {
+      final requests = _mapDocs(snapshot);
+      requests.sort((left, right) {
+        final leftTime = left.respondedAt ?? left.updatedAt;
+        final rightTime = right.respondedAt ?? right.updatedAt;
+        return rightTime.compareTo(leftTime);
+      });
+      return requests;
+    });
+  }
+
   /// Historical requests (non-pending) for a client, newest first.
   Stream<List<ConnectionRequestModel>> streamHistoryForClient(String clientId) {
     // Firestore `whereIn` supports up to 10 values — safe here.
@@ -683,6 +725,18 @@ class ConnectionRequestRepository {
             snapshot,
           ).where((request) => request.isLawyerInitiated).toList(),
         );
+  }
+
+  /// Approved requests for a client, regardless of who initiated the request.
+  Stream<List<ConnectionRequestModel>> streamApprovedForClient(
+    String clientId,
+  ) {
+    return _requests
+        .where('clientId', isEqualTo: clientId)
+        .where('status', isEqualTo: ConnectionRequestStatus.approved.wireValue)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(_mapDocs);
   }
 
   /// All requests sent by a given lawyer, newest first.

@@ -1,6 +1,6 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lei_guard/models/user_model.dart' show UserRole;
+import 'package:lei_guard/models/user_model.dart' show UserModel, UserRole;
 import 'package:lei_guard/repositories/chat_repository.dart';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -93,6 +93,69 @@ void main() {
     });
   });
 
+  group('syncClientRevealForApprovedConnections', () {
+    test(
+      'repairs approved request reveal and existing room client name',
+      () async {
+        await fakeDb.collection('connection_requests').doc(_roomId).set({
+          'id': _roomId,
+          'caseId': 'case_1',
+          'clientId': _clientId,
+          'lawyerId': _lawyerId,
+          'message': 'The client has requested you for this case.',
+          'status': 'approved',
+          'initiatedByRole': 'client',
+          'requestDirection': 'client_to_lawyer',
+          'createdAt': DateTime.utc(2026, 5, 1),
+          'updatedAt': DateTime.utc(2026, 5, 1),
+          'clientReveal': {'name': 'Client'},
+          'lawyerSnapshot': {
+            'name': 'Ahmad Zaki',
+            'verificationStatus': 'auto_verified',
+          },
+        });
+        await fakeDb.collection('chat_rooms').doc(_roomId).set({
+          'id': _roomId,
+          'caseId': 'case_1',
+          'clientId': _clientId,
+          'lawyerId': _lawyerId,
+          'participants': [_clientId, _lawyerId],
+          'clientName': 'Client',
+          'lawyerName': 'Ahmad Zaki',
+          'caseTitle': 'Property dispute',
+          'lastMessageText': '',
+          'lastMessageType': 'text',
+          'lastSenderId': '',
+          'createdAt': DateTime.utc(2026, 5, 1),
+          'unreadCounts': {_clientId: 0, _lawyerId: 0},
+        });
+
+        final repaired = await repo.syncClientRevealForApprovedConnections(
+          const UserModel(
+            id: _clientId,
+            name: 'Tan Wei Ming',
+            email: 'tan@example.com',
+            phone: '+60112345678',
+            role: UserRole.client,
+          ),
+        );
+
+        expect(repaired, 2);
+        final request = await fakeDb
+            .collection('connection_requests')
+            .doc(_roomId)
+            .get();
+        expect(
+          (request.data()!['clientReveal'] as Map)['name'],
+          'Tan Wei Ming',
+        );
+
+        final room = await fakeDb.collection('chat_rooms').doc(_roomId).get();
+        expect(room.data()!['clientName'], 'Tan Wei Ming');
+      },
+    );
+  });
+
   // ── streamMessages ──────────────────────────────────────────────────────────
 
   group('streamMessages', () {
@@ -168,8 +231,7 @@ void main() {
       expect(msgData['type'], 'text');
 
       // Verify room's lastMessage fields were updated.
-      final roomSnap =
-          await fakeDb.collection('chat_rooms').doc(_roomId).get();
+      final roomSnap = await fakeDb.collection('chat_rooms').doc(_roomId).get();
       final roomData = roomSnap.data()!;
       expect(roomData['lastMessageText'], 'Hello lawyer');
       expect(roomData['lastMessageType'], 'text');
@@ -177,10 +239,7 @@ void main() {
     });
 
     test('increments recipient unreadCounts slot', () async {
-      await _seedRoom(
-        fakeDb,
-        unreadCounts: {_clientId: 0, _lawyerId: 0},
-      );
+      await _seedRoom(fakeDb, unreadCounts: {_clientId: 0, _lawyerId: 0});
 
       await repo.sendTextMessage(
         roomId: _roomId,
@@ -190,10 +249,10 @@ void main() {
         recipientId: _lawyerId,
       );
 
-      final roomSnap =
-          await fakeDb.collection('chat_rooms').doc(_roomId).get();
-      final counts =
-          Map<String, dynamic>.from(roomSnap.data()!['unreadCounts'] as Map);
+      final roomSnap = await fakeDb.collection('chat_rooms').doc(_roomId).get();
+      final counts = Map<String, dynamic>.from(
+        roomSnap.data()!['unreadCounts'] as Map,
+      );
       // Lawyer's slot incremented; client's stays at 0.
       expect(counts[_lawyerId], 1);
       expect(counts[_clientId], 0);
@@ -246,10 +305,10 @@ void main() {
         );
       }
 
-      final roomSnap =
-          await fakeDb.collection('chat_rooms').doc(_roomId).get();
-      final counts =
-          Map<String, dynamic>.from(roomSnap.data()!['unreadCounts'] as Map);
+      final roomSnap = await fakeDb.collection('chat_rooms').doc(_roomId).get();
+      final counts = Map<String, dynamic>.from(
+        roomSnap.data()!['unreadCounts'] as Map,
+      );
       expect(counts[_lawyerId], 3);
     });
   });
@@ -258,17 +317,14 @@ void main() {
 
   group('markRoomRead', () {
     test('zeroes the caller uid slot and leaves the other untouched', () async {
-      await _seedRoom(
-        fakeDb,
-        unreadCounts: {_clientId: 5, _lawyerId: 2},
-      );
+      await _seedRoom(fakeDb, unreadCounts: {_clientId: 5, _lawyerId: 2});
 
       await repo.markRoomRead(_roomId, _clientId);
 
-      final roomSnap =
-          await fakeDb.collection('chat_rooms').doc(_roomId).get();
-      final counts =
-          Map<String, dynamic>.from(roomSnap.data()!['unreadCounts'] as Map);
+      final roomSnap = await fakeDb.collection('chat_rooms').doc(_roomId).get();
+      final counts = Map<String, dynamic>.from(
+        roomSnap.data()!['unreadCounts'] as Map,
+      );
       expect(counts[_clientId], 0);
       expect(counts[_lawyerId], 2); // untouched
     });
@@ -277,15 +333,12 @@ void main() {
       await _seedRoom(fakeDb, unreadCounts: {_clientId: 0, _lawyerId: 0});
 
       // Should not throw.
-      await expectLater(
-        repo.markRoomRead(_roomId, _clientId),
-        completes,
-      );
+      await expectLater(repo.markRoomRead(_roomId, _clientId), completes);
 
-      final roomSnap =
-          await fakeDb.collection('chat_rooms').doc(_roomId).get();
-      final counts =
-          Map<String, dynamic>.from(roomSnap.data()!['unreadCounts'] as Map);
+      final roomSnap = await fakeDb.collection('chat_rooms').doc(_roomId).get();
+      final counts = Map<String, dynamic>.from(
+        roomSnap.data()!['unreadCounts'] as Map,
+      );
       expect(counts[_clientId], 0);
     });
   });
@@ -293,61 +346,80 @@ void main() {
   // ── deleteMessage / editMessage ─────────────────────────────────────────────
 
   group('deleteMessage and editMessage', () {
-    test('deleteMessage removes the message document from the subcollection', () async {
-      await _seedRoom(fakeDb);
+    test(
+      'deleteMessage removes the message document from the subcollection',
+      () async {
+        await _seedRoom(fakeDb);
 
-      final ref = fakeDb.collection('chat_rooms').doc(_roomId).collection('messages');
-      await ref.doc('m1').set({
-        'id': 'm1',
-        'roomId': _roomId,
-        'senderId': _clientId,
-        'senderRole': 'client',
-        'type': 'text',
-        'text': 'Initial text',
-        'createdAt': DateTime.utc(2026, 5, 10),
-      });
+        final ref = fakeDb
+            .collection('chat_rooms')
+            .doc(_roomId)
+            .collection('messages');
+        await ref.doc('m1').set({
+          'id': 'm1',
+          'roomId': _roomId,
+          'senderId': _clientId,
+          'senderRole': 'client',
+          'type': 'text',
+          'text': 'Initial text',
+          'createdAt': DateTime.utc(2026, 5, 10),
+        });
 
-      // Assert exists first
-      var snap = await ref.doc('m1').get();
-      expect(snap.exists, true);
+        // Assert exists first
+        var snap = await ref.doc('m1').get();
+        expect(snap.exists, true);
 
-      // Delete
-      await repo.deleteMessage(roomId: _roomId, messageId: 'm1');
+        // Delete
+        await repo.deleteMessage(roomId: _roomId, messageId: 'm1');
 
-      // Assert removed
-      snap = await ref.doc('m1').get();
-      expect(snap.exists, false);
-    });
+        // Assert removed
+        snap = await ref.doc('m1').get();
+        expect(snap.exists, false);
+      },
+    );
 
-    test('editMessage updates the text content of the message document', () async {
-      await _seedRoom(fakeDb);
+    test(
+      'editMessage updates the text content of the message document',
+      () async {
+        await _seedRoom(fakeDb);
 
-      final ref = fakeDb.collection('chat_rooms').doc(_roomId).collection('messages');
-      await ref.doc('m1').set({
-        'id': 'm1',
-        'roomId': _roomId,
-        'senderId': _clientId,
-        'senderRole': 'client',
-        'type': 'text',
-        'text': 'Initial text',
-        'createdAt': DateTime.utc(2026, 5, 10),
-      });
+        final ref = fakeDb
+            .collection('chat_rooms')
+            .doc(_roomId)
+            .collection('messages');
+        await ref.doc('m1').set({
+          'id': 'm1',
+          'roomId': _roomId,
+          'senderId': _clientId,
+          'senderRole': 'client',
+          'type': 'text',
+          'text': 'Initial text',
+          'createdAt': DateTime.utc(2026, 5, 10),
+        });
 
-      // Edit
-      await repo.editMessage(roomId: _roomId, messageId: 'm1', newText: '  Edited text  ');
+        // Edit
+        await repo.editMessage(
+          roomId: _roomId,
+          messageId: 'm1',
+          newText: '  Edited text  ',
+        );
 
-      // Assert text updated and trimmed
-      final snap = await ref.doc('m1').get();
-      expect(snap.data()?['text'], 'Edited text');
-    });
+        // Assert text updated and trimmed
+        final snap = await ref.doc('m1').get();
+        expect(snap.data()?['text'], 'Edited text');
+      },
+    );
 
-    test('editMessage throws ArgumentError if newText is empty or whitespace', () async {
-      await _seedRoom(fakeDb);
+    test(
+      'editMessage throws ArgumentError if newText is empty or whitespace',
+      () async {
+        await _seedRoom(fakeDb);
 
-      await expectLater(
-        repo.editMessage(roomId: _roomId, messageId: 'm1', newText: '   '),
-        throwsA(isA<ArgumentError>()),
-      );
-    });
+        await expectLater(
+          repo.editMessage(roomId: _roomId, messageId: 'm1', newText: '   '),
+          throwsA(isA<ArgumentError>()),
+        );
+      },
+    );
   });
 }

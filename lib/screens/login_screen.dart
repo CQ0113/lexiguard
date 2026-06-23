@@ -10,8 +10,6 @@ import '../repositories/user_repository.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_auth_sync_service.dart';
 import 'admin_login_screen.dart';
-import 'client/client_dashboard_screen.dart';
-import 'lawyer/lawyer_dashboard_screen.dart';
 import 'shared/live_dashboard_router_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -39,9 +37,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final Color primaryBlue = const Color(0xFF0C1D36);
   final Color goldAccent = const Color(0xFFCFA92A);
   final FirebaseAuthSyncService _authSyncService = FirebaseAuthSyncService();
-  
+
   UserRepository? _userRepositoryInstance;
-  UserRepository get _userRepository => _userRepositoryInstance ??= UserRepository();
+  UserRepository get _userRepository =>
+      _userRepositoryInstance ??= UserRepository();
 
   LawyerProfileRepository? _lawyerProfileRepositoryInstance;
   LawyerProfileRepository get _lawyerProfileRepository =>
@@ -284,7 +283,9 @@ class _LoginScreenState extends State<LoginScreen> {
     required UserRole role,
   }) {
     if (role == UserRole.client) {
-      final client = DummyData.users.firstWhere((u) => u.role == UserRole.client);
+      final client = DummyData.users.firstWhere(
+        (u) => u.role == UserRole.client,
+      );
       return UserModel(
         id: uid,
         name: client.name,

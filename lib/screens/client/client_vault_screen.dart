@@ -2,9 +2,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart'; 
-import 'package:cloud_functions/cloud_functions.dart'; 
-import 'package:flutter/services.dart'; 
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/services.dart';
 
 import '../../models/vault_document_model.dart';
 import '../../repositories/vault_document_repository.dart';
@@ -31,7 +31,7 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
   late final VaultDocumentRepository _repository;
   bool _isUploading = false;
   double _uploadProgress = 0;
-  
+
   final double _maxStorageGb = 50.0;
   final Map<String, DateTime> _activeShareLinks = {};
 
@@ -57,7 +57,7 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
 
   Future<void> _openDocument(VaultDocumentModel document) async {
     final urlString = document.downloadUrl;
-    
+
     if (urlString.isEmpty) {
       _showSnack('File link is not available.');
       return;
@@ -71,6 +71,77 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
     } catch (e) {
       _showSnack('Error opening file: $e');
     }
+  }
+
+  Future<void> _showRenameDialog(VaultDocumentModel document) async {
+    final formKey = GlobalKey<FormState>();
+    var enteredName = document.fileName;
+
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Rename Document'),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              initialValue: document.fileName,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: 'Document name',
+                hintText: 'e.g. Tenancy agreement.pdf',
+              ),
+              validator: _validateDocumentName,
+              onChanged: (value) => enteredName = value,
+              onFieldSubmitted: (value) {
+                enteredName = value;
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.of(dialogContext).pop(enteredName.trim());
+                }
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.of(dialogContext).pop(enteredName.trim());
+                }
+              },
+              child: const Text('Rename'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (newName == null || newName == document.fileName) return;
+
+    try {
+      final renamed = await _repository.renameDocument(
+        document: document,
+        ownerUserId: _effectiveUserId,
+        newFileName: newName,
+      );
+      _showSnack('Renamed to "$renamed".');
+    } catch (error) {
+      _showSnack('Rename failed: $error');
+    }
+  }
+
+  String? _validateDocumentName(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return 'Enter a document name.';
+    if (trimmed.length > 120) return 'Use 120 characters or fewer.';
+    if (RegExp(r'[\\/\x00-\x1F]').hasMatch(trimmed)) {
+      return 'Name cannot contain / or \\.';
+    }
+    return null;
   }
 
   Future<void> _pickAndUpload() async {
@@ -117,21 +188,24 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
     } catch (error) {
       _showSnack('Upload failed: $error');
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isUploading = false;
-        _uploadProgress = 0;
-      });
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _uploadProgress = 0;
+        });
+      }
     }
   }
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _showShareDialog(VaultDocumentModel doc) async {
-    int selectedHours = 24; 
+    int selectedHours = 24;
     bool isGenerating = false;
 
     await showModalBottomSheet(
@@ -177,81 +251,121 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
                     style: GoogleFonts.inter(color: const Color(0xFF64748B)),
                   ),
                   const SizedBox(height: 24),
-                  
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildDurationButton(1, '1h', selectedHours, (val) => setModalState(() => selectedHours = val)),
-                      _buildDurationButton(6, '6h', selectedHours, (val) => setModalState(() => selectedHours = val)),
-                      _buildDurationButton(24, '24h', selectedHours, (val) => setModalState(() => selectedHours = val)),
-                      _buildDurationButton(48, '48h', selectedHours, (val) => setModalState(() => selectedHours = val)),
+                      _buildDurationButton(
+                        1,
+                        '1h',
+                        selectedHours,
+                        (val) => setModalState(() => selectedHours = val),
+                      ),
+                      _buildDurationButton(
+                        6,
+                        '6h',
+                        selectedHours,
+                        (val) => setModalState(() => selectedHours = val),
+                      ),
+                      _buildDurationButton(
+                        24,
+                        '24h',
+                        selectedHours,
+                        (val) => setModalState(() => selectedHours = val),
+                      ),
+                      _buildDurationButton(
+                        48,
+                        '48h',
+                        selectedHours,
+                        (val) => setModalState(() => selectedHours = val),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
-                  
+
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFD4AF37),
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       onPressed: isGenerating
                           ? null
                           : () async {
                               setModalState(() => isGenerating = true);
-                              
+
                               try {
                                 final result = await FirebaseFunctions.instance
                                     .httpsCallable('generateSecureShareLink')
                                     .call({
-                                  'storagePath': doc.storagePath,
-                                  'expirationHours': selectedHours,
-                                });
+                                      'storagePath': doc.storagePath,
+                                      'expirationHours': selectedHours,
+                                    });
 
-                                if (mounted) {
+                                if (mounted && dialogContext.mounted) {
                                   setModalState(() => isGenerating = false);
-                                  
-                                  final generatedUrl = result.data['url'] as String?;
-                                  final expiresAtMs = result.data['expiresAt'] as int?; 
+
+                                  final generatedUrl =
+                                      result.data['url'] as String?;
+                                  final expiresAtMs =
+                                      result.data['expiresAt'] as int?;
 
                                   if (generatedUrl != null) {
-                                    Clipboard.setData(ClipboardData(text: generatedUrl));
-                                    _showSnack('Link generated and copied to clipboard!');
-                                    
+                                    Clipboard.setData(
+                                      ClipboardData(text: generatedUrl),
+                                    );
+                                    _showSnack(
+                                      'Link generated and copied to clipboard!',
+                                    );
+
                                     if (expiresAtMs != null) {
                                       setState(() {
-                                        _activeShareLinks[doc.storagePath] = DateTime.fromMillisecondsSinceEpoch(expiresAtMs);
+                                        _activeShareLinks[doc.storagePath] =
+                                            DateTime.fromMillisecondsSinceEpoch(
+                                              expiresAtMs,
+                                            );
                                       });
                                     }
-                                    
-                                    Navigator.pop(context);
+
+                                    Navigator.pop(dialogContext);
                                   }
                                 }
                               } on FirebaseFunctionsException catch (e) {
-                                if (mounted) {
+                                if (mounted && dialogContext.mounted) {
                                   setModalState(() => isGenerating = false);
-                                  Navigator.pop(context);
-                                  _showSnack('Failed to generate link: ${e.message}');
+                                  Navigator.pop(dialogContext);
+                                  _showSnack(
+                                    'Failed to generate link: ${e.message}',
+                                  );
                                 }
                               } catch (e) {
-                                if (mounted) {
+                                if (mounted && dialogContext.mounted) {
                                   setModalState(() => isGenerating = false);
-                                  Navigator.pop(context);
+                                  Navigator.pop(dialogContext);
                                   _showSnack('Error connecting to server: $e');
                                 }
                               }
                             },
                       child: isGenerating
                           ? const SizedBox(
-                              height: 20, width: 20, 
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
                             )
                           : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.link, color: const Color(0xFF0B2447)),
+                                const Icon(
+                                  Icons.link,
+                                  color: Color(0xFF0B2447),
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Generate & Copy Link',
@@ -274,7 +388,12 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
     );
   }
 
-  Widget _buildDurationButton(int value, String label, int selectedHours, Function(int) onChanged) {
+  Widget _buildDurationButton(
+    int value,
+    String label,
+    int selectedHours,
+    Function(int) onChanged,
+  ) {
     final isSelected = value == selectedHours;
     return GestureDetector(
       onTap: () => onChanged(value),
@@ -284,7 +403,9 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
           color: isSelected ? const Color(0xFF0B2447) : Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isSelected ? const Color(0xFF0B2447) : const Color(0xFFE2E8F0),
+            color: isSelected
+                ? const Color(0xFF0B2447)
+                : const Color(0xFFE2E8F0),
           ),
         ),
         child: Text(
@@ -306,15 +427,18 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
         stream: _getSafeStream(),
         builder: (context, snapshot) {
           final docs = snapshot.data ?? const <VaultDocumentModel>[];
-          
-          double totalBytes = docs.fold(0, (sum, doc) => sum + (doc.sizeBytes ?? 0));
+
+          double totalBytes = docs.fold(
+            0,
+            (sum, doc) => sum + (doc.sizeBytes ?? 0),
+          );
           double totalGb = totalBytes / (1024 * 1024 * 1024);
           double totalMb = totalBytes / (1024 * 1024);
-          
-          String usedLabel = totalGb >= 1.0 
-              ? '${totalGb.toStringAsFixed(1)} GB' 
+
+          String usedLabel = totalGb >= 1.0
+              ? '${totalGb.toStringAsFixed(1)} GB'
               : '${totalMb.toStringAsFixed(1)} MB';
-              
+
           double progressPct = (totalGb / _maxStorageGb).clamp(0.0, 1.0);
           if (docs.isNotEmpty && progressPct < 0.02) progressPct = 0.02;
 
@@ -363,7 +487,7 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      
+
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -372,17 +496,21 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
                           border: Border.all(color: const Color(0xFFF1F5F9)),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha: 0.02),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
-                            )
-                          ]
+                            ),
+                          ],
                         ),
                         child: Column(
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.shield_outlined, color: Color(0xFFD4AF37), size: 20),
+                                const Icon(
+                                  Icons.shield_outlined,
+                                  color: Color(0xFFD4AF37),
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Encrypted Storage',
@@ -417,7 +545,10 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(999),
                                       gradient: const LinearGradient(
-                                        colors: [Color(0xFF0B2447), Color(0xFFD4AF37)],
+                                        colors: [
+                                          Color(0xFF0B2447),
+                                          Color(0xFFD4AF37),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -428,14 +559,14 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      
+
                       VaultUploadCardWidget(
                         isUploading: _isUploading,
                         progress: _uploadProgress,
                         onPickFile: _pickAndUpload,
                       ),
                       const SizedBox(height: 24),
-                      
+
                       Text(
                         'My Documents',
                         style: GoogleFonts.inter(
@@ -448,7 +579,7 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
                   ),
                 ),
               ),
-              
+
               if (snapshot.connectionState == ConnectionState.waiting)
                 const SliverFillRemaining(
                   child: Center(child: CircularProgressIndicator()),
@@ -475,55 +606,68 @@ class _ClientVaultScreenState extends State<ClientVaultScreen> {
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final doc = docs[index];
-                        
-                        String? shareNotice;
-                        bool isExpired = false;
-                        final expiresAt = _activeShareLinks[doc.storagePath];
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final doc = docs[index];
 
-                        if (expiresAt != null) {
-                          final now = DateTime.now();
-                          
-                          if (expiresAt.isAfter(now)) {
-                            final diff = expiresAt.difference(now);
-                            final hours = diff.inHours;
-                            final minutes = diff.inMinutes % 60;
-                            
-                            if (hours > 0) {
-                              shareNotice = 'Share link: ${hours}h ${minutes}m remaining';
-                            } else if (minutes > 0) {
-                              shareNotice = 'Share link: ${minutes}m remaining';
-                            } else {
-                              shareNotice = 'Share link: < 1m remaining';
-                            }
+                      String? shareNotice;
+                      bool isExpired = false;
+                      final expiresAt = _activeShareLinks[doc.storagePath];
+
+                      if (expiresAt != null) {
+                        final now = DateTime.now();
+
+                        if (expiresAt.isAfter(now)) {
+                          final diff = expiresAt.difference(now);
+                          final hours = diff.inHours;
+                          final minutes = diff.inMinutes % 60;
+
+                          if (hours > 0) {
+                            shareNotice =
+                                'Share link: ${hours}h ${minutes}m remaining';
+                          } else if (minutes > 0) {
+                            shareNotice = 'Share link: ${minutes}m remaining';
                           } else {
-                            shareNotice = 'Share link: Expired';
-                            isExpired = true;
+                            shareNotice = 'Share link: < 1m remaining';
                           }
+                        } else {
+                          shareNotice = 'Share link: Expired';
+                          isExpired = true;
                         }
+                      }
 
-                        return VaultDocumentTileWidget(
-                          document: doc,
-                          activeShareText: shareNotice, 
-                          isShareExpired: isExpired, 
-                          onTap: () => _openDocument(doc),
-                          trailing: IconButton(
-                            onPressed: () => _showShareDialog(doc),
-                            icon: const Icon(
-                              Icons.share_outlined,
-                              color: Color(0xFF94A3B8),
-                              size: 20,
+                      return VaultDocumentTileWidget(
+                        document: doc,
+                        activeShareText: shareNotice,
+                        isShareExpired: isExpired,
+                        onTap: () => _openDocument(doc),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              onPressed: () => _showRenameDialog(doc),
+                              tooltip: 'Rename document',
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                color: Color(0xFF64748B),
+                                size: 20,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                      childCount: docs.length,
-                    ),
+                            IconButton(
+                              onPressed: () => _showShareDialog(doc),
+                              tooltip: 'Share document',
+                              icon: const Icon(
+                                Icons.share_outlined,
+                                color: Color(0xFF94A3B8),
+                                size: 20,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }, childCount: docs.length),
                   ),
                 ),
-                
+
               const SliverToBoxAdapter(child: SizedBox(height: 40)),
             ],
           );

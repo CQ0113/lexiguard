@@ -48,4 +48,28 @@ void main() {
     expect(data['closedBy'], 'client_2');
     expect(data['closeReason'], 'Resolved amicably.');
   });
+
+  test('lawyer recommendation accepts backend matchScore schema', () {
+    final recommendation = LawyerRecommendation.fromMap({
+      'lawyerId': 'lawyer_1',
+      'lawyerName': 'Aina Legal',
+      'specialization': 'Property',
+      'practiceState': 'Johor',
+      'practiceCity': 'Johor Bahru',
+      'yearsExperience': 7,
+      'languages': ['English', 'Malay'],
+      'hourlyRate': 180,
+      'matchScore': 87,
+      'matchReasons': [
+        'Practice area matches the property case.',
+        'Location matches Johor Bahru.',
+      ],
+    });
+
+    expect(recommendation.matchPercentage, 87);
+    expect(
+      recommendation.matchReason,
+      'Practice area matches the property case. Location matches Johor Bahru.',
+    );
+  });
 }

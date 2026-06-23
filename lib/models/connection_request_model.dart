@@ -150,8 +150,11 @@ class LawyerSnapshot {
 
 // ─── Nested helper: ClientReveal ─────────────────────────────────────────────
 
-/// Written to the request doc on `approve` — gives the approved lawyer access
-/// to the client's contact info without exposing the full user document.
+/// Denormalized client identity for a connection request.
+///
+/// Lawyer-initiated requests receive this on client approval. Client-initiated
+/// requests include at least the display name up front so the requested lawyer
+/// can label the case without reading the private client user document.
 class ClientReveal {
   final String name;
   final String? email;

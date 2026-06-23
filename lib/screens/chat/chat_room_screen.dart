@@ -2,7 +2,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -11,7 +10,6 @@ import '../../models/vault_document_model.dart';
 import '../../repositories/chat_repository.dart';
 import '../../repositories/vault_document_repository.dart';
 import '../../repositories/user_repository.dart';
-import '../shared/profile_screen.dart';
 import 'widgets/lexibot_draft_panel.dart';
 import 'widgets/message_bubble.dart';
 
@@ -60,8 +58,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   bool get _isClient => widget.currentUser.role == UserRole.client;
 
-  UserRole get _senderRole =>
-      _isClient ? UserRole.client : UserRole.lawyer;
+  UserRole get _senderRole => _isClient ? UserRole.client : UserRole.lawyer;
 
   String get _recipientId =>
       _isClient ? widget.room.lawyerId : widget.room.clientId;
@@ -101,7 +98,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   Future<void> _editMessage(String messageId, String newText) async {
     try {
-      await _repo.editMessage(roomId: widget.room.id, messageId: messageId, newText: newText);
+      await _repo.editMessage(
+        roomId: widget.room.id,
+        messageId: messageId,
+        newText: newText,
+      );
     } catch (e) {
       _showErrorSnackBar('Could not edit message: ${e.toString()}');
     }
@@ -111,9 +112,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(color: _gold),
-      ),
+      builder: (context) =>
+          const Center(child: CircularProgressIndicator(color: _gold)),
     );
     try {
       if (_isClient) {
@@ -191,11 +191,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 // Avatar
                 CircleAvatar(
                   radius: 40,
-                  backgroundColor: _navy.withOpacity(0.1),
-                  backgroundImage: isLawyer && user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                  backgroundColor: _navy.withValues(alpha: 0.1),
+                  backgroundImage:
+                      isLawyer &&
+                          user.avatarUrl != null &&
+                          user.avatarUrl!.isNotEmpty
                       ? NetworkImage(user.avatarUrl!)
                       : null,
-                  child: !isLawyer || user.avatarUrl == null || user.avatarUrl!.isEmpty
+                  child:
+                      !isLawyer ||
+                          user.avatarUrl == null ||
+                          user.avatarUrl!.isEmpty
                       ? Text(
                           _initials(user.name),
                           style: GoogleFonts.inter(
@@ -220,9 +226,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 const SizedBox(height: 6),
                 // Role badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: isLawyer ? _gold.withOpacity(0.12) : _navy.withOpacity(0.08),
+                    color: isLawyer
+                        ? _gold.withValues(alpha: 0.12)
+                        : _navy.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Text(
@@ -245,7 +256,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -254,36 +265,79 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   child: Column(
                     children: [
                       if (isLawyer) ...[
-                        _buildDetailRow(Icons.business_rounded, 'Firm Name', user.firmName ?? 'Not provided'),
+                        _buildDetailRow(
+                          Icons.business_rounded,
+                          'Firm Name',
+                          user.firmName ?? 'Not provided',
+                        ),
                         _buildDetailDivider(),
-                        _buildDetailRow(Icons.gavel_rounded, 'Specialization', user.specialization ?? 'Not provided'),
+                        _buildDetailRow(
+                          Icons.gavel_rounded,
+                          'Specialization',
+                          user.specialization ?? 'Not provided',
+                        ),
                         _buildDetailDivider(),
-                        _buildDetailRow(Icons.history_rounded, 'Experience', user.yearsExperience != null ? '${user.yearsExperience} years' : 'Not provided'),
+                        _buildDetailRow(
+                          Icons.history_rounded,
+                          'Experience',
+                          user.yearsExperience != null
+                              ? '${user.yearsExperience} years'
+                              : 'Not provided',
+                        ),
                         _buildDetailDivider(),
-                        _buildDetailRow(Icons.monetization_on_outlined, 'Hourly Rate', user.hourlyRate != null ? 'RM ${user.hourlyRate!.toStringAsFixed(2)} / hour' : 'Not provided'),
+                        _buildDetailRow(
+                          Icons.monetization_on_outlined,
+                          'Hourly Rate',
+                          user.hourlyRate != null
+                              ? 'RM ${user.hourlyRate!.toStringAsFixed(2)} / hour'
+                              : 'Not provided',
+                        ),
                         _buildDetailDivider(),
-                        _buildDetailRow(Icons.badge_outlined, 'Bar Number', user.barNumber ?? 'Not provided'),
+                        _buildDetailRow(
+                          Icons.badge_outlined,
+                          'Bar Number',
+                          user.barNumber ?? 'Not provided',
+                        ),
                         if (user.languages.isNotEmpty) ...[
                           _buildDetailDivider(),
                           _buildLanguagesRow(user.languages),
                         ],
                       ] else ...[
-                        _buildDetailRow(Icons.email_outlined, 'Email', user.email),
+                        _buildDetailRow(
+                          Icons.email_outlined,
+                          'Email',
+                          user.email,
+                        ),
                         _buildDetailDivider(),
-                        _buildDetailRow(Icons.phone_outlined, 'Phone', user.phone.isNotEmpty ? user.phone : 'Not provided'),
+                        _buildDetailRow(
+                          Icons.phone_outlined,
+                          'Phone',
+                          user.phone.isNotEmpty ? user.phone : 'Not provided',
+                        ),
                         _buildDetailDivider(),
                         Row(
                           children: [
                             Expanded(
-                              child: _buildDetailRow(Icons.fingerprint_rounded, 'Client ID', user.id),
+                              child: _buildDetailRow(
+                                Icons.fingerprint_rounded,
+                                'Client ID',
+                                user.id,
+                              ),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.copy_rounded, color: Color(0xFFCFA92A), size: 20),
+                              icon: const Icon(
+                                Icons.copy_rounded,
+                                color: Color(0xFFCFA92A),
+                                size: 20,
+                              ),
                               onPressed: () {
                                 Clipboard.setData(ClipboardData(text: user.id));
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Client ID copied to clipboard.', style: GoogleFonts.inter()),
+                                    content: Text(
+                                      'Client ID copied to clipboard.',
+                                      style: GoogleFonts.inter(),
+                                    ),
                                     backgroundColor: const Color(0xFF0C1D36),
                                   ),
                                 );
@@ -303,11 +357,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _navy,
-                      side: BorderSide(color: _navy.withOpacity(0.2)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide(color: _navy.withValues(alpha: 0.2)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: () => Navigator.of(ctx).pop(),
-                    child: Text('Close', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ],
@@ -365,7 +424,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.translate_rounded, size: 20, color: Color(0xFF64748B)),
+          const Icon(
+            Icons.translate_rounded,
+            size: 20,
+            color: Color(0xFF64748B),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -385,11 +448,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   runSpacing: 6,
                   children: languages.map((lang) {
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: _gold.withOpacity(0.1),
+                        color: _gold.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _gold.withOpacity(0.2)),
+                        border: Border.all(color: _gold.withValues(alpha: 0.2)),
                       ),
                       child: Text(
                         lang,
@@ -446,10 +512,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.inter(color: Colors.white),
-        ),
+        content: Text(message, style: GoogleFonts.inter(color: Colors.white)),
         backgroundColor: Colors.red[700],
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -504,7 +567,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   ///
   /// No external `mime` package needed — extension lookup covers all types
   /// permitted by the Storage rule.
-  static String _mimeFromExtension(String fileName, {required String fallback}) {
+  static String _mimeFromExtension(
+    String fileName, {
+    required String fallback,
+  }) {
     final ext = fileName.contains('.')
         ? fileName.split('.').last.toLowerCase()
         : '';
@@ -575,7 +641,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             const SizedBox(height: 12),
             ListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              leading: const Icon(Icons.image_rounded, color: Color(0xFF0C1D36)),
+              leading: const Icon(
+                Icons.image_rounded,
+                color: Color(0xFF0C1D36),
+              ),
               title: Text(
                 'Photo',
                 style: GoogleFonts.inter(
@@ -651,7 +720,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF0C1D36)));
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF0C1D36)),
+                  );
                 }
                 if (snapshot.hasError) {
                   return Center(
@@ -687,7 +758,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       ),
                       subtitle: Text(
                         doc.contentType ?? 'Document',
-                        style: GoogleFonts.inter(fontSize: 11, color: Colors.grey[500]),
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: Colors.grey[500],
+                        ),
                       ),
                       onTap: () => Navigator.of(dialogCtx).pop(doc),
                     );
@@ -709,7 +783,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       },
     );
 
-    if (chosenDoc == null) return;
+    if (chosenDoc == null || !mounted) return;
 
     // Ask user: Direct send or Time-bomb expiring link
     final shareModeChoice = await showDialog<String>(
@@ -718,14 +792,23 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         return AlertDialog(
           title: Text(
             'Share Document',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0C1D36)),
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF0C1D36),
+            ),
           ),
           content: Text(
             'How would you like to share "${chosenDoc.fileName}" in this chat?',
-            style: GoogleFonts.inter(fontSize: 14, color: const Color(0xFF334155)),
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: const Color(0xFF334155),
+            ),
           ),
           actionsAlignment: MainAxisAlignment.center,
-          actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          actionsPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
           actions: [
             Column(
               mainAxisSize: MainAxisSize.min,
@@ -736,7 +819,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0C1D36),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     icon: const Icon(Icons.send_rounded, size: 16),
                     label: const Text('Send Document Directly'),
@@ -750,7 +835,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFCFA92A),
                       side: const BorderSide(color: Color(0xFFCFA92A)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     icon: const Icon(Icons.timer_outlined, size: 16),
                     label: const Text('Send Expiring Link (Time-Bomb)'),
@@ -766,7 +853,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   ),
                 ),
               ],
-            )
+            ),
           ],
         );
       },
@@ -777,8 +864,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     if (shareModeChoice == 'direct') {
       setState(() => _isUploading = true);
       try {
-        final String mimeType = chosenDoc.contentType ?? 'application/octet-stream';
-        final msgType = mimeType.startsWith('image/') ? MessageType.image : MessageType.file;
+        final String mimeType =
+            chosenDoc.contentType ?? 'application/octet-stream';
+        final msgType = mimeType.startsWith('image/')
+            ? MessageType.image
+            : MessageType.file;
 
         // Directly link vault attachment without local download to resolve CORS & Storage permissions
         final path = await _repo.sendVaultAttachmentMessage(
@@ -802,6 +892,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         if (mounted) setState(() => _isUploading = false);
       }
     } else if (shareModeChoice == 'timebomb') {
+      if (!mounted) return;
       int selectedHours = 24;
       final bool? confirmTimebomb = await showDialog<bool>(
         context: context,
@@ -811,7 +902,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               return AlertDialog(
                 title: Text(
                   'Expiring Share Link',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0C1D36)),
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF0C1D36),
+                  ),
                 ),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -819,16 +913,43 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   children: [
                     Text(
                       'Select link validity duration. Once expired, the recipient will not be able to access the document.',
-                      style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFF64748B)),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: const Color(0xFF64748B),
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildTimeOption(timebombCtx, 1, '1h', selectedHours, (v) => setTimeState(() => selectedHours = v)),
-                        _buildTimeOption(timebombCtx, 6, '6h', selectedHours, (v) => setTimeState(() => selectedHours = v)),
-                        _buildTimeOption(timebombCtx, 24, '24h', selectedHours, (v) => setTimeState(() => selectedHours = v)),
-                        _buildTimeOption(timebombCtx, 48, '48h', selectedHours, (v) => setTimeState(() => selectedHours = v)),
+                        _buildTimeOption(
+                          timebombCtx,
+                          1,
+                          '1h',
+                          selectedHours,
+                          (v) => setTimeState(() => selectedHours = v),
+                        ),
+                        _buildTimeOption(
+                          timebombCtx,
+                          6,
+                          '6h',
+                          selectedHours,
+                          (v) => setTimeState(() => selectedHours = v),
+                        ),
+                        _buildTimeOption(
+                          timebombCtx,
+                          24,
+                          '24h',
+                          selectedHours,
+                          (v) => setTimeState(() => selectedHours = v),
+                        ),
+                        _buildTimeOption(
+                          timebombCtx,
+                          48,
+                          '48h',
+                          selectedHours,
+                          (v) => setTimeState(() => selectedHours = v),
+                        ),
                       ],
                     ),
                   ],
@@ -836,7 +957,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(timebombCtx).pop(false),
-                    child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey[500])),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.inter(color: Colors.grey[500]),
+                    ),
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -860,23 +984,26 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         final result = await FirebaseFunctions.instance
             .httpsCallable('generateSecureShareLink')
             .call({
-          'storagePath': chosenDoc.storagePath,
-          'expirationHours': selectedHours,
-        });
+              'storagePath': chosenDoc.storagePath,
+              'expirationHours': selectedHours,
+            });
 
         final generatedUrl = result.data['url'] as String?;
         if (generatedUrl == null) {
           throw Exception('Cloud function returned empty redirect URL.');
         }
 
-        final DateTime expiresAt = DateTime.now().add(Duration(hours: selectedHours));
+        final DateTime expiresAt = DateTime.now().add(
+          Duration(hours: selectedHours),
+        );
         // Send the generated link as a secure message in the chat
         await _repo.sendTextMessage(
           roomId: widget.room.id,
           senderId: widget.currentUser.id,
           senderRole: _senderRole,
           recipientId: _recipientId,
-          text: '🔒 Secure Expiring Link for "${chosenDoc.fileName}" (valid for $selectedHours hours):\n$generatedUrl',
+          text:
+              '🔒 Secure Expiring Link for "${chosenDoc.fileName}" (valid for $selectedHours hours):\n$generatedUrl',
           expiresAt: expiresAt,
           attachmentName: chosenDoc.fileName,
           attachmentDownloadUrl: generatedUrl,
@@ -890,7 +1017,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
-  Widget _buildTimeOption(BuildContext ctx, int value, String label, int selected, Function(int) onTap) {
+  Widget _buildTimeOption(
+    BuildContext ctx,
+    int value,
+    String label,
+    int selected,
+    Function(int) onTap,
+  ) {
     final active = value == selected;
     return GestureDetector(
       onTap: () => onTap(value),
@@ -899,7 +1032,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         decoration: BoxDecoration(
           color: active ? const Color(0xFF0C1D36) : Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: active ? const Color(0xFF0C1D36) : const Color(0xFFCBD5E1)),
+          border: Border.all(
+            color: active ? const Color(0xFF0C1D36) : const Color(0xFFCBD5E1),
+          ),
         ),
         child: Text(
           label,
@@ -935,11 +1070,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             children: [
               CircleAvatar(
                 radius: 18,
-                backgroundColor: _gold.withOpacity(0.2),
-                backgroundImage: !isClient && room.lawyerAvatarUrl != null && room.lawyerAvatarUrl!.isNotEmpty
+                backgroundColor: _gold.withValues(alpha: 0.2),
+                backgroundImage:
+                    !isClient &&
+                        room.lawyerAvatarUrl != null &&
+                        room.lawyerAvatarUrl!.isNotEmpty
                     ? NetworkImage(room.lawyerAvatarUrl!)
                     : null,
-                child: isClient || room.lawyerAvatarUrl == null || room.lawyerAvatarUrl!.isEmpty
+                child:
+                    isClient ||
+                        room.lawyerAvatarUrl == null ||
+                        room.lawyerAvatarUrl!.isEmpty
                     ? Text(
                         _initials(_otherName),
                         style: GoogleFonts.inter(
@@ -1072,7 +1213,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         return MessageBubble(
                           message: msg,
                           isOwn: isMyMsg,
-                          onDelete: isMyMsg ? () => _deleteMessage(msg.id) : null,
+                          onDelete: isMyMsg
+                              ? () => _deleteMessage(msg.id)
+                              : null,
                           onEdit: isMyMsg && msg.type == MessageType.text
                               ? (newText) => _editMessage(msg.id, newText)
                               : null,
@@ -1177,9 +1320,7 @@ class _ComposerState extends State<_Composer> {
       padding: EdgeInsets.fromLTRB(12, 10, 12, 10 + bottomInset),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-        ),
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
       child: SafeArea(
         top: false,
@@ -1190,7 +1331,9 @@ class _ComposerState extends State<_Composer> {
             Container(
               margin: const EdgeInsets.only(bottom: 2, right: 6),
               decoration: BoxDecoration(
-                color: widget.isBusy ? Colors.transparent : const Color(0xFFF1F5F9),
+                color: widget.isBusy
+                    ? Colors.transparent
+                    : const Color(0xFFF1F5F9),
                 shape: BoxShape.circle,
               ),
               child: IconButton(
@@ -1217,13 +1360,8 @@ class _ComposerState extends State<_Composer> {
                   enabled: !widget.isBusy,
                   keyboardType: TextInputType.multiline,
                   textCapitalization: TextCapitalization.sentences,
-                  inputFormatters: [
-                    LengthLimitingTextInputFormatter(4000),
-                  ],
-                  style: GoogleFonts.inter(
-                    color: _navy,
-                    fontSize: 14,
-                  ),
+                  inputFormatters: [LengthLimitingTextInputFormatter(4000)],
+                  style: GoogleFonts.inter(color: _navy, fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Type a message…',
                     hintStyle: GoogleFonts.inter(
@@ -1244,7 +1382,9 @@ class _ComposerState extends State<_Composer> {
             Container(
               margin: const EdgeInsets.only(left: 6, bottom: 2),
               decoration: BoxDecoration(
-                color: widget.isBusy ? Colors.transparent : const Color(0xFFFEF3C7),
+                color: widget.isBusy
+                    ? Colors.transparent
+                    : const Color(0xFFFEF3C7),
                 shape: BoxShape.circle,
               ),
               child: Tooltip(

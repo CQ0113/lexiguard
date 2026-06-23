@@ -11,8 +11,9 @@ import '../../repositories/case_repository.dart';
 // Design: #0B2447 navy, #D4AF37 gold, white cards, gray-50 bg
 class PostCaseScreen extends StatefulWidget {
   final UserModel poster;
+  final CaseRepository? caseRepository;
 
-  const PostCaseScreen({super.key, required this.poster});
+  const PostCaseScreen({super.key, required this.poster, this.caseRepository});
 
   @override
   State<PostCaseScreen> createState() => _PostCaseScreenState();
@@ -69,7 +70,13 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
   List<PlatformFile> _files = [];
   bool _submitting = false;
   String _submitStatus = '';
-  final CaseRepository _caseRepository = CaseRepository();
+  late final CaseRepository _caseRepository;
+
+  @override
+  void initState() {
+    super.initState();
+    _caseRepository = widget.caseRepository ?? CaseRepository();
+  }
 
   @override
   void dispose() {
@@ -113,7 +120,9 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
     if (!_isValid) return;
     setState(() {
       _submitting = true;
-      _submitStatus = _files.isNotEmpty ? 'Uploading attachments...' : 'Creating case...';
+      _submitStatus = _files.isNotEmpty
+          ? 'Uploading attachments...'
+          : 'Creating case...';
     });
 
     // Map string category to CaseCategory enum
@@ -158,7 +167,9 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
         for (final file in _files) {
           final bytes = file.bytes;
           if (bytes == null) {
-            throw StateError('Could not read ${file.name}. Please reattach it.');
+            throw StateError(
+              'Could not read ${file.name}. Please reattach it.',
+            );
           }
 
           final attachment = await _caseRepository.uploadCaseAttachmentBytes(
@@ -199,11 +210,9 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
       attachments: attachmentMetadata,
     );
 
-    var storedInFirestore = false;
     if (_canUseFirestore) {
       try {
         await _caseRepository.createCase(newCase);
-        storedInFirestore = true;
       } catch (error) {
         for (final attachment in attachmentMetadata) {
           try {
@@ -287,25 +296,31 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Smart Matching',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Smart Matching',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        Text(
-                          'AI matches by distance + specialization proficiency',
-                          style: GoogleFonts.inter(
-                            color: Colors.white60,
-                            fontSize: 11,
+                          Text(
+                            'AI matches by distance + specialization proficiency',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              color: Colors.white60,
+                              fontSize: 11,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -459,13 +474,17 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            Text(
-                              _submitStatus.isNotEmpty
-                                  ? _submitStatus
-                                  : 'Submitting...',
-                              style: GoogleFonts.inter(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
+                            Flexible(
+                              child: Text(
+                                _submitStatus.isNotEmpty
+                                    ? _submitStatus
+                                    : 'Submitting...',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -475,11 +494,15 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
                           children: [
                             const Icon(Icons.auto_awesome, size: 20),
                             const SizedBox(width: 8),
-                            Text(
-                              'Submit & Find Lawyers',
-                              style: GoogleFonts.inter(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
+                            Flexible(
+                              child: Text(
+                                'Submit & Find Lawyers',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -725,9 +748,13 @@ class _PostCaseScreenState extends State<PostCaseScreen> {
           children: [
             Icon(Icons.attach_file, color: Colors.grey[400], size: 16),
             const SizedBox(width: 6),
-            Text(
-              'Attach documents (PDF, JPG, PNG)',
-              style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
+            Flexible(
+              child: Text(
+                'Attach documents (PDF, JPG, PNG)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(color: Colors.grey[400], fontSize: 13),
+              ),
             ),
           ],
         ),

@@ -7,10 +7,10 @@ import '../../models/vault_document_model.dart';
 class VaultDocumentTileWidget extends StatelessWidget {
   final VaultDocumentModel document;
   final VoidCallback onTap;
-  final Widget? trailing; 
+  final Widget? trailing;
   final String? extraSubtitle;
   final String? activeShareText;
-  final bool isShareExpired; 
+  final bool isShareExpired;
 
   const VaultDocumentTileWidget({
     super.key,
@@ -19,7 +19,7 @@ class VaultDocumentTileWidget extends StatelessWidget {
     this.trailing,
     this.extraSubtitle,
     this.activeShareText,
-    this.isShareExpired = false, 
+    this.isShareExpired = false,
   });
 
   @override
@@ -27,19 +27,21 @@ class VaultDocumentTileWidget extends StatelessWidget {
     final createdLabel = document.createdAt == null
         ? 'Pending'
         : DateFormat('dd MMM yyyy').format(document.createdAt!);
-    
+
     String sizeLabel = '';
     if (document.sizeBytes != null) {
       if (document.sizeBytes! >= 1024 * 1024) {
-        sizeLabel = '${(document.sizeBytes! / (1024 * 1024)).toStringAsFixed(1)} MB';
+        sizeLabel =
+            '${(document.sizeBytes! / (1024 * 1024)).toStringAsFixed(1)} MB';
       } else {
         sizeLabel = '${(document.sizeBytes! / 1024).toStringAsFixed(0)} KB';
       }
     }
 
-    final isImage = document.fileName.toLowerCase().endsWith('.png') || 
-                    document.fileName.toLowerCase().endsWith('.jpg') || 
-                    document.fileName.toLowerCase().endsWith('.jpeg');
+    final isImage =
+        document.fileName.toLowerCase().endsWith('.png') ||
+        document.fileName.toLowerCase().endsWith('.jpg') ||
+        document.fileName.toLowerCase().endsWith('.jpeg');
 
     return InkWell(
       onTap: onTap,
@@ -52,10 +54,10 @@ class VaultDocumentTileWidget extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 8,
               offset: const Offset(0, 2),
-            )
+            ),
           ],
           border: Border.all(color: const Color(0xFFF1F5F9)),
         ),
@@ -101,45 +103,47 @@ class VaultDocumentTileWidget extends StatelessWidget {
                           color: const Color(0xFF64748B),
                         ),
                       ),
-                      
+
                       // --- 新增的律师合同状态标签 ---
                       if (document.isContract) ...[
                         const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: document.contractStatus == 'signed'
-                                    ? const Color(0xFFECFDF5)
-                                    : const Color(0xFFFFFBEB),
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(
-                                  color: document.contractStatus == 'signed'
-                                      ? const Color(0xFFA7F3D0)
-                                      : const Color(0xFFFDE68A),
-                                  width: 0.5,
-                                ),
-                              ),
-                              child: Text(
-                                document.contractStatus == 'signed'
-                                    ? 'SIGNED'
-                                    : 'PENDING CLIENT SIGNATURE',
-                                style: GoogleFonts.inter(
-                                  color: document.contractStatus == 'signed'
-                                      ? const Color(0xFF047857)
-                                      : const Color(0xFFB45309),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
+                        Container(
+                          constraints: const BoxConstraints(maxWidth: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: document.contractStatus == 'signed'
+                                ? const Color(0xFFECFDF5)
+                                : const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: document.contractStatus == 'signed'
+                                  ? const Color(0xFFA7F3D0)
+                                  : const Color(0xFFFDE68A),
+                              width: 0.5,
                             ),
-                          ],
+                          ),
+                          child: Text(
+                            document.contractStatus == 'signed'
+                                ? 'SIGNED'
+                                : 'PENDING CLIENT SIGNATURE',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              color: document.contractStatus == 'signed'
+                                  ? const Color(0xFF047857)
+                                  : const Color(0xFFB45309),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                         ),
                       ],
-                      // ----------------------------
 
+                      // ----------------------------
                       if (extraSubtitle != null) ...[
                         const SizedBox(height: 2),
                         Text(
@@ -154,34 +158,47 @@ class VaultDocumentTileWidget extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (trailing != null) trailing!,
+                ?trailing,
               ],
             ),
-            
+
             // --- 安全分享链接状态横幅 ---
             if (activeShareText != null && activeShareText!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
-                  color: isShareExpired ? const Color(0xFFFEF2F2) : const Color(0xFFFFFBEB), 
+                  color: isShareExpired
+                      ? const Color(0xFFFEF2F2)
+                      : const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      Icons.access_time, 
-                      color: isShareExpired ? const Color(0xFFEF4444) : const Color(0xFFD97706),
+                      Icons.access_time,
+                      color: isShareExpired
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFFD97706),
                       size: 14,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      activeShareText!,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isShareExpired ? const Color(0xFFEF4444) : const Color(0xFFD97706),
+                    Expanded(
+                      child: Text(
+                        activeShareText!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isShareExpired
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFFD97706),
+                        ),
                       ),
                     ),
                   ],

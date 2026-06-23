@@ -35,6 +35,9 @@ class LawyerRecommendation {
   });
 
   factory LawyerRecommendation.fromMap(Map<String, dynamic> map) {
+    final matchPercentage = _readMatchPercentage(map);
+    final matchReason = _readMatchReason(map);
+
     return LawyerRecommendation(
       lawyerId: map['lawyerId']?.toString() ?? '',
       lawyerName: map['lawyerName']?.toString() ?? '',
@@ -44,8 +47,8 @@ class LawyerRecommendation {
       yearsExperience: (map['yearsExperience'] as num?)?.toInt() ?? 0,
       languages: List<String>.from(map['languages'] as List? ?? []),
       hourlyRate: (map['hourlyRate'] as num?)?.toDouble() ?? 0.0,
-      matchPercentage: (map['matchPercentage'] as num?)?.toInt() ?? 0,
-      matchReason: map['matchReason']?.toString() ?? '',
+      matchPercentage: matchPercentage,
+      matchReason: matchReason,
     );
   }
 
@@ -60,12 +63,36 @@ class LawyerRecommendation {
       'languages': languages,
       'hourlyRate': hourlyRate,
       'matchPercentage': matchPercentage,
+      'matchScore': matchPercentage,
       'matchReason': matchReason,
+      if (matchReason.trim().isNotEmpty) 'matchReasons': [matchReason],
     };
   }
 
   Map<String, dynamic> toMap() {
     return toFirestore();
+  }
+
+  static int _readMatchPercentage(Map<String, dynamic> map) {
+    final rawValue = map['matchPercentage'] ?? map['matchScore'];
+    return ((rawValue as num?)?.round() ?? 0).clamp(0, 100);
+  }
+
+  static String _readMatchReason(Map<String, dynamic> map) {
+    final directReason = map['matchReason']?.toString().trim();
+    if (directReason != null && directReason.isNotEmpty) {
+      return directReason;
+    }
+
+    final reasons = map['matchReasons'];
+    if (reasons is List) {
+      final usableReasons = reasons
+          .map((item) => item?.toString().trim() ?? '')
+          .where((item) => item.isNotEmpty);
+      return usableReasons.join(' ');
+    }
+
+    return '';
   }
 }
 

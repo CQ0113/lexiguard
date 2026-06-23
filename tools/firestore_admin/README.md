@@ -58,6 +58,43 @@ npm run seed
 npm run flush-and-seed     # destructive — wipes users + lawyer_profiles, then seeds from seed_data.json
 ```
 
+## Full demo reset
+
+Use this when the live Firebase project has accumulated messy demo users and
+app data. It backs up app Firestore collections and Auth metadata, deletes Auth
+users, clears app-owned Firestore collections, removes app-owned Storage files,
+and seeds clean demo clients/lawyers with connected cases and chat rooms.
+
+Dry run first:
+
+```bash
+npm run reset-demo:dry-run
+```
+
+Execute the destructive reset:
+
+```bash
+npm run reset-demo
+```
+
+Seeded credentials:
+
+| Role     | Email                          | Password       |
+| -------- | ------------------------------ | -------------- |
+| Admin    | `admin123@gmail.com`           | `admin123`     |
+| Client   | `client.chu@lexiguard.dev`     | `LexiDemo!2026` |
+| Client   | `client.ahmad@lexiguard.dev`   | `LexiDemo!2026` |
+| Client   | `client.nurul@lexiguard.dev`   | `LexiDemo!2026` |
+| Lawyer   | `lawyer.aishah@lexiguard.dev`  | `LexiDemo!2026` |
+| Lawyer   | `lawyer.kailesh@lexiguard.dev` | `LexiDemo!2026` |
+| Lawyer   | `lawyer.siti@lexiguard.dev`    | `LexiDemo!2026` |
+| Reviewer | `demo.reviewer@lexiguard.dev`  | `LexiDemo!2026` |
+
+The reset preserves LexiBot source/corpus collections by default and only
+clears app/demo data: users, lawyer profiles, verification requests, cases,
+connection requests, chats, notifications, vault metadata, audit logs, and
+Storage prefixes `vault/`, `case_attachments/`, and `chat_attachments/`.
+
 ## LexiBot metadata setup
 
 The LexiBot seed command uses the ignored source manifest and Gemini File

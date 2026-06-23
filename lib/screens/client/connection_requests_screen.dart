@@ -86,7 +86,11 @@ class _ConnectionRequestsScreenState extends State<ConnectionRequestsScreen> {
               client: widget.client,
               repo: _repo,
             ),
-            _HistoryTab(clientId: widget.client.id, client: widget.client, repo: _repo),
+            _HistoryTab(
+              clientId: widget.client.id,
+              client: widget.client,
+              repo: _repo,
+            ),
           ],
         ),
       ),
@@ -202,10 +206,8 @@ class _HistoryTab extends StatelessWidget {
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           itemCount: requests.length,
-          itemBuilder: (context, i) => _HistoryRequestCard(
-            request: requests[i],
-            client: client,
-          ),
+          itemBuilder: (context, i) =>
+              _HistoryRequestCard(request: requests[i], client: client),
         );
       },
     );
@@ -712,10 +714,7 @@ class _DeclineSheetState extends State<_DeclineSheet> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _HistoryRequestCard extends StatelessWidget {
-  const _HistoryRequestCard({
-    required this.request,
-    required this.client,
-  });
+  const _HistoryRequestCard({required this.request, required this.client});
 
   final ConnectionRequestModel request;
   final UserModel client;
@@ -782,9 +781,17 @@ class _HistoryRequestCard extends StatelessWidget {
   Future<void> _openChat(BuildContext context) async {
     // Room ID == connection request ID == "${caseId}_${lawyerId}"
     final repo = ChatRepository();
-    final room = await repo.fetchRoom(request.id);
-    if (!context.mounted) return;
-    if (room == null) {
+    try {
+      final room = await repo.ensureRoom(request.id);
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              ChatRoomScreen(currentUser: client, room: room, repository: repo),
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -793,21 +800,13 @@ class _HistoryRequestCard extends StatelessWidget {
           ),
           backgroundColor: Colors.grey[700],
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           margin: const EdgeInsets.all(16),
         ),
       );
-      return;
     }
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatRoomScreen(
-          currentUser: client,
-          room: room,
-          repository: repo,
-        ),
-      ),
-    );
   }
 
   Widget _buildStatusPill(BuildContext context, ConnectionRequestModel req) {

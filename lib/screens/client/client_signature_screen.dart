@@ -21,7 +21,8 @@ class ClientSignatureScreen extends StatefulWidget {
   State<ClientSignatureScreen> createState() => _ClientSignatureScreenState();
 }
 
-class _ClientSignatureScreenState extends State<ClientSignatureScreen> with SingleTickerProviderStateMixin {
+class _ClientSignatureScreenState extends State<ClientSignatureScreen>
+    with SingleTickerProviderStateMixin {
   static const _navy = Color(0xFF0B2447);
   static const _gold = Color(0xFFD4AF37);
   static const _goldLight = Color(0xFFFFF9E6);
@@ -109,8 +110,12 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
   }
 
   Widget _buildContent(List<VaultDocumentModel> allContracts) {
-    final pending = allContracts.where((c) => c.contractStatus != 'signed').toList();
-    final signed = allContracts.where((c) => c.contractStatus == 'signed').toList();
+    final pending = allContracts
+        .where((c) => c.contractStatus != 'signed')
+        .toList();
+    final signed = allContracts
+        .where((c) => c.contractStatus == 'signed')
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,10 +141,7 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
               const SizedBox(height: 4),
               Text(
                 'Review and digitally sign official agreements from your lawyer',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: _grey,
-                ),
+                style: GoogleFonts.inter(fontSize: 14, color: _grey),
               ),
             ],
           ),
@@ -161,7 +163,7 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -169,8 +171,14 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
               ),
               labelColor: _navy,
               unselectedLabelColor: _grey,
-              labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-              unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13),
+              labelStyle: GoogleFonts.inter(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+              unselectedLabelStyle: GoogleFonts.inter(
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
               indicatorSize: TabBarIndicatorSize.tab,
               dividerColor: Colors.transparent,
               padding: const EdgeInsets.all(4),
@@ -215,7 +223,10 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
     );
   }
 
-  Widget _buildContractList(List<VaultDocumentModel> list, {required bool isPending}) {
+  Widget _buildContractList(
+    List<VaultDocumentModel> list, {
+    required bool isPending,
+  }) {
     if (list.isEmpty) {
       return Center(
         child: Padding(
@@ -231,14 +242,18 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  isPending ? Icons.edit_document : Icons.assignment_turned_in_rounded,
+                  isPending
+                      ? Icons.edit_document
+                      : Icons.assignment_turned_in_rounded,
                   color: const Color(0xFF94A3B8),
                   size: 30,
                 ),
               ),
               const SizedBox(height: 16),
               Text(
-                isPending ? 'No agreements pending signature' : 'No signed agreements found',
+                isPending
+                    ? 'No agreements pending signature'
+                    : 'No signed agreements found',
                 style: GoogleFonts.inter(
                   color: _navy,
                   fontSize: 15,
@@ -251,7 +266,11 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                 isPending
                     ? 'When your lawyer sends an official contract or tenancy agreement, it will appear here for review and digital signature.'
                     : 'Once you sign an agreement, the fully formalized copy will be logged here for your permanent records.',
-                style: GoogleFonts.inter(color: _grey, fontSize: 12, height: 1.5),
+                style: GoogleFonts.inter(
+                  color: _grey,
+                  fontSize: 12,
+                  height: 1.5,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -274,8 +293,8 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
     final typeLabel = doc.contractType == 'tenancy'
         ? 'Tenancy Agreement'
         : doc.contractType == 'representation'
-            ? 'Representation Agreement'
-            : 'Legal Contract';
+        ? 'Representation Agreement'
+        : 'Legal Contract';
 
     final createdDateStr = doc.createdAt != null
         ? DateFormat('dd MMM yyyy, h:mm a').format(doc.createdAt!)
@@ -293,7 +312,7 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -307,7 +326,9 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
             height: 6,
             decoration: BoxDecoration(
               color: isPending ? _gold : const Color(0xFF22C55E),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
             ),
           ),
 
@@ -320,7 +341,10 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: isPending ? _goldLight : const Color(0xFFDCFCE7),
                         borderRadius: BorderRadius.circular(20),
@@ -339,8 +363,14 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                         const Icon(Icons.attach_file, color: _grey, size: 14),
                         const SizedBox(width: 2),
                         Text(
-                          doc.contentType == 'application/pdf' ? 'PDF' : 'Draft',
-                          style: GoogleFonts.inter(color: _grey, fontSize: 10, fontWeight: FontWeight.bold),
+                          doc.contentType == 'application/pdf'
+                              ? 'PDF'
+                              : 'Draft',
+                          style: GoogleFonts.inter(
+                            color: _grey,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -358,10 +388,7 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                 const SizedBox(height: 4),
                 Text(
                   doc.fileName,
-                  style: GoogleFonts.inter(
-                    color: _grey,
-                    fontSize: 12,
-                  ),
+                  style: GoogleFonts.inter(color: _grey, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -376,19 +403,28 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Sender / Lawyer ID',
-                          style: GoogleFonts.inter(color: _grey, fontSize: 10),
-                        ),
-                        Text(
-                          doc.ownerUserId,
-                          style: GoogleFonts.inter(color: _navy, fontSize: 12, fontWeight: FontWeight.w600),
-                        ),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Sender / Lawyer ID',
+                            style: GoogleFonts.inter(color: _grey, fontSize: 10),
+                          ),
+                          Text(
+                            doc.ownerUserId,
+                            style: GoogleFonts.inter(
+                              color: _navy,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -398,7 +434,11 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                         ),
                         Text(
                           isPending ? createdDateStr : signedDateStr,
-                          style: GoogleFonts.inter(color: _navy, fontSize: 12, fontWeight: FontWeight.w600),
+                          style: GoogleFonts.inter(
+                            color: _navy,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -413,9 +453,7 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => ContractReviewScreen(
-                            contract: doc,
-                          ),
+                          builder: (_) => ContractReviewScreen(contract: doc),
                         ),
                       );
                     },
@@ -424,14 +462,18 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
                       size: 16,
                     ),
                     label: Text(
-                      isPending ? 'Review & Digital Sign' : 'View Agreement Details',
+                      isPending
+                          ? 'Review & Digital Sign'
+                          : 'View Agreement Details',
                       style: GoogleFonts.inter(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isPending ? _navy : const Color(0xFFF1F5F9),
+                      backgroundColor: isPending
+                          ? _navy
+                          : const Color(0xFFF1F5F9),
                       foregroundColor: isPending ? Colors.white : _navy,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -492,7 +534,11 @@ class _ClientSignatureScreenState extends State<ClientSignatureScreen> with Sing
           const SizedBox(width: 4),
           Text(
             label,
-            style: GoogleFonts.inter(color: _navy, fontSize: 10, fontWeight: FontWeight.w600),
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),

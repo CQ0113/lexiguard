@@ -136,6 +136,9 @@ service cloud.firestore {
           && request.resource.data.message is string
           && request.resource.data.lawyerSnapshot is map
           && request.resource.data.caseSnapshot is map
+          && (!('clientReveal' in request.resource.data) ||
+              (request.resource.data.clientReveal is map &&
+               request.resource.data.clientReveal.name is string))
           && request.resource.data.initiatedByRole == 'client'
           && request.resource.data.requestDirection == 'client_to_lawyer'
           && get(/databases/$(database)/documents/cases/$(request.resource.data.caseId)).data.clientId == request.auth.uid
@@ -208,7 +211,18 @@ service cloud.firestore {
           && resource.data.status == 'pending'
           && request.resource.data.status == 'expired'
           && getAfter(/databases/$(database)/documents/cases/$(resource.data.caseId)).data.status == 'active'
-          && getAfter(/databases/$(database)/documents/cases/$(resource.data.caseId)).data.lawyerId == request.auth.uid)
+          && getAfter(/databases/$(database)/documents/cases/$(resource.data.caseId)).data.lawyerId == request.auth.uid) ||
+        // Client repairs denormalized reveal data for an already-approved
+        // connection. This is limited to display/contact reveal fields.
+        (request.auth.uid == resource.data.clientId
+          && resource.data.status == 'approved'
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.clientId == resource.data.clientId
+          && request.resource.data.lawyerId == resource.data.lawyerId
+          && request.resource.data.caseId == resource.data.caseId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clientReveal', 'updatedAt'])
+          && request.resource.data.clientReveal is map
+          && request.resource.data.clientReveal.name is string)
       );
 
       allow delete: if false;
@@ -280,19 +294,29 @@ service cloud.firestore {
                     && (request.auth.uid == get(/databases/$(database)/documents/connection_requests/$(roomId)).data.clientId
                         || request.auth.uid == get(/databases/$(database)/documents/connection_requests/$(roomId)).data.lawyerId);
 
-      // Only mutable fields may change. Two permitted paths:
+      // Only mutable fields may change. Three permitted paths:
       //   1. Send a message: lastSenderId == caller (updates last-message fields + bumps unreadCounts).
       //   2. Mark read: caller zeroes their own unread slot only.
+      //   3. Client repairs their denormalized display name.
       allow update: if request.auth.uid in resource.data.participants
                     && request.resource.data.participants == resource.data.participants
                     && request.resource.data.caseId == resource.data.caseId
                     && request.resource.data.clientId == resource.data.clientId
                     && request.resource.data.lawyerId == resource.data.lawyerId
-                    && request.resource.data.diff(resource.data).changedKeys().hasOnly(
-                         ['lastMessageText','lastMessageType','lastSenderId','lastMessageAt','unreadCounts'])
                     && (
-                         request.resource.data.lastSenderId == request.auth.uid
-                         || request.resource.data.unreadCounts[request.auth.uid] == 0
+                         (
+                           request.resource.data.diff(resource.data).changedKeys().hasOnly(
+                            ['lastMessageText','lastMessageType','lastSenderId','lastMessageAt','unreadCounts'])
+                           && (
+                              request.resource.data.lastSenderId == request.auth.uid
+                              || request.resource.data.unreadCounts[request.auth.uid] == 0
+                            )
+                         ) ||
+                         (
+                           request.auth.uid == resource.data.clientId
+                           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clientName'])
+                           && request.resource.data.clientName is string
+                         )
                        );
 
       allow delete: if false;

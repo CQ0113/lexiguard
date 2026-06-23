@@ -80,7 +80,7 @@ class NetworkAvatar extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _placeholder(),
+          errorBuilder: (_, _, _) => _placeholder(),
           loadingBuilder: (_, child, progress) {
             if (progress == null) return child;
             return _placeholder();

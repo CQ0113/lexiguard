@@ -12,22 +12,83 @@ void main() {
     GoogleFonts.config.allowRuntimeFetching = false;
   });
 
-  testWidgets('Client Dashboard: tapping View All activities shows snackbar', (tester) async {
-    await tester.pumpWidget(DashboardTestHarness.wrapClient(user: DashboardTestHarness.client));
+  testWidgets('Client Dashboard: Recent Activity uses Firestore data', (
+    tester,
+  ) async {
+    final db = DashboardTestHarness.createFakeDb();
+    final client = DashboardTestHarness.client;
+
+    final caseModel = CaseModel(
+      id: 'case_recent_activity',
+      clientId: client.id,
+      title: 'Dynamic Tenancy Case',
+      description: 'Recent activity test case.',
+      category: CaseCategory.property,
+      status: CaseStatus.pending,
+      urgency: CaseUrgency.medium,
+      createdAt: DateTime.now().subtract(const Duration(minutes: 20)),
+    );
+
+    await db
+        .collection(CaseRepository.collectionName)
+        .doc(caseModel.id)
+        .set(caseModel.toFirestore());
+
+    await tester.pumpWidget(
+      DashboardTestHarness.wrapClient(user: client, firestore: db),
+    );
     await tester.pumpAndSettle();
 
-    final viewAllActivities = find.text('View All').first;
-    expect(viewAllActivities, findsOneWidget);
-    await tester.ensureVisible(viewAllActivities);
-    await tester.pumpAndSettle();
-
-    await tester.tap(viewAllActivities);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Full activity history will be available soon.'), findsOneWidget);
+    expect(find.text('Case posted'), findsOneWidget);
+    expect(find.text('Dynamic Tenancy Case • Property'), findsOneWidget);
+    expect(find.text('Contract reviewed by AI'), findsNothing);
+    expect(find.text('New message from Pn. Aishah'), findsNothing);
+    expect(find.text('Document shared'), findsNothing);
   });
 
-  testWidgets('Lawyer Dashboard: tapping Call in My Cases shows snackbar', (tester) async {
+  testWidgets(
+    'Client Dashboard: tapping View All activities opens live history',
+    (tester) async {
+      final db = DashboardTestHarness.createFakeDb();
+      final client = DashboardTestHarness.client;
+
+      final caseModel = CaseModel(
+        id: 'case_activity_sheet',
+        clientId: client.id,
+        title: 'Activity Sheet Case',
+        description: 'Recent activity sheet test case.',
+        category: CaseCategory.family,
+        status: CaseStatus.pending,
+        urgency: CaseUrgency.low,
+        createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+      );
+
+      await db
+          .collection(CaseRepository.collectionName)
+          .doc(caseModel.id)
+          .set(caseModel.toFirestore());
+
+      await tester.pumpWidget(
+        DashboardTestHarness.wrapClient(user: client, firestore: db),
+      );
+      await tester.pumpAndSettle();
+
+      final viewAllActivities = find.text('View All').first;
+      expect(viewAllActivities, findsOneWidget);
+      await tester.ensureVisible(viewAllActivities);
+      await tester.pumpAndSettle();
+
+      await tester.tap(viewAllActivities);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recent Activity'), findsNWidgets(2));
+      expect(find.text('Activity Sheet Case • Family'), findsNWidgets(2));
+    },
+  );
+
+  testWidgets('Lawyer Dashboard: tapping Call in My Cases shows snackbar', (
+    tester,
+  ) async {
     final db = DashboardTestHarness.createFakeDb();
     await DashboardTestHarness.seedConnectedCase(
       db,
@@ -53,10 +114,17 @@ void main() {
     await tester.tap(callBtn);
     await tester.pumpAndSettle();
 
-    expect(find.text('Direct calling is not available in this demo. Use Chat to contact the client.'), findsOneWidget);
+    expect(
+      find.text(
+        'Direct calling is not available in this demo. Use Chat to contact the client.',
+      ),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('Client Dashboard: My Cases sorting and popup screen', (tester) async {
+  testWidgets('Client Dashboard: My Cases sorting and popup screen', (
+    tester,
+  ) async {
     final db = DashboardTestHarness.createFakeDb();
     final client = DashboardTestHarness.client;
 
@@ -93,15 +161,21 @@ void main() {
       createdAt: DateTime.utc(2026, 6, 3),
     );
 
-    await db.collection(CaseRepository.collectionName).doc(caseWithdrawn.id).set(caseWithdrawn.toFirestore());
-    await db.collection(CaseRepository.collectionName).doc(caseActive.id).set(caseActive.toFirestore());
-    await db.collection(CaseRepository.collectionName).doc(casePending.id).set(casePending.toFirestore());
+    await db
+        .collection(CaseRepository.collectionName)
+        .doc(caseWithdrawn.id)
+        .set(caseWithdrawn.toFirestore());
+    await db
+        .collection(CaseRepository.collectionName)
+        .doc(caseActive.id)
+        .set(caseActive.toFirestore());
+    await db
+        .collection(CaseRepository.collectionName)
+        .doc(casePending.id)
+        .set(casePending.toFirestore());
 
     await tester.pumpWidget(
-      DashboardTestHarness.wrapClient(
-        user: client,
-        firestore: db,
-      ),
+      DashboardTestHarness.wrapClient(user: client, firestore: db),
     );
     await tester.pumpAndSettle();
 
@@ -120,7 +194,7 @@ void main() {
 
     // Now we are in AllCasesScreen
     expect(find.text('My Cases'), findsOneWidget); // AppBar title
-    
+
     // Check for chips
     expect(find.text('All'), findsOneWidget);
     expect(find.text('Pending'), findsOneWidget);
@@ -143,4 +217,3 @@ void main() {
     expect(find.text('Withdrawn Case Title'), findsOneWidget);
   });
 }
-

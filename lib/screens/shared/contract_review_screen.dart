@@ -19,7 +19,8 @@ class ContractReviewScreen extends StatefulWidget {
   State<ContractReviewScreen> createState() => _ContractReviewScreenState();
 }
 
-class _ContractReviewScreenState extends State<ContractReviewScreen> with SingleTickerProviderStateMixin {
+class _ContractReviewScreenState extends State<ContractReviewScreen>
+    with SingleTickerProviderStateMixin {
   static const _navy = Color(0xFF0B2447);
   static const _gold = Color(0xFFD4AF37);
   static const _grey = Color(0xFF64748B);
@@ -28,7 +29,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
   final VaultDocumentRepository _repository = VaultDocumentRepository();
 
   // Signature lines
-  List<DrawPoint> _points = [];
+  final List<DrawPoint> _points = [];
   int _currentStroke = 0;
 
   bool _agreeToTerms = false;
@@ -93,7 +94,9 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
 
   Future<void> _submitSignature() async {
     if (!_agreeToTerms || !_confirmSignature) {
-      _showSnack('Please complete and confirm the legal verification checkboxes.');
+      _showSnack(
+        'Please complete and confirm the legal verification checkboxes.',
+      );
       return;
     }
 
@@ -106,11 +109,9 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
 
     // Convert Points into Firestore-compatible list of maps
     final signatureData = _points
-        .map((p) => {
-              'x': p.offset.dx,
-              'y': p.offset.dy,
-              'stroke': p.strokeIndex,
-            })
+        .map(
+          (p) => {'x': p.offset.dx, 'y': p.offset.dy, 'stroke': p.strokeIndex},
+        )
         .toList();
 
     try {
@@ -151,8 +152,8 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
     final typeLabel = widget.contract.contractType == 'tenancy'
         ? 'Tenancy Agreement'
         : widget.contract.contractType == 'representation'
-            ? 'Representation Agreement'
-            : 'Legal Contract';
+        ? 'Representation Agreement'
+        : 'Legal Contract';
 
     final isSigned = widget.contract.contractStatus == 'signed' || _success;
 
@@ -182,17 +183,26 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                 // Terms detail grid
                 Text(
                   'Agreement Terms',
-                  style: GoogleFonts.inter(color: _navy, fontSize: 14, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.inter(
+                    color: _navy,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 _buildTermsDetailGrid(),
                 const SizedBox(height: 24),
 
                 // Scope section (only for representation)
-                if (widget.contract.contractTerms != null && widget.contract.contractTerms!['scope'] != null) ...[
+                if (widget.contract.contractTerms != null &&
+                    widget.contract.contractTerms!['scope'] != null) ...[
                   Text(
                     'Scope of Legal Work',
-                    style: GoogleFonts.inter(color: _navy, fontSize: 14, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.inter(
+                      color: _navy,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Container(
@@ -205,7 +215,11 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                     ),
                     child: Text(
                       widget.contract.contractTerms!['scope'] as String? ?? '',
-                      style: GoogleFonts.inter(color: _navy, fontSize: 13, height: 1.5),
+                      style: GoogleFonts.inter(
+                        color: _navy,
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -218,8 +232,13 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                     onPressed: _viewDocument,
                     icon: const Icon(Icons.file_open_outlined, size: 16),
                     label: Text(
-                      isSigned ? 'View Signed Document' : 'View Original Draft File',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
+                      isSigned
+                          ? 'View Signed Document'
+                          : 'View Original Draft File',
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _navy,
@@ -234,19 +253,31 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                 const SizedBox(height: 32),
 
                 // AI summary block!
-                if (widget.contract.contractTerms != null && widget.contract.contractTerms!['aiReview'] != null) ...[
-                  _buildAiReviewPanel(widget.contract.contractTerms!['aiReview'] as Map<String, dynamic>),
+                if (widget.contract.contractTerms != null &&
+                    widget.contract.contractTerms!['aiReview'] != null) ...[
+                  _buildAiReviewPanel(
+                    widget.contract.contractTerms!['aiReview']
+                        as Map<String, dynamic>,
+                  ),
                   const SizedBox(height: 32),
                 ],
 
                 // E-Signature Section
                 if (!isSigned) ...[
-                  if (widget.contract.contractTerms != null && widget.contract.contractTerms!['aiReview'] != null)
-                    _buildSignatureAssistantCard(widget.contract.contractTerms!['aiReview'] as Map<String, dynamic>?),
+                  if (widget.contract.contractTerms != null &&
+                      widget.contract.contractTerms!['aiReview'] != null)
+                    _buildSignatureAssistantCard(
+                      widget.contract.contractTerms!['aiReview']
+                          as Map<String, dynamic>?,
+                    ),
                   const SizedBox(height: 32),
                   Text(
                     'Draw Digital Signature',
-                    style: GoogleFonts.inter(color: _navy, fontSize: 14, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.inter(
+                      color: _navy,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -267,7 +298,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
               ],
             ),
           ),
-          
+
           // Success Overlay Animation
           if (_success) _buildSuccessAnimationOverlay(),
         ],
@@ -283,7 +314,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: _navy.withOpacity(0.1),
+            color: _navy.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -296,9 +327,14 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: isSigned ? const Color(0xFF22C55E).withOpacity(0.2) : _gold.withOpacity(0.2),
+                  color: isSigned
+                      ? const Color(0xFF22C55E).withValues(alpha: 0.2)
+                      : _gold.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -335,19 +371,55 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Contract Ref ID', style: GoogleFonts.inter(color: Colors.white38, fontSize: 9)),
-                  Text(widget.contract.id, style: GoogleFonts.inter(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Contract Ref ID',
+                      style: GoogleFonts.inter(
+                        color: Colors.white38,
+                        fontSize: 9,
+                      ),
+                    ),
+                    Text(
+                      widget.contract.id,
+                      style: GoogleFonts.inter(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('Lawyer ID', style: GoogleFonts.inter(color: Colors.white38, fontSize: 9)),
-                  Text(widget.contract.ownerUserId, style: GoogleFonts.inter(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Lawyer ID',
+                      style: GoogleFonts.inter(
+                        color: Colors.white38,
+                        fontSize: 9,
+                      ),
+                    ),
+                    Text(
+                      widget.contract.ownerUserId,
+                      style: GoogleFonts.inter(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -373,9 +445,21 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
         crossAxisSpacing: 10,
         childAspectRatio: 1.1,
         children: [
-          _buildGridTermItem(Icons.home_work_outlined, 'Monthly Rent', 'RM $rent'),
-          _buildGridTermItem(Icons.payments_outlined, 'Rent Deposit', 'RM $deposit'),
-          _buildGridTermItem(Icons.calendar_month_outlined, 'Duration', '$duration Months'),
+          _buildGridTermItem(
+            Icons.home_work_outlined,
+            'Monthly Rent',
+            'RM $rent',
+          ),
+          _buildGridTermItem(
+            Icons.payments_outlined,
+            'Rent Deposit',
+            'RM $deposit',
+          ),
+          _buildGridTermItem(
+            Icons.calendar_month_outlined,
+            'Duration',
+            '$duration Months',
+          ),
         ],
       );
     } else if (type == 'representation') {
@@ -390,8 +474,16 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
         crossAxisSpacing: 10,
         childAspectRatio: 1.6,
         children: [
-          _buildGridTermItem(Icons.attach_money_rounded, 'Retainer Fee', 'RM $retainer'),
-          _buildGridTermItem(Icons.hourglass_empty_rounded, 'Hourly Rate', 'RM $hourly'),
+          _buildGridTermItem(
+            Icons.attach_money_rounded,
+            'Retainer Fee',
+            'RM $retainer',
+          ),
+          _buildGridTermItem(
+            Icons.hourglass_empty_rounded,
+            'Hourly Rate',
+            'RM $hourly',
+          ),
         ],
       );
     }
@@ -420,7 +512,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.01),
+            color: Colors.black.withValues(alpha: 0.01),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -434,11 +526,19 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
           const SizedBox(height: 8),
           Text(
             label,
-            style: GoogleFonts.inter(color: _grey, fontSize: 10, fontWeight: FontWeight.w500),
+            style: GoogleFonts.inter(
+              color: _grey,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           Text(
             value,
-            style: GoogleFonts.inter(color: _navy, fontSize: 14, fontWeight: FontWeight.bold),
+            style: GoogleFonts.inter(
+              color: _navy,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
@@ -459,18 +559,22 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
           GestureDetector(
             onPanStart: (details) {
               setState(() {
-                _points.add(DrawPoint(
-                  offset: details.localPosition,
-                  strokeIndex: _currentStroke,
-                ));
+                _points.add(
+                  DrawPoint(
+                    offset: details.localPosition,
+                    strokeIndex: _currentStroke,
+                  ),
+                );
               });
             },
             onPanUpdate: (details) {
               setState(() {
-                _points.add(DrawPoint(
-                  offset: details.localPosition,
-                  strokeIndex: _currentStroke,
-                ));
+                _points.add(
+                  DrawPoint(
+                    offset: details.localPosition,
+                    strokeIndex: _currentStroke,
+                  ),
+                );
               });
             },
             onPanEnd: (_) {
@@ -491,11 +595,17 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
               icon: const Icon(Icons.clear, size: 14, color: Color(0xFFEF4444)),
               label: Text(
                 'Clear Canvas',
-                style: GoogleFonts.inter(color: const Color(0xFFEF4444), fontSize: 11, fontWeight: FontWeight.bold),
+                style: GoogleFonts.inter(
+                  color: const Color(0xFFEF4444),
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               style: TextButton.styleFrom(
                 backgroundColor: const Color(0xFFFEF2F2),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
           ),
@@ -510,13 +620,15 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
         _buildCheckboxRow(
           value: _agreeToTerms,
           onChanged: (val) => setState(() => _agreeToTerms = val ?? false),
-          text: 'I declare that I have fully read and accept all general and specific terms outlined in this agreement draft.',
+          text:
+              'I declare that I have fully read and accept all general and specific terms outlined in this agreement draft.',
         ),
         const SizedBox(height: 12),
         _buildCheckboxRow(
           value: _confirmSignature,
           onChanged: (val) => setState(() => _confirmSignature = val ?? false),
-          text: 'I verify that the hand-drawn mark on the signature pad is my official representation and legally validates this contract.',
+          text:
+              'I verify that the hand-drawn mark on the signature pad is my official representation and legally validates this contract.',
         ),
       ],
     );
@@ -537,7 +649,9 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
             value: value,
             onChanged: onChanged,
             activeColor: _navy,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -560,11 +674,16 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
             ? const SizedBox(
                 width: 14,
                 height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
               )
             : const Icon(Icons.edit_document, size: 16),
         label: Text(
-          _isSigning ? 'Logging Digital Signature...' : 'Legally Finalize & Sign Agreement',
+          _isSigning
+              ? 'Logging Digital Signature...'
+              : 'Legally Finalize & Sign Agreement',
           style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
         ),
         style: ElevatedButton.styleFrom(
@@ -586,7 +705,11 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
       children: [
         Text(
           'Official Digital Signature',
-          style: GoogleFonts.inter(color: _navy, fontSize: 14, fontWeight: FontWeight.bold),
+          style: GoogleFonts.inter(
+            color: _navy,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 10),
         Container(
@@ -595,7 +718,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
           decoration: BoxDecoration(
             color: _goldLight,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _gold.withOpacity(0.3), width: 1.5),
+            border: Border.all(color: _gold.withValues(alpha: 0.3), width: 1.5),
           ),
           child: Stack(
             children: [
@@ -607,11 +730,16 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                       points: _points.isNotEmpty
                           ? _points
                           : (widget.contract.signaturePoints ?? [])
-                              .map((p) => DrawPoint(
-                                    offset: Offset(p['x'] as double, p['y'] as double),
+                                .map(
+                                  (p) => DrawPoint(
+                                    offset: Offset(
+                                      p['x'] as double,
+                                      p['y'] as double,
+                                    ),
                                     strokeIndex: p['stroke'] as int? ?? 0,
-                                  ))
-                              .toList(),
+                                  ),
+                                )
+                                .toList(),
                     ),
                     size: Size.infinite,
                   ),
@@ -620,7 +748,11 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                 Center(
                   child: Text(
                     'DIGITALLY E-SIGNED',
-                    style: GoogleFonts.inter(color: _gold.withOpacity(0.6), fontWeight: FontWeight.bold, letterSpacing: 2),
+                    style: GoogleFonts.inter(
+                      color: _gold.withValues(alpha: 0.6),
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                    ),
                   ),
                 ),
 
@@ -630,11 +762,19 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                 left: 16,
                 child: Row(
                   children: [
-                    const Icon(Icons.verified, color: Color(0xFF22C55E), size: 16),
+                    const Icon(
+                      Icons.verified,
+                      color: Color(0xFF22C55E),
+                      size: 16,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'SECURELY SIGNED',
-                      style: GoogleFonts.inter(color: const Color(0xFF15803D), fontSize: 10, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF15803D),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -648,7 +788,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
 
   Widget _buildSuccessAnimationOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.85),
+      color: Colors.black.withValues(alpha: 0.85),
       width: double.infinity,
       height: double.infinity,
       child: Center(
@@ -746,7 +886,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
   Widget _buildFormattedText(String text, TextStyle baseStyle) {
     final List<TextSpan> spans = [];
     final parts = text.split('**');
-    
+
     for (int i = 0; i < parts.length; i++) {
       final isBold = i % 2 == 1;
       spans.add(
@@ -756,18 +896,17 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
         ),
       );
     }
-    
+
     return RichText(
-      text: TextSpan(
-        style: baseStyle,
-        children: spans,
-      ),
+      text: TextSpan(style: baseStyle, children: spans),
     );
   }
 
   Widget _buildAiReviewPanel(Map<String, dynamic> aiReview) {
     final rawRiskColor = aiReview['riskColor'] as int?;
-    final riskColor = rawRiskColor != null ? Color(rawRiskColor) : const Color(0xFF22C55E);
+    final riskColor = rawRiskColor != null
+        ? Color(rawRiskColor)
+        : const Color(0xFF22C55E);
     final riskLevel = aiReview['riskLevel'] as String? ?? 'Low';
     final riskCount = aiReview['riskCount'] as int? ?? 0;
     final keyClauses = List<String>.from(aiReview['keyClauses'] ?? []);
@@ -783,7 +922,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -795,64 +934,78 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
           // Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'LexiGuard AI Review',
-                        style: GoogleFonts.inter(
-                          color: _grey,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: source.contains('Gemini') 
-                              ? const Color(0xFFE0F2FE) 
-                              : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: source.contains('Gemini')
-                                ? const Color(0xFF7DD3FC)
-                                : const Color(0xFFCBD5E1),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Text(
-                          source.toUpperCase(),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'LexiGuard AI Review',
                           style: GoogleFonts.inter(
-                            color: source.contains('Gemini')
-                                ? const Color(0xFF0369A1)
-                                : const Color(0xFF475569),
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
+                            color: _grey,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Agreement Summarization',
-                    style: GoogleFonts.inter(
-                      color: _navy,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: source.contains('Gemini')
+                                  ? const Color(0xFFE0F2FE)
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: source.contains('Gemini')
+                                    ? const Color(0xFF7DD3FC)
+                                    : const Color(0xFFCBD5E1),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Text(
+                              source.toUpperCase(),
+                              style: GoogleFonts.inter(
+                                color: source.contains('Gemini')
+                                    ? const Color(0xFF0369A1)
+                                    : const Color(0xFF475569),
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      'Agreement Summarization',
+                      style: GoogleFonts.inter(
+                        color: _navy,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: riskColor.withOpacity(0.12),
+                  color: riskColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -883,11 +1036,15 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: riskCount > 0 ? const Color(0xFFFFFBEB) : const Color(0xFFECFDF5),
+                  color: riskCount > 0
+                      ? const Color(0xFFFFFBEB)
+                      : const Color(0xFFECFDF5),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  riskCount > 0 ? Icons.lightbulb_outline_rounded : Icons.check_circle_outline_rounded,
+                  riskCount > 0
+                      ? Icons.lightbulb_outline_rounded
+                      : Icons.check_circle_outline_rounded,
                   color: riskCount > 0 ? _gold : const Color(0xFF10B981),
                   size: 18,
                 ),
@@ -895,7 +1052,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  riskCount > 0 
+                  riskCount > 0
                       ? 'AI found $riskCount risk indicators & suggestions for improvement.'
                       : 'AI Review: Fully standardized legal agreement with zero critical risks flagged.',
                   style: GoogleFonts.inter(
@@ -937,7 +1094,11 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                     children: [
                       const Padding(
                         padding: EdgeInsets.only(top: 2.0),
-                        child: Icon(Icons.check_circle, color: Color(0xFF22C55E), size: 14),
+                        child: Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF22C55E),
+                          size: 14,
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1007,11 +1168,14 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
     if (aiReview == null) return const SizedBox.shrink();
 
     final rawPage = aiReview['signaturePage'];
-    final int signaturePage = rawPage is int 
-        ? rawPage 
-        : (rawPage is num ? rawPage.toInt() : int.tryParse(rawPage?.toString() ?? '') ?? 1);
-        
-    final String signatureAnchor = aiReview['signatureAnchor']?.toString() ?? 'Client\'s Signature';
+    final int signaturePage = rawPage is int
+        ? rawPage
+        : (rawPage is num
+              ? rawPage.toInt()
+              : int.tryParse(rawPage?.toString() ?? '') ?? 1);
+
+    final String signatureAnchor =
+        aiReview['signatureAnchor']?.toString() ?? 'Client\'s Signature';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
@@ -1024,7 +1188,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.2),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.2),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1040,7 +1204,7 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
             child: Icon(
               Icons.track_changes,
               size: 130,
-              color: Colors.white.withOpacity(0.04),
+              color: Colors.white.withValues(alpha: 0.04),
             ),
           ),
           Padding(
@@ -1100,18 +1264,29 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.find_in_page_outlined, color: Color(0xFFD4AF37), size: 14),
+                              const Icon(
+                                Icons.find_in_page_outlined,
+                                color: Color(0xFFD4AF37),
+                                size: 14,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'Target Page',
-                                style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 10),
+                                style: GoogleFonts.inter(
+                                  color: const Color(0xFF94A3B8),
+                                  fontSize: 10,
+                                ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'Page $signaturePage',
-                            style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
@@ -1129,11 +1304,18 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.title, color: Color(0xFFD4AF37), size: 14),
+                              const Icon(
+                                Icons.title,
+                                color: Color(0xFFD4AF37),
+                                size: 14,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 'Text Anchor Phrase',
-                                style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 10),
+                                style: GoogleFonts.inter(
+                                  color: const Color(0xFF94A3B8),
+                                  fontSize: 10,
+                                ),
                               ),
                             ],
                           ),
@@ -1156,20 +1338,34 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
                 ),
                 const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E293B),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF334155), width: 0.5),
+                    border: Border.all(
+                      color: const Color(0xFF334155),
+                      width: 0.5,
+                    ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline, color: Color(0xFF38BDF8), size: 14),
+                      const Icon(
+                        Icons.info_outline,
+                        color: Color(0xFF38BDF8),
+                        size: 14,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Your hand-drawn signature will be dynamically bound and locked directly on Page $signaturePage next to the "$signatureAnchor" section.',
-                          style: GoogleFonts.inter(color: const Color(0xFF38BDF8), fontSize: 10, height: 1.3),
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF38BDF8),
+                            fontSize: 10,
+                            height: 1.3,
+                          ),
                         ),
                       ),
                     ],
@@ -1182,8 +1378,6 @@ class _ContractReviewScreenState extends State<ContractReviewScreen> with Single
       ),
     );
   }
-
-
 }
 
 // Support classes for Drawing signature
@@ -1191,10 +1385,7 @@ class DrawPoint {
   final Offset offset;
   final int strokeIndex;
 
-  DrawPoint({
-    required this.offset,
-    required this.strokeIndex,
-  });
+  DrawPoint({required this.offset, required this.strokeIndex});
 }
 
 class SignaturePainter extends CustomPainter {
@@ -1214,7 +1405,9 @@ class SignaturePainter extends CustomPainter {
     if (points.isEmpty) return;
 
     for (int stroke = 0; stroke <= points.last.strokeIndex; stroke++) {
-      final strokePoints = points.where((p) => p.strokeIndex == stroke).toList();
+      final strokePoints = points
+          .where((p) => p.strokeIndex == stroke)
+          .toList();
       if (strokePoints.isEmpty) continue;
 
       for (int i = 0; i < strokePoints.length - 1; i++) {

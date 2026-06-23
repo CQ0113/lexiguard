@@ -27,7 +27,8 @@ class SendContractScreen extends StatefulWidget {
   State<SendContractScreen> createState() => _SendContractScreenState();
 }
 
-class _SendContractScreenState extends State<SendContractScreen> with SingleTickerProviderStateMixin {
+class _SendContractScreenState extends State<SendContractScreen>
+    with SingleTickerProviderStateMixin {
   static const _navy = Color(0xFF0B2447);
   static const _gold = Color(0xFFD4AF37);
   static const _goldLight = Color(0xFFFFF9E6);
@@ -71,7 +72,8 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
     // Default mock inputs for easy testing
     _hourlyRateController.text = '350';
     _fixedRetainerController.text = '1500';
-    _scopeController.text = 'Full legal representation for Property Dispute case.';
+    _scopeController.text =
+        'Full legal representation for Property Dispute case.';
 
     _monthlyRentController.text = '2200';
     _depositController.text = '4400';
@@ -127,7 +129,9 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
     if (_pickedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select or upload a contract agreement document.'),
+          content: Text(
+            'Please select or upload a contract agreement document.',
+          ),
           backgroundColor: Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
         ),
@@ -148,19 +152,23 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
 
     if (_contractType == 'representation') {
       terms['hourlyRate'] = double.tryParse(_hourlyRateController.text) ?? 0.0;
-      terms['fixedRetainer'] = double.tryParse(_fixedRetainerController.text) ?? 0.0;
+      terms['fixedRetainer'] =
+          double.tryParse(_fixedRetainerController.text) ?? 0.0;
       terms['scope'] = _scopeController.text;
     } else if (_contractType == 'tenancy') {
-      terms['monthlyRent'] = double.tryParse(_monthlyRentController.text) ?? 0.0;
+      terms['monthlyRent'] =
+          double.tryParse(_monthlyRentController.text) ?? 0.0;
       terms['deposit'] = double.tryParse(_depositController.text) ?? 0.0;
-      terms['durationMonths'] = int.tryParse(_durationMonthsController.text) ?? 12;
+      terms['durationMonths'] =
+          int.tryParse(_durationMonthsController.text) ?? 12;
     }
 
     // Pack the AI Review details into contractTerms so they are stored in Firestore!
     if (_aiReview != null) {
       terms['aiReview'] = {
         'riskLevel': _aiReview!.riskLevel,
-        'riskColor': _aiReview!.riskColor.value, // Color stored as integer value
+        'riskColor': _aiReview!.riskColor
+            .toARGB32(), // Color stored as integer value
         'riskCount': _aiReview!.riskCount,
         'keyClauses': _aiReview!.keyClauses,
         'warnings': _aiReview!.warnings,
@@ -178,7 +186,9 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
         ownerUserId: widget.lawyer.id,
         ownerRole: 'lawyer',
         allowedUserIds: [widget.caseModel.clientId],
-        contentType: _pickedFile!.extension == 'pdf' ? 'application/pdf' : 'application/octet-stream',
+        contentType: _pickedFile!.extension == 'pdf'
+            ? 'application/pdf'
+            : 'application/octet-stream',
         isContract: true,
         contractStatus: 'pending_signature',
         contractType: _contractType,
@@ -209,9 +219,13 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
   String _extractTextFromBytes(Uint8List bytes, String? extension) {
     if (bytes.isEmpty) return '';
     final ext = (extension ?? '').toLowerCase();
-    
+
     // 1. If it's a plain text or markdown file, just decode it directly
-    if (ext == 'txt' || ext == 'md' || ext == 'json' || ext == 'csv' || ext == 'rtf') {
+    if (ext == 'txt' ||
+        ext == 'md' ||
+        ext == 'json' ||
+        ext == 'csv' ||
+        ext == 'rtf') {
       try {
         return utf8.decode(bytes, allowMalformed: true).trim();
       } catch (_) {
@@ -227,7 +241,10 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
 
       for (final byte in bytes) {
         // Alphanumeric, spaces, basic punctuation, tab, newline
-        if ((byte >= 32 && byte <= 126) || byte == 10 || byte == 13 || byte == 9) {
+        if ((byte >= 32 && byte <= 126) ||
+            byte == 10 ||
+            byte == 13 ||
+            byte == 9) {
           currentList.add(byte);
           consecutive++;
         } else {
@@ -235,8 +252,8 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
             // Keep chunks of text that look like actual words/phrases
             final word = String.fromCharCodes(currentList);
             // Ignore highly common raw PDF/binary syntax elements to reduce tokens even further
-            if (!word.contains('/Page') && 
-                !word.contains('/Contents') && 
+            if (!word.contains('/Page') &&
+                !word.contains('/Contents') &&
                 !word.contains('/Resources') &&
                 !word.contains('/Font') &&
                 !word.contains('endstream') &&
@@ -255,18 +272,24 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
       }
 
       String rawExtracted = buffer.toString().trim();
-      
+
       // Post-process: collapse multiple spaces and remove garbled character streaks
       rawExtracted = rawExtracted.replaceAll(RegExp(r'\s+'), ' ');
-      
+
       // Filter out non-alphanumeric/unreadable junk characters (retaining standard punctuation)
-      rawExtracted = rawExtracted.replaceAll(RegExp(r'[^a-zA-Z0-9\s.,;:()\-–_@/\\#%&?*+=!\[\]{}'']'), '');
-      
+      rawExtracted = rawExtracted.replaceAll(
+        RegExp(
+          r'[^a-zA-Z0-9\s.,;:()\-–_@/\\#%&?*+=!\[\]{}'
+          ']',
+        ),
+        '',
+      );
+
       // Limit to prevent token overflow (e.g., max ~15,000 characters)
       if (rawExtracted.length > 15000) {
         rawExtracted = '${rawExtracted.substring(0, 15000)}... [TRUNCATED]';
       }
-      
+
       return rawExtracted.trim();
     } catch (e) {
       return 'Error parsing document content: $e';
@@ -296,7 +319,10 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
     for (int i = 0; i < result.length; i++) {
       final codeUnit = result.codeUnitAt(i);
       // ASCII 32 (space) to 126 (~) plus common whitespace (LF, CR, Tab) and common Latin-1 accents
-      if ((codeUnit >= 32 && codeUnit <= 126) || codeUnit == 10 || codeUnit == 13 || codeUnit == 9) {
+      if ((codeUnit >= 32 && codeUnit <= 126) ||
+          codeUnit == 10 ||
+          codeUnit == 13 ||
+          codeUnit == 9) {
         buffer.writeCharCode(codeUnit);
       }
     }
@@ -319,24 +345,19 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
   Widget _buildFormattedText(String text, TextStyle baseStyle) {
     final List<TextSpan> spans = [];
     final parts = text.split('**');
-    
+
     for (int i = 0; i < parts.length; i++) {
       final isBold = i % 2 == 1;
       spans.add(
         TextSpan(
           text: parts[i],
-          style: isBold 
-              ? const TextStyle(fontWeight: FontWeight.bold) 
-              : null,
+          style: isBold ? const TextStyle(fontWeight: FontWeight.bold) : null,
         ),
       );
     }
-    
+
     return RichText(
-      text: TextSpan(
-        style: baseStyle,
-        children: spans,
-      ),
+      text: TextSpan(style: baseStyle, children: spans),
     );
   }
 
@@ -345,7 +366,9 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
     if (_pickedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select or upload a contract agreement document.'),
+          content: Text(
+            'Please select or upload a contract agreement document.',
+          ),
           backgroundColor: Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
         ),
@@ -368,11 +391,17 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
     // Extract text from the contract file bytes to send as pure text
     String fileTextContent = '';
     if (_fileBytes != null) {
-      fileTextContent = _extractTextFromBytes(_fileBytes!, _pickedFile!.extension);
+      fileTextContent = _extractTextFromBytes(
+        _fileBytes!,
+        _pickedFile!.extension,
+      );
     }
 
     final apiKey = dotenv.env['GEMINI_API_KEY'];
-    final bool hasCustomKey = apiKey != null && apiKey.isNotEmpty && apiKey != 'YOUR_GEMINI_API_KEY_HERE';
+    final bool hasCustomKey =
+        apiKey != null &&
+        apiKey.isNotEmpty &&
+        apiKey != 'YOUR_GEMINI_API_KEY_HERE';
 
     try {
       if (!hasCustomKey) {
@@ -381,14 +410,14 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
         throw Exception('Placeholder key detected. Using offline legal logic.');
       }
 
-      setState(() => _analysisStatus = 'Running LexiGuard AI Review (Gemini 3.5)...');
-      
-      final model = GenerativeModel(
-        model: 'gemini-3.5-flash',
-        apiKey: apiKey,
+      setState(
+        () => _analysisStatus = 'Running LexiGuard AI Review (Gemini 3.5)...',
       );
 
-      final prompt = '''
+      final model = GenerativeModel(model: 'gemini-3.5-flash', apiKey: apiKey);
+
+      final prompt =
+          '''
       You are an expert legal contract reviewer specializing in Malaysian law.
       Analyze the contract details, form fields, and the attached raw contract document file (PDF/Image/Text) provided below to perform a thorough legal audit and review.
       
@@ -429,31 +458,34 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
         ],
         "signaturePage": 1-based integer representing the page number where the client's signature is located,
         "signatureAnchor": "The closest text label/phrase or header next to the client's signature box (e.g. 'Tenant's Signature', 'Signature of Client', 'Second Party Signature' etc.)",
-        "signatureOffset": "\"above\" | \"right\" | \"below\" - indicating where the physical signature should be placed relative to the signatureAnchor text. (e.g. if the anchor is 'Client: ______', the offset should be 'right'. If the anchor is 'Client's Signature' under a line, the offset should be 'above'). Default to 'above' if unsure."
+        "signatureOffset": ""above" | "right" | "below" - indicating where the physical signature should be placed relative to the signatureAnchor text. (e.g. if the anchor is 'Client: ______', the offset should be 'right'. If the anchor is 'Client's Signature' under a line, the offset should be 'above'). Default to 'above' if unsure."
       }
       ''';
 
       final response = await model.generateContent([
         Content('user', [
           TextPart(prompt),
-          if (_fileBytes != null && (
-              _pickedFile!.extension == 'pdf' || 
-              _pickedFile!.extension == 'txt' || 
-              _pickedFile!.extension == 'png' || 
-              _pickedFile!.extension == 'jpg' || 
-              _pickedFile!.extension == 'jpeg'
-          )) ...[
+          if (_fileBytes != null &&
+              (_pickedFile!.extension == 'pdf' ||
+                  _pickedFile!.extension == 'txt' ||
+                  _pickedFile!.extension == 'png' ||
+                  _pickedFile!.extension == 'jpg' ||
+                  _pickedFile!.extension == 'jpeg')) ...[
             DataPart(
-              _pickedFile!.extension == 'pdf' ? 'application/pdf' :
-              _pickedFile!.extension == 'txt' ? 'text/plain' :
-              _pickedFile!.extension == 'png' ? 'image/png' : 'image/jpeg',
+              _pickedFile!.extension == 'pdf'
+                  ? 'application/pdf'
+                  : _pickedFile!.extension == 'txt'
+                  ? 'text/plain'
+                  : _pickedFile!.extension == 'png'
+                  ? 'image/png'
+                  : 'image/jpeg',
               _fileBytes!,
             ),
           ],
         ]),
       ]);
       final responseText = response.text;
-      
+
       if (responseText == null || responseText.isEmpty) {
         throw Exception('Empty response from Gemini API');
       }
@@ -467,10 +499,15 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
 
       final Map<String, dynamic> aiJson = jsonDecode(cleanText);
       final rawRisk = aiJson['riskLevel']?.toString() ?? 'Low';
-      final riskLevel = (rawRisk == 'High' || rawRisk == 'Medium' || rawRisk == 'Low') ? rawRisk : 'Low';
-      final riskColor = riskLevel == 'High' 
-          ? const Color(0xFFEF4444) 
-          : (riskLevel == 'Medium' ? const Color(0xFFD4AF37) : const Color(0xFF22C55E));
+      final riskLevel =
+          (rawRisk == 'High' || rawRisk == 'Medium' || rawRisk == 'Low')
+          ? rawRisk
+          : 'Low';
+      final riskColor = riskLevel == 'High'
+          ? const Color(0xFFEF4444)
+          : (riskLevel == 'Medium'
+                ? const Color(0xFFD4AF37)
+                : const Color(0xFF22C55E));
 
       final keyClauses = List<String>.from(aiJson['keyClauses'] ?? []);
       final warnings = List<String>.from(aiJson['warnings'] ?? []);
@@ -479,15 +516,23 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
         riskLevel: riskLevel,
         riskColor: riskColor,
         riskCount: warnings.length,
-        keyClauses: (keyClauses.isNotEmpty ? keyClauses : ['Draft successfully parsed.'])
-            .map((c) => _sanitizeFontOutput(c))
-            .toList(),
-        warnings: (warnings.isNotEmpty ? warnings : ['No critical risks flagged by Gemini.'])
-            .map((w) => _sanitizeFontOutput(w))
-            .toList(),
+        keyClauses:
+            (keyClauses.isNotEmpty
+                    ? keyClauses
+                    : ['Draft successfully parsed.'])
+                .map((c) => _sanitizeFontOutput(c))
+                .toList(),
+        warnings:
+            (warnings.isNotEmpty
+                    ? warnings
+                    : ['No critical risks flagged by Gemini.'])
+                .map((w) => _sanitizeFontOutput(w))
+                .toList(),
         source: 'Gemini 3.5 Flash',
         signaturePage: _parsePageNumber(aiJson['signaturePage']),
-        signatureAnchor: _sanitizeFontOutput(aiJson['signatureAnchor']?.toString() ?? 'Client\'s Signature'),
+        signatureAnchor: _sanitizeFontOutput(
+          aiJson['signatureAnchor']?.toString() ?? 'Client\'s Signature',
+        ),
         signatureOffset: aiJson['signatureOffset']?.toString() ?? 'above',
       );
     } catch (e) {
@@ -498,7 +543,9 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
         setState(() => _isAnalyzing = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gemini API Error: $e\n\nPlease check your API key validity and network connection.'),
+            content: Text(
+              'Gemini API Error: $e\n\nPlease check your API key validity and network connection.',
+            ),
             backgroundColor: const Color(0xFFEF4444),
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 8),
@@ -518,7 +565,9 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
 
         review = ContractAiReview(
           riskLevel: rent > 4000 ? 'Medium' : 'Low',
-          riskColor: rent > 4000 ? const Color(0xFFD4AF37) : const Color(0xFF22C55E),
+          riskColor: rent > 4000
+              ? const Color(0xFFD4AF37)
+              : const Color(0xFF22C55E),
           riskCount: rent > 4000 ? 2 : 1,
           keyClauses: [
             'Monthly Rental: $monthlyRentStr',
@@ -546,7 +595,9 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
 
         review = ContractAiReview(
           riskLevel: hourly > 500 ? 'Medium' : 'Low',
-          riskColor: hourly > 500 ? const Color(0xFFD4AF37) : const Color(0xFF22C55E),
+          riskColor: hourly > 500
+              ? const Color(0xFFD4AF37)
+              : const Color(0xFF22C55E),
           riskCount: hourly > 500 ? 2 : 1,
           keyClauses: [
             'Professional Retainer Fee: RM ${retainer.toStringAsFixed(2)} (Fixed)',
@@ -607,7 +658,9 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
       appBar: _buildAppBar(),
       body: _isAnalyzing
           ? _buildAiLoadingUI()
-          : (_currentStep == SendContractStep.aiReview ? _buildAiReviewUI() : _buildFormUI()),
+          : (_currentStep == SendContractStep.aiReview
+                ? _buildAiReviewUI()
+                : _buildFormUI()),
     );
   }
 
@@ -637,11 +690,7 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                     shape: BoxShape.circle,
                   ),
                   child: const Center(
-                    child: Icon(
-                      Icons.auto_awesome,
-                      color: _gold,
-                      size: 30,
-                    ),
+                    child: Icon(Icons.auto_awesome, color: _gold, size: 30),
                   ),
                 ),
               ],
@@ -661,10 +710,7 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
               child: Text(
                 _analysisStatus,
                 key: ValueKey(_analysisStatus),
-                style: GoogleFonts.inter(
-                  color: _grey,
-                  fontSize: 13,
-                ),
+                style: GoogleFonts.inter(color: _grey, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -680,11 +726,10 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
       foregroundColor: Colors.white,
       elevation: 0,
       title: Text(
-        _currentStep == SendContractStep.aiReview ? 'AI Contract Summary' : 'Send Legal Contract',
-        style: GoogleFonts.inter(
-          fontWeight: FontWeight.w600,
-          fontSize: 16,
-        ),
+        _currentStep == SendContractStep.aiReview
+            ? 'AI Contract Summary'
+            : 'Send Legal Contract',
+        style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 16),
       ),
       centerTitle: true,
       leading: _currentStep == SendContractStep.aiReview
@@ -717,7 +762,7 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                 border: Border.all(color: const Color(0xFFE2E8F0)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -732,7 +777,11 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                       color: Color(0xFFEFF6FF),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.person_outline_rounded, color: _navy, size: 24),
+                    child: const Icon(
+                      Icons.person_outline_rounded,
+                      color: _navy,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -758,10 +807,7 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                         ),
                         Text(
                           'Case: ${widget.caseModel.title}',
-                          style: GoogleFonts.inter(
-                            color: _grey,
-                            fontSize: 12,
-                          ),
+                          style: GoogleFonts.inter(color: _grey, fontSize: 12),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -834,16 +880,14 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
           decoration: BoxDecoration(
             color: active ? _navy : Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: active ? _navy : const Color(0xFFE2E8F0),
-            ),
+            border: Border.all(color: active ? _navy : const Color(0xFFE2E8F0)),
             boxShadow: active
                 ? [
                     BoxShadow(
-                      color: _navy.withOpacity(0.1),
+                      color: _navy.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
-                    )
+                    ),
                   ]
                 : [],
           ),
@@ -991,7 +1035,10 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
             prefixIcon: Icon(icon, color: _grey, size: 18),
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 14,
+              horizontal: 16,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -1033,18 +1080,24 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: _pickedFile == null ? const Color(0xFFF1F5F9) : const Color(0xFFFFF2CC),
+                    color: _pickedFile == null
+                        ? const Color(0xFFF1F5F9)
+                        : const Color(0xFFFFF2CC),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    _pickedFile == null ? Icons.cloud_upload_outlined : Icons.description,
+                    _pickedFile == null
+                        ? Icons.cloud_upload_outlined
+                        : Icons.description,
                     color: _pickedFile == null ? _grey : _gold,
                     size: 26,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  _pickedFile == null ? 'Upload Contract PDF' : _pickedFile!.name,
+                  _pickedFile == null
+                      ? 'Upload Contract PDF'
+                      : _pickedFile!.name,
                   style: GoogleFonts.inter(
                     color: _navy,
                     fontSize: 14,
@@ -1057,10 +1110,7 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                   _pickedFile == null
                       ? 'PDF, DOCX, JPG, PNG (Max 15MB)'
                       : '${(_pickedFile!.size / 1024).toStringAsFixed(1)} KB  •  Tap to replace file',
-                  style: GoogleFonts.inter(
-                    color: _grey,
-                    fontSize: 11,
-                  ),
+                  style: GoogleFonts.inter(color: _grey, fontSize: 11),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -1087,11 +1137,19 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
           children: [
             Text(
               'Uploading secure draft to vault...',
-              style: GoogleFonts.inter(color: _navy, fontSize: 12, fontWeight: FontWeight.w500),
+              style: GoogleFonts.inter(
+                color: _navy,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             Text(
               '${(_uploadProgress * 100).toInt()}%',
-              style: GoogleFonts.inter(color: _gold, fontSize: 13, fontWeight: FontWeight.bold),
+              style: GoogleFonts.inter(
+                color: _gold,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -1107,10 +1165,7 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
         icon: const Icon(Icons.auto_awesome, size: 16),
         label: Text(
           'Analyze Agreement with LexiGuard AI',
-          style: GoogleFonts.inter(
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-          ),
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: _navy,
@@ -1131,8 +1186,8 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
     final typeLabel = _contractType == 'tenancy'
         ? 'Tenancy Agreement'
         : _contractType == 'representation'
-            ? 'Representation Agreement'
-            : 'Custom Legal Contract';
+        ? 'Representation Agreement'
+        : 'Custom Legal Contract';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -1148,7 +1203,7 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
               border: Border.all(color: const Color(0xFFE2E8F0)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
+                  color: Colors.black.withValues(alpha: 0.02),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -1175,11 +1230,18 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                             ),
                             const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: _aiReview!.source.contains('Gemini') 
-                                    ? const Color(0xFFE0F2FE) // Sky blue for Live Gemini
-                                    : const Color(0xFFF1F5F9), // Slate for local heuristics
+                                color: _aiReview!.source.contains('Gemini')
+                                    ? const Color(
+                                        0xFFE0F2FE,
+                                      ) // Sky blue for Live Gemini
+                                    : const Color(
+                                        0xFFF1F5F9,
+                                      ), // Slate for local heuristics
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
                                   color: _aiReview!.source.contains('Gemini')
@@ -1214,15 +1276,22 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
-                        color: _aiReview!.riskColor.withOpacity(0.12),
+                        color: _aiReview!.riskColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.shield_outlined, color: _aiReview!.riskColor, size: 14),
+                          Icon(
+                            Icons.shield_outlined,
+                            color: _aiReview!.riskColor,
+                            size: 14,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '${_aiReview!.riskLevel} Risk',
@@ -1248,7 +1317,11 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                         color: Color(0xFFFEF2F2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 18),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Color(0xFFEF4444),
+                        size: 18,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1301,7 +1374,11 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
                     children: [
                       const Padding(
                         padding: EdgeInsets.only(top: 2.0),
-                        child: Icon(Icons.check_circle, color: Color(0xFF22C55E), size: 14),
+                        child: Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF22C55E),
+                          size: 14,
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1325,7 +1402,11 @@ class _SendContractScreenState extends State<SendContractScreen> with SingleTick
           // Potential Risks & Suggestions
           Row(
             children: [
-              const Icon(Icons.lightbulb_outline_rounded, color: _gold, size: 18),
+              const Icon(
+                Icons.lightbulb_outline_rounded,
+                color: _gold,
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Identified Risks & Recommendations',

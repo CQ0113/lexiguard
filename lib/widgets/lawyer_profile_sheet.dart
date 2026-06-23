@@ -74,9 +74,7 @@ class _LawyerProfileSheetContent extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildInfoSection(),
-                        ],
+                        children: [_buildInfoSection()],
                       ),
                     ),
                   ],
@@ -92,8 +90,6 @@ class _LawyerProfileSheetContent extends StatelessWidget {
   // ── Navy gradient header ───────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context) {
-    final initial =
-        snapshot.name.isNotEmpty ? snapshot.name[0].toUpperCase() : '?';
     final isVerified = snapshot.verificationStatus == 'auto_verified';
 
     return Container(
@@ -151,29 +147,29 @@ class _LawyerProfileSheetContent extends StatelessWidget {
                 Text(
                   snapshot.firmName!,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
-                    color: Colors.white60,
-                    fontSize: 13,
-                  ),
+                  style: GoogleFonts.inter(color: Colors.white60, fontSize: 13),
                 ),
               ],
               if (isVerified) ...[
                 const SizedBox(height: 10),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _gold.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: _gold.withValues(alpha: 0.5),
-                    ),
+                    border: Border.all(color: _gold.withValues(alpha: 0.5)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.verified_rounded,
-                          color: _gold, size: 14),
+                      const Icon(
+                        Icons.verified_rounded,
+                        color: _gold,
+                        size: 14,
+                      ),
                       const SizedBox(width: 5),
                       Text(
                         'Malaysian Bar Verified',
@@ -210,8 +206,10 @@ class _LawyerProfileSheetContent extends StatelessWidget {
             if (snapshot.jurisdiction != null)
               _chip(Icons.location_on_outlined, snapshot.jurisdiction!),
             if (snapshot.yearsExperience != null)
-              _chip(Icons.work_history_outlined,
-                  '${snapshot.yearsExperience} yrs experience'),
+              _chip(
+                Icons.work_history_outlined,
+                '${snapshot.yearsExperience} yrs experience',
+              ),
           ],
         ),
         if (snapshot.rating != null) ...[
@@ -247,10 +245,7 @@ class _LawyerProfileSheetContent extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'BC# ${snapshot.barNumber}',
-            style: GoogleFonts.inter(
-              color: Colors.grey[600],
-              fontSize: 13,
-            ),
+            style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 13),
           ),
         ],
         const SizedBox(height: 24),
@@ -264,10 +259,7 @@ class _LawyerProfileSheetContent extends StatelessWidget {
           ),
           child: Text(
             'Profile information is captured at the time of the connection request and may not reflect the most recent updates.',
-            style: GoogleFonts.inter(
-              color: Colors.grey[500],
-              fontSize: 11,
-            ),
+            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 11),
           ),
         ),
       ],

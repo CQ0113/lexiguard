@@ -211,6 +211,8 @@ void main() {
         expect(requestData['requestDirection'], 'client_to_lawyer');
         expect(requestData['status'], 'pending');
         expect(requestData['caseSnapshot'], isA<Map>());
+        expect(requestData['clientReveal'], isA<Map>());
+        expect((requestData['clientReveal'] as Map)['name'], client.name);
 
         final caseSnap = await fakeDb
             .collection('cases')
@@ -292,6 +294,51 @@ void main() {
             .doc(siblingId)
             .get();
         expect(siblingSnap.data()!['status'], 'expired');
+
+        final chatSnap = await fakeDb
+            .collection('chat_rooms')
+            .doc(requestId)
+            .get();
+        expect(chatSnap.exists, isTrue);
+        final chatData = chatSnap.data()!;
+        expect(chatData['caseId'], openCase.id);
+        expect(chatData['clientId'], client.id);
+        expect(chatData['lawyerId'], requestedLawyer.id);
+        expect(
+          List<String>.from(chatData['participants'] as List? ?? []),
+          containsAll([client.id, requestedLawyer.id]),
+        );
+        expect(chatData['lawyerName'], requestedLawyer.name);
+        expect(chatData['clientName'], client.name);
+        expect(chatData['caseTitle'], openCase.title);
+      },
+    );
+
+    test(
+      'approved client request is visible in client approved stream',
+      () async {
+        final client = _clientUser();
+        final openCase = _openCase();
+        final requestedLawyer = _verifiedLawyer();
+        await _seedCase(fakeDb, openCase);
+
+        await repo.sendClientRequestToLawyer(
+          targetCase: openCase,
+          client: client,
+          lawyer: _recommendedLawyer(id: requestedLawyer.id),
+        );
+
+        final requestId = ConnectionRequestRepository.docIdFor(
+          caseId: openCase.id,
+          lawyerId: requestedLawyer.id,
+        );
+        await repo.approveClientRequest(
+          requestId: requestId,
+          lawyer: requestedLawyer,
+        );
+
+        final requests = await repo.streamApprovedForClient(client.id).first;
+        expect(requests.map((request) => request.id), contains(requestId));
       },
     );
   });
@@ -759,8 +806,7 @@ void main() {
       await repo.approveRequest(requestId: docId, client: client);
 
       // chat_rooms/{roomId} should now exist (roomId == docId).
-      final chatSnap =
-          await fakeDb.collection('chat_rooms').doc(docId).get();
+      final chatSnap = await fakeDb.collection('chat_rooms').doc(docId).get();
       expect(chatSnap.exists, isTrue);
 
       final chatData = chatSnap.data()!;
@@ -778,10 +824,7 @@ void main() {
       expect(chatData['clientName'], client.name);
 
       // Lawyer name comes from the LawyerSnapshot.
-      expect(
-        chatData['lawyerName'],
-        isNotEmpty,
-      );
+      expect(chatData['lawyerName'], isNotEmpty);
 
       // Case title is populated from the case doc.
       expect(chatData['caseTitle'], openCase.title);
@@ -905,6 +948,65 @@ void main() {
       expect(result.any((r) => r.lawyerId == 'lh1'), isTrue);
       // Pending case2 should NOT appear
       expect(result.any((r) => r.lawyerId == 'lh2'), isFalse);
+    });
+
+    test('streamForClient returns all requests for that client', () async {
+      final lawyer1 = _verifiedLawyer(id: 'client_stream_l1');
+      final lawyer2 = _verifiedLawyer(id: 'client_stream_l2');
+      final otherLawyer = _verifiedLawyer(id: 'client_stream_other_lawyer');
+      final case1 = _openCase(id: 'case_client_stream_1');
+      final case2 = _openCase(id: 'case_client_stream_2');
+      final otherCase = CaseModel(
+        id: 'case_client_stream_other',
+        clientId: 'client_2',
+        title: 'Other client case',
+        description: 'Should not appear in client_1 stream.',
+        category: CaseCategory.property,
+        status: CaseStatus.pending,
+        urgency: CaseUrgency.low,
+        createdAt: DateTime.utc(2026, 5, 2),
+      );
+      await _seedCase(fakeDb, case1);
+      await _seedCase(fakeDb, case2);
+      await _seedCase(fakeDb, otherCase);
+      const msg = 'I can assist with your property dispute in detail.';
+
+      await repo.sendRequest(targetCase: case1, lawyer: lawyer1, message: msg);
+      await repo.sendRequest(targetCase: case2, lawyer: lawyer2, message: msg);
+      await repo.sendRequest(
+        targetCase: otherCase,
+        lawyer: otherLawyer,
+        message: msg,
+      );
+
+      final docId1 = ConnectionRequestRepository.docIdFor(
+        caseId: case1.id,
+        lawyerId: lawyer1.id,
+      );
+      final docId2 = ConnectionRequestRepository.docIdFor(
+        caseId: case2.id,
+        lawyerId: lawyer2.id,
+      );
+      await repo.withdrawRequest(docId1);
+
+      final result = await repo.streamForClient('client_1').first;
+      final ids = result.map((request) => request.id);
+
+      expect(result.length, 2);
+      expect(ids, containsAll([docId1, docId2]));
+      expect(result.every((request) => request.clientId == 'client_1'), isTrue);
+      expect(
+        result.any(
+          (request) => request.status == ConnectionRequestStatus.withdrawn,
+        ),
+        isTrue,
+      );
+      expect(
+        result.any(
+          (request) => request.status == ConnectionRequestStatus.pending,
+        ),
+        isTrue,
+      );
     });
 
     test('streamForLawyer returns all requests from that lawyer', () async {

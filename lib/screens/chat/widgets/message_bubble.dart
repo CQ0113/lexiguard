@@ -139,14 +139,25 @@ class _MessageBubbleState extends State<MessageBubble> {
               // Copy Text
               if (isText)
                 ListTile(
-                  leading: const Icon(Icons.copy_rounded, color: Color(0xFF0C1D36)),
-                  title: Text('Copy Message Text', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+                  leading: const Icon(
+                    Icons.copy_rounded,
+                    color: Color(0xFF0C1D36),
+                  ),
+                  title: Text(
+                    'Copy Message Text',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                  ),
                   onTap: () {
                     Navigator.of(ctx).pop();
-                    Clipboard.setData(ClipboardData(text: widget.message.text ?? ''));
+                    Clipboard.setData(
+                      ClipboardData(text: widget.message.text ?? ''),
+                    );
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Message copied to clipboard.', style: GoogleFonts.inter()),
+                        content: Text(
+                          'Message copied to clipboard.',
+                          style: GoogleFonts.inter(),
+                        ),
                         backgroundColor: const Color(0xFF0C1D36),
                       ),
                     );
@@ -154,8 +165,14 @@ class _MessageBubbleState extends State<MessageBubble> {
                 ),
               // Message Info
               ListTile(
-                leading: const Icon(Icons.info_outline_rounded, color: Color(0xFF0C1D36)),
-                title: Text('Message Details', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+                leading: const Icon(
+                  Icons.info_outline_rounded,
+                  color: Color(0xFF0C1D36),
+                ),
+                title: Text(
+                  'Message Details',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                ),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   setState(() => _showTimestamp = !_showTimestamp);
@@ -164,8 +181,14 @@ class _MessageBubbleState extends State<MessageBubble> {
               // Edit Message
               if (widget.isOwn && isText && !hasTimer && widget.onEdit != null)
                 ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: Color(0xFFCFA92A)),
-                  title: Text('Edit Message', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+                  leading: const Icon(
+                    Icons.edit_outlined,
+                    color: Color(0xFFCFA92A),
+                  ),
+                  title: Text(
+                    'Edit Message',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                  ),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _showEditDialog();
@@ -174,8 +197,17 @@ class _MessageBubbleState extends State<MessageBubble> {
               // Delete Message
               if (widget.isOwn && widget.onDelete != null)
                 ListTile(
-                  leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                  title: Text('Delete Message', style: GoogleFonts.inter(fontWeight: FontWeight.w500, color: Colors.red)),
+                  leading: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.red,
+                  ),
+                  title: Text(
+                    'Delete Message',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w500,
+                      color: Colors.red,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _confirmDelete();
@@ -196,7 +228,10 @@ class _MessageBubbleState extends State<MessageBubble> {
         return AlertDialog(
           title: Text(
             'Edit Message',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: const Color(0xFF0C1D36)),
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF0C1D36),
+            ),
           ),
           content: TextField(
             controller: editCtrl,
@@ -212,7 +247,10 @@ class _MessageBubbleState extends State<MessageBubble> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey[500])),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(color: Colors.grey[500]),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -241,7 +279,10 @@ class _MessageBubbleState extends State<MessageBubble> {
         return AlertDialog(
           title: Text(
             'Delete Message?',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.red[700]),
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold,
+              color: Colors.red[700],
+            ),
           ),
           content: Text(
             'Are you sure you want to delete this message? This action cannot be undone.',
@@ -250,7 +291,10 @@ class _MessageBubbleState extends State<MessageBubble> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey[500])),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(color: Colors.grey[500]),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -299,7 +343,9 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
           backgroundColor: _navy,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           margin: const EdgeInsets.all(16),
           duration: const Duration(seconds: 2),
         ),
@@ -331,7 +377,11 @@ class _MessageBubbleState extends State<MessageBubble> {
                     );
                   },
                   errorBuilder: (context, error, stackTrace) => const Center(
-                    child: Icon(Icons.broken_image, color: Colors.white54, size: 48),
+                    child: Icon(
+                      Icons.broken_image,
+                      color: Colors.white54,
+                      size: 48,
+                    ),
                   ),
                 ),
               ),
@@ -522,8 +572,12 @@ class _MessageBubbleState extends State<MessageBubble> {
         ? const Color(0xFF0C1D36)
         : const Color(0xFFF1F5F9);
     final Color textColor = isOwn ? Colors.white : const Color(0xFF0C1D36);
-    final Color accentColor = isExpired ? Colors.red[400]! : const Color(0xFFCFA92A);
-    final Color timerColor = isExpired ? Colors.red[400]! : (isOwn ? const Color(0xFFCFA92A) : const Color(0xFFB45309));
+    final Color accentColor = isExpired
+        ? Colors.red[400]!
+        : const Color(0xFFCFA92A);
+    final Color timerColor = isExpired
+        ? Colors.red[400]!
+        : (isOwn ? const Color(0xFFCFA92A) : const Color(0xFFB45309));
 
     return GestureDetector(
       onTap: isExpired ? null : () => _openUrl(msg.attachmentDownloadUrl),
@@ -541,15 +595,15 @@ class _MessageBubbleState extends State<MessageBubble> {
           border: Border.all(
             color: isExpired
                 ? (isOwn ? Colors.white24 : Colors.grey[300]!)
-                : const Color(0xFFCFA92A).withOpacity(0.5),
+                : const Color(0xFFCFA92A).withValues(alpha: 0.5),
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 4,
               offset: const Offset(0, 2),
-            )
+            ),
           ],
         ),
         child: Column(
@@ -559,7 +613,9 @@ class _MessageBubbleState extends State<MessageBubble> {
             Row(
               children: [
                 Icon(
-                  isExpired ? Icons.lock_outline_rounded : Icons.lock_clock_outlined,
+                  isExpired
+                      ? Icons.lock_outline_rounded
+                      : Icons.lock_clock_outlined,
                   color: accentColor,
                   size: 20,
                 ),
@@ -593,14 +649,18 @@ class _MessageBubbleState extends State<MessageBubble> {
               decoration: BoxDecoration(
                 color: isExpired
                     ? Colors.red[50]
-                    : (isOwn ? Colors.white.withOpacity(0.1) : const Color(0xFFFEF3C7)),
+                    : (isOwn
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : const Color(0xFFFEF3C7)),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    isExpired ? Icons.error_outline_rounded : Icons.timer_outlined,
+                    isExpired
+                        ? Icons.error_outline_rounded
+                        : Icons.timer_outlined,
                     color: isExpired ? Colors.red[600] : timerColor,
                     size: 14,
                   ),
@@ -624,7 +684,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                   Text(
                     'Tap to Access',
                     style: GoogleFonts.inter(
-                      color: isOwn ? const Color(0xFFCFA92A) : const Color(0xFF0C1D36),
+                      color: isOwn
+                          ? const Color(0xFFCFA92A)
+                          : const Color(0xFF0C1D36),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -632,7 +694,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                   const SizedBox(width: 4),
                   Icon(
                     Icons.arrow_forward_rounded,
-                    color: isOwn ? const Color(0xFFCFA92A) : const Color(0xFF0C1D36),
+                    color: isOwn
+                        ? const Color(0xFFCFA92A)
+                        : const Color(0xFF0C1D36),
                     size: 14,
                   ),
                 ],
@@ -651,14 +715,16 @@ class _MessageBubbleState extends State<MessageBubble> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
       child: Column(
-        crossAxisAlignment:
-            isOwn ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isOwn
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           GestureDetector(
             onLongPress: () => _showOptionsMenu(context),
             child: Row(
-              mainAxisAlignment:
-                  isOwn ? MainAxisAlignment.end : MainAxisAlignment.start,
+              mainAxisAlignment: isOwn
+                  ? MainAxisAlignment.end
+                  : MainAxisAlignment.start,
               children: [
                 ConstrainedBox(
                   constraints: BoxConstraints(
@@ -675,10 +741,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 _timeFmt.format(widget.message.createdAt.toLocal()),
-                style: GoogleFonts.inter(
-                  color: Colors.grey[500],
-                  fontSize: 10,
-                ),
+                style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 10),
               ),
             ),
           ],

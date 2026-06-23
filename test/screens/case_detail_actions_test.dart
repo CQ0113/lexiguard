@@ -10,6 +10,7 @@ import 'package:lei_guard/screens/shared/case_detail_screen.dart';
 
 class _FakeCaseActionHandler implements CaseActionHandler {
   final List<String> recommendationCaseIds = [];
+  final List<bool> recommendationForceRefreshValues = [];
 
   @override
   Future<void> withdrawCase({required String caseId}) async {}
@@ -18,8 +19,12 @@ class _FakeCaseActionHandler implements CaseActionHandler {
   Future<void> closeCase({required String caseId, String? reason}) async {}
 
   @override
-  Future<void> recommendLawyers({required String caseId}) async {
+  Future<void> recommendLawyers({
+    required String caseId,
+    bool forceRefresh = false,
+  }) async {
     recommendationCaseIds.add(caseId);
+    recommendationForceRefreshValues.add(forceRefresh);
   }
 }
 
@@ -35,7 +40,9 @@ void main() {
   }
 
   testWidgets('client sees withdraw action for pending case', (tester) async {
-    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
+    final repo = ConnectionRequestRepository(
+      firestore: FakeFirebaseFirestore(),
+    );
     const client = UserModel(
       id: 'client_1',
       name: 'Client A',
@@ -73,7 +80,9 @@ void main() {
   });
 
   testWidgets('client sees close action for active case', (tester) async {
-    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
+    final repo = ConnectionRequestRepository(
+      firestore: FakeFirebaseFirestore(),
+    );
     const client = UserModel(
       id: 'client_2',
       name: 'Client B',
@@ -114,7 +123,9 @@ void main() {
   testWidgets('client auto-triggers recommendations once for eligible case', (
     tester,
   ) async {
-    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
+    final repo = ConnectionRequestRepository(
+      firestore: FakeFirebaseFirestore(),
+    );
     const client = UserModel(
       id: 'client_3',
       name: 'Client C',
@@ -169,7 +180,9 @@ void main() {
   testWidgets('client does not auto-trigger while recommendations generate', (
     tester,
   ) async {
-    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
+    final repo = ConnectionRequestRepository(
+      firestore: FakeFirebaseFirestore(),
+    );
     const client = UserModel(
       id: 'client_4',
       name: 'Client D',
@@ -211,7 +224,9 @@ void main() {
   testWidgets('client does not overwrite completed recommendations', (
     tester,
   ) async {
-    final repo = ConnectionRequestRepository(firestore: FakeFirebaseFirestore());
+    final repo = ConnectionRequestRepository(
+      firestore: FakeFirebaseFirestore(),
+    );
     const client = UserModel(
       id: 'client_5',
       name: 'Client E',
@@ -262,5 +277,71 @@ void main() {
 
     expect(actionHandler.recommendationCaseIds, isEmpty);
     expect(find.text('Lawyer One'), findsOneWidget);
+  });
+
+  testWidgets('client can force-refresh completed recommendations', (
+    tester,
+  ) async {
+    final repo = ConnectionRequestRepository(
+      firestore: FakeFirebaseFirestore(),
+    );
+    const client = UserModel(
+      id: 'client_6',
+      name: 'Client F',
+      email: 'clientf@example.com',
+      phone: '+600000005',
+      role: UserRole.client,
+    );
+    final actionHandler = _FakeCaseActionHandler();
+
+    final pendingCase = CaseModel(
+      id: 'case_6',
+      clientId: client.id,
+      title: 'Refresh recommendations',
+      description: 'Pending case description.',
+      category: CaseCategory.property,
+      status: CaseStatus.pending,
+      urgency: CaseUrgency.high,
+      createdAt: DateTime.utc(2026, 5, 6),
+      recommendationStatus: 'completed',
+      lawyerRecommendations: const [
+        LawyerRecommendation(
+          lawyerId: 'lawyer_1',
+          lawyerName: 'Lawyer One',
+          specialization: 'Property',
+          practiceState: 'Selangor',
+          practiceCity: 'Shah Alam',
+          yearsExperience: 8,
+          languages: ['English'],
+          hourlyRate: 250,
+          matchPercentage: 92,
+          matchReason: 'Matches the property case category.',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrap(
+        CaseDetailScreen(
+          caseModel: pendingCase,
+          viewer: client,
+          repository: repo,
+          actionHandler: actionHandler,
+          subscribeToLiveUpdates: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final refreshButton = find.text('Refresh');
+    expect(refreshButton, findsOneWidget);
+
+    await tester.ensureVisible(refreshButton);
+    await tester.pumpAndSettle();
+    await tester.tap(refreshButton);
+    await tester.pump();
+
+    expect(actionHandler.recommendationCaseIds, ['case_6']);
+    expect(actionHandler.recommendationForceRefreshValues, [true]);
   });
 }

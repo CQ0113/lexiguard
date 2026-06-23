@@ -7,6 +7,7 @@ import 'dart:async';
 import '../../data/dummy_data.dart';
 import '../../models/case_model.dart';
 import '../../models/user_model.dart';
+import '../../models/vault_document_model.dart';
 import '../../repositories/case_repository.dart';
 import '../../repositories/connection_request_repository.dart';
 import '../../widgets/network_avatar.dart';
@@ -20,7 +21,6 @@ import '../chat/chat_list_screen.dart';
 import '../../repositories/chat_repository.dart';
 import '../../repositories/vault_document_repository.dart';
 import 'client_signature_screen.dart';
-import 'lexibot_chat_screen.dart';
 import 'lexibot_history_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,15 +73,20 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
     final chatRepo = widget.chatRepository ?? ChatRepository();
     _chatSub = chatRepo.streamRoomsForUser(widget.user.id).listen((rooms) {
       if (rooms.isEmpty) return;
-      final latestTime = rooms.first.updatedAt.millisecondsSinceEpoch;
+      final latestRoom = rooms.first;
+      final latestTime = (latestRoom.lastMessageAt ?? latestRoom.createdAt)
+          .millisecondsSinceEpoch;
       if (_prevChatTime != null && latestTime > _prevChatTime!) {
         _showRealtimeAlert('New message received in chat!');
       }
       _prevChatTime = latestTime;
     });
 
-    final connRepo = widget.connectionRequestRepository ?? ConnectionRequestRepository();
-    _connSub = connRepo.streamPendingForClient(widget.user.id).listen((requests) {
+    final connRepo =
+        widget.connectionRequestRepository ?? ConnectionRequestRepository();
+    _connSub = connRepo.streamPendingForClient(widget.user.id).listen((
+      requests,
+    ) {
       if (requests.isEmpty) return;
       int maxTime = 0;
       for (var r in requests) {
@@ -97,22 +102,24 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
     });
 
     final vaultRepo = widget.vaultRepository ?? VaultDocumentRepository();
-    _vaultSub = vaultRepo.streamClientDocuments(clientId: widget.user.id).listen((docs) {
-      if (docs.isEmpty) return;
-      int maxTime = 0;
-      for (var d in docs) {
-        final t = d.createdAt?.millisecondsSinceEpoch ?? 0;
-        final st = d.signedAt?.millisecondsSinceEpoch ?? 0;
-        if (t > maxTime) maxTime = t;
-        if (st > maxTime) maxTime = st;
-      }
-      if (_prevVaultTime != null && maxTime > _prevVaultTime!) {
-        _showRealtimeAlert('New document update in your vault!');
-      }
-      if (_prevVaultTime == null || maxTime > _prevVaultTime!) {
-        _prevVaultTime = maxTime;
-      }
-    });
+    _vaultSub = vaultRepo
+        .streamClientDocuments(clientUserId: widget.user.id)
+        .listen((docs) {
+          if (docs.isEmpty) return;
+          int maxTime = 0;
+          for (var d in docs) {
+            final t = d.createdAt?.millisecondsSinceEpoch ?? 0;
+            final st = d.signedAt?.millisecondsSinceEpoch ?? 0;
+            if (t > maxTime) maxTime = t;
+            if (st > maxTime) maxTime = st;
+          }
+          if (_prevVaultTime != null && maxTime > _prevVaultTime!) {
+            _showRealtimeAlert('New document update in your vault!');
+          }
+          if (_prevVaultTime == null || maxTime > _prevVaultTime!) {
+            _prevVaultTime = maxTime;
+          }
+        });
   }
 
   void _showRealtimeAlert(String message) {
@@ -126,7 +133,10 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
         SnackBar(
           content: Text(
             message,
-            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600),
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           backgroundColor: _gold,
           behavior: SnackBarBehavior.floating,
@@ -168,7 +178,8 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
         if (mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => CaseDetailScreen(caseModel: result, viewer: widget.user),
+              builder: (_) =>
+                  CaseDetailScreen(caseModel: result, viewer: widget.user),
             ),
           );
         }
@@ -347,6 +358,8 @@ class _ClientDashboardScreenState extends State<ClientDashboardScreen> {
             onShowNotifications: _showNotificationsSnackBar,
             caseRepository: widget.caseRepository,
             connectionRequestRepository: widget.connectionRequestRepository,
+            chatRepository: widget.chatRepository,
+            vaultRepository: widget.vaultRepository,
           ), // Maps to index 0 (Home)
           ChatListScreen(
             currentUser: widget.user,
@@ -432,6 +445,8 @@ class _ClientHomeTab extends StatefulWidget {
   final VoidCallback onShowNotifications;
   final CaseRepository? caseRepository;
   final ConnectionRequestRepository? connectionRequestRepository;
+  final ChatRepository? chatRepository;
+  final VaultDocumentRepository? vaultRepository;
 
   const _ClientHomeTab({
     required this.user,
@@ -439,6 +454,8 @@ class _ClientHomeTab extends StatefulWidget {
     required this.onShowNotifications,
     this.caseRepository,
     this.connectionRequestRepository,
+    this.chatRepository,
+    this.vaultRepository,
   });
 
   @override
@@ -451,13 +468,30 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
   late final CaseRepository _caseRepository;
   late final ConnectionRequestRepository _connRepo;
   late final Stream<List<ConnectionRequestModel>> _pendingStream;
+  late final ChatRepository _chatRepository;
+  late final VaultDocumentRepository _vaultRepository;
+  late final Stream<List<ConnectionRequestModel>> _connectionStream;
+  late final Stream<List<ChatRoom>> _chatRoomsStream;
+  late final Stream<List<VaultDocumentModel>> _ownedDocumentsStream;
+  late final Stream<List<VaultDocumentModel>> _sharedDocumentsStream;
 
   @override
   void initState() {
     super.initState();
     _caseRepository = widget.caseRepository ?? CaseRepository();
-    _connRepo = widget.connectionRequestRepository ?? ConnectionRequestRepository();
+    _connRepo =
+        widget.connectionRequestRepository ?? ConnectionRequestRepository();
     _pendingStream = _connRepo.streamPendingForClient(widget.user.id);
+    _connectionStream = _connRepo.streamForClient(widget.user.id);
+    _chatRepository = widget.chatRepository ?? ChatRepository();
+    _chatRoomsStream = _chatRepository.streamRoomsForUser(widget.user.id);
+    _vaultRepository = widget.vaultRepository ?? VaultDocumentRepository();
+    _ownedDocumentsStream = _vaultRepository.streamClientDocuments(
+      clientUserId: widget.user.id,
+    );
+    _sharedDocumentsStream = _vaultRepository.streamAccessibleDocuments(
+      userId: widget.user.id,
+    );
   }
 
   // Quick actions (from client-dashboard.tsx exactly)
@@ -466,28 +500,6 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     _QA(Icons.smart_toy_outlined, 'LexiBot', _navy),
     _QA(Icons.search_rounded, 'Find Lawyer', Color(0xFF1A4B8C)),
     _QA(Icons.edit_document, 'E-Sign', Color(0xFF2E6AB4)),
-  ];
-
-  // Recent activity (from client-dashboard.tsx)
-  static const _activities = [
-    _ActivityItem(
-      Icons.edit_document,
-      'Contract reviewed by AI',
-      'Tenancy Agreement — 2 risks found',
-      '2h ago',
-    ),
-    _ActivityItem(
-      Icons.chat_bubble_outline_rounded,
-      'New message from Pn. Aishah',
-      'Regarding property dispute case',
-      '5h ago',
-    ),
-    _ActivityItem(
-      Icons.folder_outlined,
-      'Document shared',
-      'IC Copy — expires in 24h',
-      '1d ago',
-    ),
   ];
 
   CaseModel? _activeCaseFrom(List<CaseModel> cases) {
@@ -522,6 +534,212 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     return 'Next hearing: ${DateFormat('d MMMM yyyy').format(caseModel.nextHearing!)}';
   }
 
+  List<_ActivityItem> _buildRecentActivities({
+    required List<CaseModel> cases,
+    required List<ConnectionRequestModel> connectionRequests,
+    required List<ChatRoom> chatRooms,
+    required List<VaultDocumentModel> ownedDocuments,
+    required List<VaultDocumentModel> sharedDocuments,
+  }) {
+    final casesById = {for (final caseModel in cases) caseModel.id: caseModel};
+    final items = <_ActivityItem>[];
+
+    for (final caseModel in cases) {
+      items.add(
+        _ActivityItem(
+          icon: Icons.gavel_outlined,
+          title: 'Case posted',
+          subtitle: '${caseModel.title} • ${caseModel.categoryLabel}',
+          timestamp: caseModel.createdAt,
+          target: _ActivityTarget.caseDetail,
+          caseModel: caseModel,
+        ),
+      );
+
+      if (caseModel.recommendationGeneratedAt != null) {
+        items.add(
+          _ActivityItem(
+            icon: Icons.auto_awesome_outlined,
+            title: 'Lawyer matches updated',
+            subtitle: caseModel.title,
+            timestamp: caseModel.recommendationGeneratedAt!,
+            target: _ActivityTarget.connections,
+            caseModel: caseModel,
+          ),
+        );
+      }
+
+      for (final attachment in caseModel.attachments) {
+        items.add(
+          _ActivityItem(
+            icon: Icons.attach_file_rounded,
+            title: 'Case attachment uploaded',
+            subtitle: '${attachment.fileName} • ${caseModel.title}',
+            timestamp: attachment.uploadedAt,
+            target: _ActivityTarget.caseDetail,
+            caseModel: caseModel,
+          ),
+        );
+      }
+    }
+
+    for (final request in connectionRequests) {
+      final caseModel = casesById[request.caseId];
+      final caseTitle =
+          request.caseSnapshot?.title ?? caseModel?.title ?? 'Your legal case';
+      final lawyerName = _fallbackName(request.lawyerSnapshot.name, 'Lawyer');
+      final timestamp = request.respondedAt ?? request.updatedAt;
+
+      switch (request.status) {
+        case ConnectionRequestStatus.pending:
+          items.add(
+            _ActivityItem(
+              icon: request.isClientInitiated
+                  ? Icons.outgoing_mail
+                  : Icons.how_to_reg_outlined,
+              title: request.isClientInitiated
+                  ? 'Request sent to $lawyerName'
+                  : '$lawyerName is interested',
+              subtitle: caseTitle,
+              timestamp: timestamp,
+              target: _ActivityTarget.connections,
+              caseModel: caseModel,
+            ),
+          );
+          break;
+        case ConnectionRequestStatus.approved:
+          items.add(
+            _ActivityItem(
+              icon: Icons.handshake_outlined,
+              title: 'Connected with $lawyerName',
+              subtitle: caseTitle,
+              timestamp: timestamp,
+              target: _ActivityTarget.chat,
+              caseModel: caseModel,
+            ),
+          );
+          break;
+        case ConnectionRequestStatus.declined:
+          items.add(
+            _ActivityItem(
+              icon: Icons.block_outlined,
+              title: request.isClientInitiated
+                  ? '$lawyerName declined your request'
+                  : 'Request declined',
+              subtitle: caseTitle,
+              timestamp: timestamp,
+              target: _ActivityTarget.connections,
+              caseModel: caseModel,
+            ),
+          );
+          break;
+        case ConnectionRequestStatus.withdrawn:
+          items.add(
+            _ActivityItem(
+              icon: Icons.undo_rounded,
+              title: '$lawyerName withdrew interest',
+              subtitle: caseTitle,
+              timestamp: timestamp,
+              target: _ActivityTarget.connections,
+              caseModel: caseModel,
+            ),
+          );
+          break;
+        case ConnectionRequestStatus.expired:
+          items.add(
+            _ActivityItem(
+              icon: Icons.hourglass_disabled_outlined,
+              title: 'Request closed',
+              subtitle: caseTitle,
+              timestamp: timestamp,
+              target: _ActivityTarget.connections,
+              caseModel: caseModel,
+            ),
+          );
+          break;
+      }
+    }
+
+    for (final room in chatRooms) {
+      final timestamp = room.lastMessageAt ?? room.createdAt;
+      final hasMessage = room.lastMessageText.trim().isNotEmpty;
+      final lawyerName = _fallbackName(room.lawyerName, 'Lawyer');
+      final preview = room.lastMessageType == 'text'
+          ? room.lastMessageText.trim()
+          : 'Attachment';
+      final sentByMe = room.lastSenderId == widget.user.id;
+
+      items.add(
+        _ActivityItem(
+          icon: Icons.chat_bubble_outline_rounded,
+          title: hasMessage
+              ? (sentByMe
+                    ? 'Message sent to $lawyerName'
+                    : 'New message from $lawyerName')
+              : 'Conversation started',
+          subtitle: hasMessage
+              ? '${room.caseTitle} • $preview'
+              : '${room.caseTitle} • $lawyerName',
+          timestamp: timestamp,
+          target: _ActivityTarget.chat,
+          caseModel: casesById[room.caseId],
+        ),
+      );
+    }
+
+    final documentsById = <String, VaultDocumentModel>{};
+    for (final document in [...ownedDocuments, ...sharedDocuments]) {
+      documentsById[document.id] = document;
+    }
+
+    for (final document in documentsById.values) {
+      final timestamp = document.signedAt ?? document.createdAt;
+      if (timestamp == null) continue;
+
+      final isSharedWithClient = document.ownerUserId != widget.user.id;
+      final needsSignature =
+          document.isContract &&
+          isSharedWithClient &&
+          document.signedAt == null &&
+          document.contractStatus != 'signed';
+
+      items.add(
+        _ActivityItem(
+          icon: document.signedAt != null
+              ? Icons.verified_outlined
+              : (needsSignature ? Icons.edit_document : Icons.folder_outlined),
+          title: document.signedAt != null
+              ? 'Document signed'
+              : (needsSignature
+                    ? 'Signature requested'
+                    : (isSharedWithClient
+                          ? 'Document shared with you'
+                          : 'Document uploaded')),
+          subtitle: document.fileName,
+          timestamp: timestamp,
+          target: needsSignature ? _ActivityTarget.sign : _ActivityTarget.vault,
+        ),
+      );
+    }
+
+    items.sort((left, right) => right.timestamp.compareTo(left.timestamp));
+    return items.take(30).toList();
+  }
+
+  String _fallbackName(String value, String fallback) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? fallback : trimmed;
+  }
+
+  String _relativeTime(DateTime timestamp) {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.isNegative || diff.inSeconds < 60) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return DateFormat('d MMM').format(timestamp);
+  }
+
   Future<void> _openPostCase() async {
     final result = await Navigator.of(context).push<CaseModel>(
       MaterialPageRoute(builder: (_) => PostCaseScreen(poster: widget.user)),
@@ -531,7 +749,8 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
       if (mounted) {
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => CaseDetailScreen(caseModel: result, viewer: widget.user),
+            builder: (_) =>
+                CaseDetailScreen(caseModel: result, viewer: widget.user),
           ),
         );
       }
@@ -566,11 +785,9 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
   }
 
   void _openLexiBotEntry() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const LexiBotHistoryScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LexiBotHistoryScreen()));
   }
 
   VoidCallback _quickActionTap(_QA action) {
@@ -588,15 +805,30 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
   }
 
   VoidCallback _activityTap(_ActivityItem item) {
-    switch (item.title) {
-      case 'Contract reviewed by AI':
-        return () => widget.onSwitchTab(4);
-      case 'New message from Pn. Aishah':
+    switch (item.target) {
+      case _ActivityTarget.caseDetail:
+        return () {
+          final caseModel = item.caseModel;
+          if (caseModel == null) {
+            _showSnackBar('Case details are no longer available.');
+            return;
+          }
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  CaseDetailScreen(caseModel: caseModel, viewer: widget.user),
+            ),
+          );
+        };
+      case _ActivityTarget.connections:
+        return _openConnectionRequests;
+      case _ActivityTarget.chat:
         return () => widget.onSwitchTab(2);
-      case 'Document shared':
+      case _ActivityTarget.vault:
         return () => widget.onSwitchTab(3);
+      case _ActivityTarget.sign:
+        return () => widget.onSwitchTab(4);
     }
-    return () => _showSnackBar('Activity details will be available soon.');
   }
 
   @override
@@ -639,7 +871,9 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
           );
         }
 
-        final myCases = List<CaseModel>.from(snapshot.data ?? const <CaseModel>[]);
+        final myCases = List<CaseModel>.from(
+          snapshot.data ?? const <CaseModel>[],
+        );
         myCases.sort((a, b) {
           final priorityA = _statusSortPriority(a.status);
           final priorityB = _statusSortPriority(b.status);
@@ -650,10 +884,69 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
         });
 
         final activeCase = _activeCaseFrom(myCases);
-        return _buildContent(
-          myCases: myCases,
-          activeCase: activeCase,
-          pendingRequests: pendingRequests,
+        return StreamBuilder<List<ConnectionRequestModel>>(
+          stream: _connectionStream,
+          builder: (context, connectionSnap) {
+            if (connectionSnap.hasError) {
+              debugPrint(
+                '[ClientDashboard] connection activity error: ${connectionSnap.error}',
+              );
+            }
+            final connectionRequests =
+                connectionSnap.data ?? const <ConnectionRequestModel>[];
+
+            return StreamBuilder<List<ChatRoom>>(
+              stream: _chatRoomsStream,
+              builder: (context, chatSnap) {
+                if (chatSnap.hasError) {
+                  debugPrint(
+                    '[ClientDashboard] chat activity error: ${chatSnap.error}',
+                  );
+                }
+                final chatRooms = chatSnap.data ?? const <ChatRoom>[];
+
+                return StreamBuilder<List<VaultDocumentModel>>(
+                  stream: _ownedDocumentsStream,
+                  builder: (context, ownedDocsSnap) {
+                    if (ownedDocsSnap.hasError) {
+                      debugPrint(
+                        '[ClientDashboard] owned document activity error: ${ownedDocsSnap.error}',
+                      );
+                    }
+                    final ownedDocuments =
+                        ownedDocsSnap.data ?? const <VaultDocumentModel>[];
+
+                    return StreamBuilder<List<VaultDocumentModel>>(
+                      stream: _sharedDocumentsStream,
+                      builder: (context, sharedDocsSnap) {
+                        if (sharedDocsSnap.hasError) {
+                          debugPrint(
+                            '[ClientDashboard] shared document activity error: ${sharedDocsSnap.error}',
+                          );
+                        }
+                        final sharedDocuments =
+                            sharedDocsSnap.data ?? const <VaultDocumentModel>[];
+                        final activities = _buildRecentActivities(
+                          cases: myCases,
+                          connectionRequests: connectionRequests,
+                          chatRooms: chatRooms,
+                          ownedDocuments: ownedDocuments,
+                          sharedDocuments: sharedDocuments,
+                        );
+
+                        return _buildContent(
+                          myCases: myCases,
+                          activeCase: activeCase,
+                          pendingRequests: pendingRequests,
+                          activities: activities,
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
         );
       },
     );
@@ -663,6 +956,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     required List<CaseModel> myCases,
     required CaseModel? activeCase,
     required List<ConnectionRequestModel> pendingRequests,
+    required List<_ActivityItem> activities,
   }) {
     final pendingCount = pendingRequests.length;
     return SingleChildScrollView(
@@ -840,7 +1134,10 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
             GestureDetector(
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => CaseDetailScreen(caseModel: activeCase, viewer: widget.user),
+                  builder: (_) => CaseDetailScreen(
+                    caseModel: activeCase,
+                    viewer: widget.user,
+                  ),
                 ),
               ),
               child: Container(
@@ -849,78 +1146,79 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                   color: _navy,
                   borderRadius: BorderRadius.circular(16),
                 ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.balance, color: _gold, size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                        'ACTIVE CASE',
-                        style: GoogleFonts.inter(
-                          color: _gold,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    activeCase.title,
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    _lawyerLabelFor(activeCase),
-                    style: GoogleFonts.inter(
-                      color: Colors.white60,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: activeCase.progressPercent / 100,
-                            backgroundColor: Colors.white.withValues(
-                              alpha: 0.2,
-                            ),
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              _gold,
-                            ),
-                            minHeight: 6,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.balance, color: _gold, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          'ACTIVE CASE',
+                          style: GoogleFonts.inter(
+                            color: _gold,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${activeCase.progressPercent.toInt()}%',
-                        style: GoogleFonts.inter(
-                          color: Colors.white70,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _hearingLabelFor(activeCase),
-                    style: GoogleFonts.inter(
-                      color: Colors.white38,
-                      fontSize: 11,
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      activeCase.title,
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      _lawyerLabelFor(activeCase),
+                      style: GoogleFonts.inter(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: activeCase.progressPercent / 100,
+                              backgroundColor: Colors.white.withValues(
+                                alpha: 0.2,
+                              ),
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                _gold,
+                              ),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${activeCase.progressPercent.toInt()}%',
+                          style: GoogleFonts.inter(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _hearingLabelFor(activeCase),
+                      style: GoogleFonts.inter(
+                        color: Colors.white38,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            )),
+            ),
             const SizedBox(height: 24),
           ],
 
@@ -979,9 +1277,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                 ),
               ),
               GestureDetector(
-                onTap: () => _showSnackBar(
-                  'Full activity history will be available soon.',
-                ),
+                onTap: () => _showActivitySheet(activities),
                 behavior: HitTestBehavior.opaque,
                 child: Text(
                   'View All',
@@ -995,7 +1291,10 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
             ],
           ),
           const SizedBox(height: 12),
-          ..._activities.map((item) => _activityCard(item)),
+          if (activities.isEmpty)
+            _emptyActivityCard()
+          else
+            ...activities.take(5).map((item) => _activityCard(item)),
 
           // ── My Cases ─────────────────────────────────────────────────────
           if (myCases.isNotEmpty) ...[
@@ -1043,11 +1342,122 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
     );
   }
 
-  Widget _activityCard(_ActivityItem item) {
+  void _showActivitySheet(List<_ActivityItem> activities) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Recent Activity',
+                    style: GoogleFonts.inter(
+                      color: _navy,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (activities.isEmpty)
+                    _emptyActivityCard()
+                  else
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: activities.length,
+                        itemBuilder: (context, index) {
+                          final item = activities[index];
+                          return _activityCard(
+                            item,
+                            onTapOverride: () {
+                              Navigator.of(sheetContext).pop();
+                              _activityTap(item)();
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _emptyActivityCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _navy.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.history_rounded, color: _navy, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No recent activity yet',
+                  style: GoogleFonts.inter(
+                    color: _navy,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Case, chat, and document updates will appear here.',
+                  style: GoogleFonts.inter(
+                    color: Colors.grey[500],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _activityCard(_ActivityItem item, {VoidCallback? onTapOverride}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: GestureDetector(
-        onTap: _activityTap(item),
+        onTap: onTapOverride ?? _activityTap(item),
         behavior: HitTestBehavior.opaque,
         child: Container(
           padding: const EdgeInsets.all(16),
@@ -1085,6 +1495,8 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       item.subtitle,
@@ -1102,7 +1514,7 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                   Icon(Icons.access_time, size: 12, color: Colors.grey[400]),
                   const SizedBox(width: 3),
                   Text(
-                    item.time,
+                    _relativeTime(item.timestamp),
                     style: GoogleFonts.inter(
                       color: Colors.grey[400],
                       fontSize: 11,
@@ -1192,7 +1604,9 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  c.status == CaseStatus.active ? 'APPROVED' : c.status.name.toUpperCase(),
+                  c.status == CaseStatus.active
+                      ? 'APPROVED'
+                      : c.status.name.toUpperCase(),
                   style: GoogleFonts.inter(
                     color: () {
                       switch (c.status) {
@@ -1222,37 +1636,6 @@ class _ClientHomeTabState extends State<_ClientHomeTab> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Placeholder for unfinished tabs
 // ─────────────────────────────────────────────────────────────────────────────
-class _PlaceholderTab extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  const _PlaceholderTab(this.label, this.icon);
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 48, color: Colors.grey[300]),
-          const SizedBox(height: 12),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: Colors.grey[400],
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Text(
-            'Coming soon',
-            style: GoogleFonts.inter(color: Colors.grey[300], fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // ALL CASES SCREEN — Popup Screen with Real-time Stream & Priority Sorting
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1331,11 +1714,23 @@ class _AllCasesScreenState extends State<AllCasesScreen> {
                     children: [
                       _filterChip('all', 'All', Icons.all_inbox_rounded),
                       const SizedBox(width: 12),
-                      _filterChip('pending', 'Pending', Icons.pending_actions_rounded),
+                      _filterChip(
+                        'pending',
+                        'Pending',
+                        Icons.pending_actions_rounded,
+                      ),
                       const SizedBox(width: 12),
-                      _filterChip('approved', 'Approved', Icons.check_circle_rounded),
+                      _filterChip(
+                        'approved',
+                        'Approved',
+                        Icons.check_circle_rounded,
+                      ),
                       const SizedBox(width: 12),
-                      _filterChip('withdrawn', 'Withdrawn', Icons.backspace_rounded),
+                      _filterChip(
+                        'withdrawn',
+                        'Withdrawn',
+                        Icons.backspace_rounded,
+                      ),
                       const SizedBox(width: 12),
                       _filterChip('closed', 'Closed', Icons.lock_rounded),
                     ],
@@ -1349,11 +1744,23 @@ class _AllCasesScreenState extends State<AllCasesScreen> {
                       children: [
                         _filterChip('all', 'All', Icons.all_inbox_rounded),
                         const SizedBox(width: 8),
-                        _filterChip('pending', 'Pending', Icons.pending_actions_rounded),
+                        _filterChip(
+                          'pending',
+                          'Pending',
+                          Icons.pending_actions_rounded,
+                        ),
                         const SizedBox(width: 8),
-                        _filterChip('approved', 'Approved', Icons.check_circle_rounded),
+                        _filterChip(
+                          'approved',
+                          'Approved',
+                          Icons.check_circle_rounded,
+                        ),
                         const SizedBox(width: 8),
-                        _filterChip('withdrawn', 'Withdrawn', Icons.backspace_rounded),
+                        _filterChip(
+                          'withdrawn',
+                          'Withdrawn',
+                          Icons.backspace_rounded,
+                        ),
                         const SizedBox(width: 8),
                         _filterChip('closed', 'Closed', Icons.lock_rounded),
                       ],
@@ -1366,15 +1773,20 @@ class _AllCasesScreenState extends State<AllCasesScreen> {
           // Cases Stream Builder
           Expanded(
             child: StreamBuilder<List<CaseModel>>(
-              stream: widget.caseRepository.streamClientCases(clientId: widget.user.id),
+              stream: widget.caseRepository.streamClientCases(
+                clientId: widget.user.id,
+              ),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
                   return const Center(
                     child: CircularProgressIndicator(color: _navy),
                   );
                 }
 
-                var cases = List<CaseModel>.from(snapshot.data ?? const <CaseModel>[]);
+                var cases = List<CaseModel>.from(
+                  snapshot.data ?? const <CaseModel>[],
+                );
 
                 // 1. Sort cases: Priority-based sorting, then by createdAt descending
                 cases.sort((a, b) {
@@ -1407,7 +1819,11 @@ class _AllCasesScreenState extends State<AllCasesScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.gavel_outlined, size: 48, color: Colors.grey),
+                        const Icon(
+                          Icons.gavel_outlined,
+                          size: 48,
+                          color: Colors.grey,
+                        ),
                         const SizedBox(height: 12),
                         Text(
                           'No cases found for this filter.',
@@ -1462,24 +1878,20 @@ class _AllCasesScreenState extends State<AllCasesScreen> {
                     color: _navy.withValues(alpha: 0.2),
                     blurRadius: 6,
                     offset: const Offset(0, 3),
-                  )
+                  ),
                 ]
               : [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 3,
                     offset: const Offset(0, 1),
-                  )
+                  ),
                 ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 14,
-              color: active ? _gold : Colors.grey[500],
-            ),
+            Icon(icon, size: 14, color: active ? _gold : Colors.grey[500]),
             const SizedBox(width: 6),
             Text(
               label,
@@ -1570,7 +1982,9 @@ class _AllCasesScreenState extends State<AllCasesScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  c.status == CaseStatus.active ? 'APPROVED' : c.status.name.toUpperCase(),
+                  c.status == CaseStatus.active
+                      ? 'APPROVED'
+                      : c.status.name.toUpperCase(),
                   style: GoogleFonts.inter(
                     color: () {
                       switch (c.status) {
@@ -1613,10 +2027,22 @@ class _QA {
   const _QA(this.icon, this.label, this.color);
 }
 
+enum _ActivityTarget { caseDetail, connections, chat, vault, sign }
+
 class _ActivityItem {
   final IconData icon;
   final String title;
   final String subtitle;
-  final String time;
-  const _ActivityItem(this.icon, this.title, this.subtitle, this.time);
+  final DateTime timestamp;
+  final _ActivityTarget target;
+  final CaseModel? caseModel;
+
+  const _ActivityItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.timestamp,
+    required this.target,
+    this.caseModel,
+  });
 }
