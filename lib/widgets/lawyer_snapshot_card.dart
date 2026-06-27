@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../models/connection_request_model.dart' show LawyerSnapshot;
+import 'network_avatar.dart';
 
 /// Shared card widget that renders a [LawyerSnapshot].
 ///
@@ -155,34 +156,13 @@ class LawyerSnapshotCard extends StatelessWidget {
   }
 
   Widget _avatar({required double size}) {
-    final initial =
-        snapshot.name.isNotEmpty ? snapshot.name[0].toUpperCase() : '?';
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: _gold, width: 2),
-        color: _navy,
-        image: snapshot.avatarUrl != null
-            ? DecorationImage(
-                image: NetworkImage(snapshot.avatarUrl!),
-                fit: BoxFit.cover,
-              )
-            : null,
-      ),
-      child: snapshot.avatarUrl == null
-          ? Center(
-              child: Text(
-                initial,
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: size * 0.38,
-                ),
-              ),
-            )
-          : null,
+    return NetworkAvatar(
+      size: size,
+      name: snapshot.name,
+      url: snapshot.avatarUrl,
+      borderColor: _gold,
+      borderWidth: 2,
+      backgroundColor: _navy,
     );
   }
 

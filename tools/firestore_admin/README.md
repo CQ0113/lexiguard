@@ -57,3 +57,102 @@ npm run backup
 npm run seed
 npm run flush-and-seed     # destructive — wipes users + lawyer_profiles, then seeds from seed_data.json
 ```
+
+## Full demo reset
+
+Use this when the live Firebase project has accumulated messy demo users and
+app data. It backs up app Firestore collections and Auth metadata, deletes Auth
+users, clears app-owned Firestore collections, removes app-owned Storage files,
+and seeds clean demo clients/lawyers with connected cases and chat rooms.
+
+Dry run first:
+
+```bash
+npm run reset-demo:dry-run
+```
+
+Execute the destructive reset:
+
+```bash
+npm run reset-demo
+```
+
+Seeded credentials:
+
+| Role     | Email                          | Password       |
+| -------- | ------------------------------ | -------------- |
+| Admin    | `admin123@gmail.com`           | `admin123`     |
+| Client   | `client.chu@lexiguard.dev`     | `LexiDemo!2026` |
+| Client   | `client.ahmad@lexiguard.dev`   | `LexiDemo!2026` |
+| Client   | `client.nurul@lexiguard.dev`   | `LexiDemo!2026` |
+| Lawyer   | `lawyer.aishah@lexiguard.dev`  | `LexiDemo!2026` |
+| Lawyer   | `lawyer.kailesh@lexiguard.dev` | `LexiDemo!2026` |
+| Lawyer   | `lawyer.siti@lexiguard.dev`    | `LexiDemo!2026` |
+| Reviewer | `demo.reviewer@lexiguard.dev`  | `LexiDemo!2026` |
+
+The reset preserves LexiBot source/corpus collections by default and only
+clears app/demo data: users, lawyer profiles, verification requests, cases,
+connection requests, chats, notifications, vault metadata, audit logs, and
+Storage prefixes `vault/`, `case_attachments/`, and `chat_attachments/`.
+
+## LexiBot metadata setup
+
+The LexiBot seed command uses the ignored source manifest and Gemini File
+Search store receipt from `../lexibot_ingest/`. It creates:
+
+- `lexibot_config/tenancy_mvp`
+- `legal_sources/{sourceId}`
+- `legal_sources/{sourceId}/versions/{versionId}`
+
+It stores downloaded legal sources as `pending` / `inactive` only. It does not
+approve documents and does not index them into Gemini File Search.
+
+```bash
+npm run lexibot:seed-pending
+npm run lexibot:verify
+```
+
+The command is idempotent and skips an existing version record, so re-running
+it cannot downgrade a later approved version back to pending.
+
+After reviewing the locally collected source PDFs, archive and activate them:
+
+```bash
+npm run lexibot:approve
+```
+
+This verifies each PDF's SHA-256 hash before uploading it to Firebase Storage
+under `legal_sources/tenancy/...` and marking its Firestore version approved.
+After the separate Gemini ingestion command completes, record its receipts:
+
+```bash
+npm run lexibot:record-indexing
+```
+
+## LexiBot frontend testing switch
+
+The callable backend reads `enabled` from the Firestore document
+`lexibot_config/tenancy_mvp`. Normal tenancy answers are blocked when that
+field is `false`; urgent and out-of-scope safety responses can still be
+audited.
+
+After sources are approved and indexed, enable authenticated UI testing:
+
+```bash
+npm run lexibot:enable-ui-testing
+```
+
+Check the saved configuration:
+
+```bash
+npm run lexibot:verify
+```
+
+Disable normal client answers again after the test session:
+
+```bash
+npm run lexibot:disable
+```
+
+Keep this disabled for a public release until the roadmap release gates,
+including client-key removal, rate limiting, and legal review, are complete.

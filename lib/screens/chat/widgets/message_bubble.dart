@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -27,10 +29,14 @@ class MessageBubble extends StatefulWidget {
     super.key,
     required this.message,
     required this.isOwn,
+    this.onDelete,
+    this.onEdit,
   });
 
   final ChatMessage message;
   final bool isOwn;
+  final VoidCallback? onDelete;
+  final ValueChanged<String>? onEdit;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -39,11 +45,273 @@ class MessageBubble extends StatefulWidget {
 class _MessageBubbleState extends State<MessageBubble> {
   static const Color _navy = Color(0xFF0C1D36);
   static const Color _ownBubbleBg = Color(0xFF0C1D36);
-  static const Color _otherBubbleBg = Color(0xFFF0F0F5);
+  static const Color _otherBubbleBg = Color(0xFFF1F5F9);
 
   bool _showTimestamp = false;
+  Timer? _countdownTimer;
+  Duration _timeLeft = Duration.zero;
 
   static final DateFormat _timeFmt = DateFormat('d MMM, h:mm a');
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimer();
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startTimer() {
+    if (widget.message.expiresAt != null) {
+      _calculateTimeLeft();
+      if (_timeLeft > Duration.zero) {
+        _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          _calculateTimeLeft();
+          if (_timeLeft <= Duration.zero) {
+            timer.cancel();
+          }
+          if (mounted) {
+            setState(() {});
+          }
+        });
+      }
+    }
+  }
+
+  void _calculateTimeLeft() {
+    final expiresAt = widget.message.expiresAt;
+    if (expiresAt == null) {
+      _timeLeft = Duration.zero;
+      return;
+    }
+    final now = DateTime.now();
+    _timeLeft = expiresAt.difference(now);
+    if (_timeLeft.isNegative) {
+      _timeLeft = Duration.zero;
+    }
+  }
+
+  String _formatDuration(Duration d) {
+    if (d <= Duration.zero) return 'Expired';
+    final hours = d.inHours;
+    final minutes = d.inMinutes.remainder(60);
+    final seconds = d.inSeconds.remainder(60);
+
+    final List<String> parts = [];
+    if (hours > 0) {
+      parts.add('${hours}h');
+    }
+    if (minutes > 0 || hours > 0) {
+      parts.add('${minutes}m');
+    }
+    parts.add('${seconds}s');
+
+    return '${parts.join(' ')} left';
+  }
+
+  void _showOptionsMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        final isText = widget.message.type == MessageType.text;
+        final hasTimer = widget.message.expiresAt != null;
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 8, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Copy Text
+              if (isText)
+                ListTile(
+                  leading: const Icon(
+                    Icons.copy_rounded,
+                    color: Color(0xFF0C1D36),
+                  ),
+                  title: Text(
+                    'Copy Message Text',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    Clipboard.setData(
+                      ClipboardData(text: widget.message.text ?? ''),
+                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Message copied to clipboard.',
+                          style: GoogleFonts.inter(),
+                        ),
+                        backgroundColor: const Color(0xFF0C1D36),
+                      ),
+                    );
+                  },
+                ),
+              // Message Info
+              ListTile(
+                leading: const Icon(
+                  Icons.info_outline_rounded,
+                  color: Color(0xFF0C1D36),
+                ),
+                title: Text(
+                  'Message Details',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  setState(() => _showTimestamp = !_showTimestamp);
+                },
+              ),
+              // Edit Message
+              if (widget.isOwn && isText && !hasTimer && widget.onEdit != null)
+                ListTile(
+                  leading: const Icon(
+                    Icons.edit_outlined,
+                    color: Color(0xFFCFA92A),
+                  ),
+                  title: Text(
+                    'Edit Message',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showEditDialog();
+                  },
+                ),
+              // Delete Message
+              if (widget.isOwn && widget.onDelete != null)
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.red,
+                  ),
+                  title: Text(
+                    'Delete Message',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w500,
+                      color: Colors.red,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _confirmDelete();
+                  },
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEditDialog() {
+    final editCtrl = TextEditingController(text: widget.message.text);
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(
+            'Edit Message',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF0C1D36),
+            ),
+          ),
+          content: TextField(
+            controller: editCtrl,
+            maxLines: null,
+            decoration: InputDecoration(
+              hintText: 'Enter new text...',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            style: GoogleFonts.inter(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(color: Colors.grey[500]),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0C1D36),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                final newText = editCtrl.text.trim();
+                if (newText.isNotEmpty && newText != widget.message.text) {
+                  widget.onEdit?.call(newText);
+                }
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _confirmDelete() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(
+            'Delete Message?',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold,
+              color: Colors.red[700],
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to delete this message? This action cannot be undone.',
+            style: GoogleFonts.inter(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(color: Colors.grey[500]),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[700],
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                widget.onDelete?.call();
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   // ── Formatted file size ───────────────────────────────────────────────────
 
@@ -75,7 +343,9 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
           backgroundColor: _navy,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           margin: const EdgeInsets.all(16),
           duration: const Duration(seconds: 2),
         ),
@@ -107,7 +377,11 @@ class _MessageBubbleState extends State<MessageBubble> {
                     );
                   },
                   errorBuilder: (context, error, stackTrace) => const Center(
-                    child: Icon(Icons.broken_image, color: Colors.white54, size: 48),
+                    child: Icon(
+                      Icons.broken_image,
+                      color: Colors.white54,
+                      size: 48,
+                    ),
                   ),
                 ),
               ),
@@ -255,6 +529,9 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   Widget _buildBubbleContent() {
     final msg = widget.message;
+    if (msg.expiresAt != null) {
+      return _buildExpiringLinkContent();
+    }
     switch (msg.type) {
       case MessageType.image:
         return _buildImageContent();
@@ -284,6 +561,153 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
   }
 
+  Widget _buildExpiringLinkContent() {
+    final isOwn = widget.isOwn;
+    final msg = widget.message;
+    final isExpired = _timeLeft <= Duration.zero;
+    final fileName = msg.attachmentName ?? 'Vault Document';
+    final timerText = _formatDuration(_timeLeft);
+
+    final Color cardBg = isOwn
+        ? const Color(0xFF0C1D36)
+        : const Color(0xFFF1F5F9);
+    final Color textColor = isOwn ? Colors.white : const Color(0xFF0C1D36);
+    final Color accentColor = isExpired
+        ? Colors.red[400]!
+        : const Color(0xFFCFA92A);
+    final Color timerColor = isExpired
+        ? Colors.red[400]!
+        : (isOwn ? const Color(0xFFCFA92A) : const Color(0xFFB45309));
+
+    return GestureDetector(
+      onTap: isExpired ? null : () => _openUrl(msg.attachmentDownloadUrl),
+      child: Container(
+        width: 260,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isOwn ? 16 : 4),
+            bottomRight: Radius.circular(isOwn ? 4 : 16),
+          ),
+          border: Border.all(
+            color: isExpired
+                ? (isOwn ? Colors.white24 : Colors.grey[300]!)
+                : const Color(0xFFCFA92A).withValues(alpha: 0.5),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isExpired
+                      ? Icons.lock_outline_rounded
+                      : Icons.lock_clock_outlined,
+                  color: accentColor,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isExpired ? 'Expired Secure Link' : 'Secure Expiring Link',
+                    style: GoogleFonts.inter(
+                      color: textColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(color: Colors.grey, height: 16, thickness: 0.5),
+            Text(
+              fileName,
+              style: GoogleFonts.inter(
+                color: textColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isExpired
+                    ? Colors.red[50]
+                    : (isOwn
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : const Color(0xFFFEF3C7)),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isExpired
+                        ? Icons.error_outline_rounded
+                        : Icons.timer_outlined,
+                    color: isExpired ? Colors.red[600] : timerColor,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    timerText,
+                    style: GoogleFonts.inter(
+                      color: isExpired ? Colors.red[700] : timerColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!isExpired) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    'Tap to Access',
+                    style: GoogleFonts.inter(
+                      color: isOwn
+                          ? const Color(0xFFCFA92A)
+                          : const Color(0xFF0C1D36),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: isOwn
+                        ? const Color(0xFFCFA92A)
+                        : const Color(0xFF0C1D36),
+                    size: 14,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOwn = widget.isOwn;
@@ -291,14 +715,16 @@ class _MessageBubbleState extends State<MessageBubble> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 3),
       child: Column(
-        crossAxisAlignment:
-            isOwn ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isOwn
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onLongPress: () => setState(() => _showTimestamp = !_showTimestamp),
+            onLongPress: () => _showOptionsMenu(context),
             child: Row(
-              mainAxisAlignment:
-                  isOwn ? MainAxisAlignment.end : MainAxisAlignment.start,
+              mainAxisAlignment: isOwn
+                  ? MainAxisAlignment.end
+                  : MainAxisAlignment.start,
               children: [
                 ConstrainedBox(
                   constraints: BoxConstraints(
@@ -315,10 +741,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 _timeFmt.format(widget.message.createdAt.toLocal()),
-                style: GoogleFonts.inter(
-                  color: Colors.grey[500],
-                  fontSize: 10,
-                ),
+                style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 10),
               ),
             ),
           ],

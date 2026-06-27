@@ -2,7 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart'; 
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/vault_document_model.dart';
 import '../../repositories/vault_document_repository.dart';
@@ -32,7 +32,7 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
   bool _isUploading = false;
   double _uploadProgress = 0;
   LawyerVaultFilter _filter = LawyerVaultFilter.all;
-  
+
   // Lawyer Storage Limit (100 GB)
   final double _maxStorageGb = 100.0;
 
@@ -59,8 +59,8 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
   }
 
   Future<void> _openDocument(VaultDocumentModel document) async {
-    final urlString = document.downloadUrl; 
-    
+    final urlString = document.downloadUrl;
+
     if (urlString.isEmpty) {
       _showSnack('File link is not available.');
       return;
@@ -74,6 +74,77 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
     } catch (e) {
       _showSnack('Error opening file: $e');
     }
+  }
+
+  Future<void> _showRenameDialog(VaultDocumentModel document) async {
+    final formKey = GlobalKey<FormState>();
+    var enteredName = document.fileName;
+
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Rename Document'),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              initialValue: document.fileName,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              decoration: const InputDecoration(
+                labelText: 'Document name',
+                hintText: 'e.g. Draft agreement.pdf',
+              ),
+              validator: _validateDocumentName,
+              onChanged: (value) => enteredName = value,
+              onFieldSubmitted: (value) {
+                enteredName = value;
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.of(dialogContext).pop(enteredName.trim());
+                }
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState?.validate() ?? false) {
+                  Navigator.of(dialogContext).pop(enteredName.trim());
+                }
+              },
+              child: const Text('Rename'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (newName == null || newName == document.fileName) return;
+
+    try {
+      final renamed = await _repository.renameDocument(
+        document: document,
+        ownerUserId: _effectiveUserId,
+        newFileName: newName,
+      );
+      _showSnack('Renamed to "$renamed".');
+    } catch (error) {
+      _showSnack('Rename failed: $error');
+    }
+  }
+
+  String? _validateDocumentName(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return 'Enter a document name.';
+    if (trimmed.length > 120) return 'Use 120 characters or fewer.';
+    if (RegExp(r'[\\/\x00-\x1F]').hasMatch(trimmed)) {
+      return 'Name cannot contain / or \\.';
+    }
+    return null;
   }
 
   Future<void> _pickAndUpload() async {
@@ -124,11 +195,12 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
     } catch (error) {
       _showSnack('Upload failed: $error');
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isUploading = false;
-        _uploadProgress = 0;
-      });
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _uploadProgress = 0;
+        });
+      }
     }
   }
 
@@ -138,7 +210,9 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Delete Document'),
-          content: Text('Remove "${document.fileName}" from storage and vault?'),
+          content: Text(
+            'Remove "${document.fileName}" from storage and vault?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -176,9 +250,17 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
   List<VaultDocumentModel> _applyFilter(List<VaultDocumentModel> docs) {
     switch (_filter) {
       case LawyerVaultFilter.mine:
-        return docs.where((doc) => doc.ownerUserId == _effectiveUserId).toList();
+        return docs
+            .where((doc) => doc.ownerUserId == _effectiveUserId)
+            .toList();
       case LawyerVaultFilter.sharedWithMe:
-        return docs.where((doc) => doc.ownerUserId != _effectiveUserId && doc.allowedUserIds.contains(_effectiveUserId)).toList();
+        return docs
+            .where(
+              (doc) =>
+                  doc.ownerUserId != _effectiveUserId &&
+                  doc.allowedUserIds.contains(_effectiveUserId),
+            )
+            .toList();
       case LawyerVaultFilter.all:
         return docs;
     }
@@ -186,10 +268,15 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Widget _buildFilterChip({required String label, required LawyerVaultFilter value}) {
+  Widget _buildFilterChip({
+    required String label,
+    required LawyerVaultFilter value,
+  }) {
     final selected = value == _filter;
     return ChoiceChip(
       label: Text(
@@ -207,9 +294,71 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
       showCheckmark: false,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       shape: RoundedRectangleBorder(
-        side: BorderSide(color: selected ? const Color(0xFF0B2447) : const Color(0xFFE2E8F0)),
+        side: BorderSide(
+          color: selected ? const Color(0xFF0B2447) : const Color(0xFFE2E8F0),
+        ),
         borderRadius: BorderRadius.circular(20),
       ),
+    );
+  }
+
+  Widget _documentActionMenu(VaultDocumentModel doc) {
+    final canRename = doc.canDelete(_effectiveUserId);
+    if (!canRename) return const SizedBox.shrink();
+
+    return PopupMenuButton<String>(
+      tooltip: 'Document actions',
+      icon: const Icon(
+        Icons.more_horiz_rounded,
+        color: Color(0xFF64748B),
+        size: 22,
+      ),
+      onSelected: (value) {
+        switch (value) {
+          case 'rename':
+            _showRenameDialog(doc);
+            break;
+          case 'remind':
+            _remindClient(doc);
+            break;
+          case 'delete':
+            _deleteDocument(doc);
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: 'rename',
+          child: Row(
+            children: [
+              Icon(Icons.edit_outlined, size: 18),
+              SizedBox(width: 10),
+              Text('Rename'),
+            ],
+          ),
+        ),
+        if (doc.isContract && doc.contractStatus == 'pending_signature')
+          const PopupMenuItem(
+            value: 'remind',
+            child: Row(
+              children: [
+                Icon(Icons.notification_important_outlined, size: 18),
+                SizedBox(width: 10),
+                Text('Remind client'),
+              ],
+            ),
+          ),
+        const PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline_rounded, size: 18, color: Colors.red),
+              SizedBox(width: 10),
+              Text('Delete', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -221,22 +370,33 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
         stream: _repository.streamAccessibleDocuments(userId: _effectiveUserId),
         builder: (context, snapshot) {
           final allDocs = snapshot.data ?? const <VaultDocumentModel>[];
-          
+
           // --- CALCULATE CONTRACTS TRACKER DYNAMICALLY ---
-          final contracts = allDocs.where((doc) => doc.isContract && doc.ownerUserId == _effectiveUserId).toList();
-          final pendingContracts = contracts.where((doc) => doc.contractStatus == 'pending_signature').toList();
-          final signedContracts = contracts.where((doc) => doc.contractStatus == 'signed').toList();
-          
+          final contracts = allDocs
+              .where(
+                (doc) => doc.isContract && doc.ownerUserId == _effectiveUserId,
+              )
+              .toList();
+          final pendingContracts = contracts
+              .where((doc) => doc.contractStatus == 'pending_signature')
+              .toList();
+          final signedContracts = contracts
+              .where((doc) => doc.contractStatus == 'signed')
+              .toList();
+
           // --- CALCULATE STORAGE DYNAMICALLY ---
           // Always calculate total storage based on ALL docs, regardless of the filter applied
-          double totalBytes = allDocs.fold(0, (sum, doc) => sum + (doc.sizeBytes ?? 0));
+          double totalBytes = allDocs.fold(
+            0,
+            (sum, doc) => sum + (doc.sizeBytes ?? 0),
+          );
           double totalGb = totalBytes / (1024 * 1024 * 1024);
           double totalMb = totalBytes / (1024 * 1024);
-          
-          String usedLabel = totalGb >= 1.0 
-              ? '${totalGb.toStringAsFixed(1)} GB' 
+
+          String usedLabel = totalGb >= 1.0
+              ? '${totalGb.toStringAsFixed(1)} GB'
               : '${totalMb.toStringAsFixed(1)} MB';
-              
+
           double progressPct = (totalGb / _maxStorageGb).clamp(0.0, 1.0);
           if (allDocs.isNotEmpty && progressPct < 0.02) progressPct = 0.02;
 
@@ -254,38 +414,47 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                         color: const Color(0xFF0B2447),
                         padding: EdgeInsets.zero,
                         alignment: Alignment.centerLeft,
-                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        constraints: const BoxConstraints(
+                          minWidth: 36,
+                          minHeight: 36,
+                        ),
                         tooltip: 'Back',
                       ),
                       const SizedBox(height: 4),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Lawyer Vault',
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 24,
-                                  color: const Color(0xFF0B2447),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Lawyer Vault',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 24,
+                                    color: const Color(0xFF0B2447),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Manage and share legal drafts securely',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: const Color(0xFF64748B),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Manage and share legal drafts securely',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: const Color(0xFF64748B),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Encrypted Storage Bar
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -295,28 +464,37 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                           border: Border.all(color: const Color(0xFFF1F5F9)),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha: 0.02),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
-                            )
-                          ]
+                            ),
+                          ],
                         ),
                         child: Column(
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.shield_outlined, color: Color(0xFFD4AF37), size: 20),
+                                const Icon(
+                                  Icons.shield_outlined,
+                                  color: Color(0xFFD4AF37),
+                                  size: 20,
+                                ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Encrypted Storage',
-                                  style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF0B2447),
+                                Expanded(
+                                  child: Text(
+                                    'Encrypted Storage',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF0B2447),
+                                    ),
                                   ),
                                 ),
-                                const Spacer(),
+                                const SizedBox(width: 8),
                                 Text(
                                   '$usedLabel / ${_maxStorageGb.toStringAsFixed(0)} GB',
+                                  maxLines: 1,
                                   style: GoogleFonts.inter(
                                     fontSize: 12,
                                     color: const Color(0xFF64748B),
@@ -341,7 +519,10 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(999),
                                       gradient: const LinearGradient(
-                                        colors: [Color(0xFF0B2447), Color(0xFFD4AF37)],
+                                        colors: [
+                                          Color(0xFF0B2447),
+                                          Color(0xFFD4AF37),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -359,18 +540,25 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                           children: [
                             Expanded(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                  horizontal: 12,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFFFBEB),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: const Color(0xFFFDE68A)),
+                                  border: Border.all(
+                                    color: const Color(0xFFFDE68A),
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.01),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.01,
+                                      ),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
-                                    )
-                                  ]
+                                    ),
+                                  ],
                                 ),
                                 child: Column(
                                   children: [
@@ -398,18 +586,25 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                  horizontal: 12,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFECFDF5),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: const Color(0xFFA7F3D0)),
+                                  border: Border.all(
+                                    color: const Color(0xFFA7F3D0),
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.01),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.01,
+                                      ),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2),
-                                    )
-                                  ]
+                                    ),
+                                  ],
                                 ),
                                 child: Column(
                                   children: [
@@ -438,7 +633,7 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                         ),
                       ],
                       const SizedBox(height: 20),
-                      
+
                       // Upload Area
                       VaultUploadCardWidget(
                         isUploading: _isUploading,
@@ -446,25 +641,37 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                         onPickFile: _pickAndUpload,
                       ),
                       const SizedBox(height: 12),
-                      
+
                       // Client ID Input
                       TextField(
                         controller: _clientIdController,
                         decoration: InputDecoration(
                           labelText: 'Share with Client ID (Optional)',
                           hintText: 'e.g. client_123',
-                          labelStyle: GoogleFonts.inter(color: const Color(0xFF64748B), fontSize: 14),
-                          prefixIcon: const Icon(Icons.person_add_alt_1_outlined, color: Color(0xFF94A3B8), size: 20),
+                          labelStyle: GoogleFonts.inter(
+                            color: const Color(0xFF64748B),
+                            fontSize: 14,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.person_add_alt_1_outlined,
+                            color: Color(0xFF94A3B8),
+                            size: 20,
+                          ),
                           filled: true,
                           fillColor: const Color(0xFFF8FAFC),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 16,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFCBD5E1),
+                            ),
                           ),
                         ),
                       ),
@@ -475,16 +682,25 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                         scrollDirection: Axis.horizontal,
                         child: Row(
                           children: [
-                            _buildFilterChip(label: 'All Files', value: LawyerVaultFilter.all),
+                            _buildFilterChip(
+                              label: 'All Files',
+                              value: LawyerVaultFilter.all,
+                            ),
                             const SizedBox(width: 8),
-                            _buildFilterChip(label: 'My Uploads', value: LawyerVaultFilter.mine),
+                            _buildFilterChip(
+                              label: 'My Uploads',
+                              value: LawyerVaultFilter.mine,
+                            ),
                             const SizedBox(width: 8),
-                            _buildFilterChip(label: 'Shared With Me', value: LawyerVaultFilter.sharedWithMe),
+                            _buildFilterChip(
+                              label: 'Shared With Me',
+                              value: LawyerVaultFilter.sharedWithMe,
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       Text(
                         'Workspace Documents',
                         style: GoogleFonts.inter(
@@ -512,70 +728,47 @@ class _LawyerVaultScreenState extends State<LawyerVaultScreen> {
                     ),
                   ),
                 )
-              else 
+              else
                 Builder(
                   builder: (context) {
                     final filteredDocs = _applyFilter(allDocs);
-                    
+
                     if (filteredDocs.isEmpty) {
                       return SliverFillRemaining(
                         child: Center(
                           child: Text(
                             'No documents available in this view.',
-                            style: GoogleFonts.inter(color: const Color(0xFF6B7280)),
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF6B7280),
+                            ),
                           ),
                         ),
                       );
                     }
-                    
+
                     return SliverPadding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final doc = filteredDocs[index];
-                            final canDelete = doc.canDelete(_effectiveUserId);
-                            
-                            return VaultDocumentTileWidget(
-                              document: doc,
-                              onTap: () => _openDocument(doc),
-                              extraSubtitle: !canDelete ? 'Shared by user: ${doc.ownerUserId}' : null,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (doc.isContract && doc.contractStatus == 'pending_signature' && canDelete) ...[
-                                    IconButton(
-                                      onPressed: () => _remindClient(doc),
-                                      tooltip: 'Send signature reminder',
-                                      icon: const Icon(
-                                        Icons.notification_important_outlined,
-                                        color: Color(0xFFD4AF37),
-                                        size: 22,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                  ],
-                                  if (canDelete)
-                                    IconButton(
-                                      onPressed: () => _deleteDocument(doc),
-                                      tooltip: 'Delete document',
-                                      icon: const Icon(
-                                        Icons.delete_outline_rounded,
-                                        color: Color(0xFFEF4444),
-                                        size: 22,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
-                          childCount: filteredDocs.length,
-                        ),
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final doc = filteredDocs[index];
+                          final canDelete = doc.canDelete(_effectiveUserId);
+
+                          return VaultDocumentTileWidget(
+                            document: doc,
+                            onTap: () => _openDocument(doc),
+                            extraSubtitle: !canDelete
+                                ? 'Shared by user: ${doc.ownerUserId}'
+                                : null,
+                            trailing: canDelete
+                                ? _documentActionMenu(doc)
+                                : null,
+                          );
+                        }, childCount: filteredDocs.length),
                       ),
                     );
-                  }
+                  },
                 ),
-                
+
               const SliverToBoxAdapter(child: SizedBox(height: 40)),
             ],
           );

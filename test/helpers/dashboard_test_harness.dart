@@ -32,9 +32,10 @@ class DashboardTestHarness {
       urgency: CaseUrgency.medium,
       createdAt: DateTime.utc(2026, 5, 1),
     );
-    await db.collection(CaseRepository.collectionName).doc(caseId).set(
-      caseModel.toFirestore(),
-    );
+    await db
+        .collection(CaseRepository.collectionName)
+        .doc(caseId)
+        .set(caseModel.toFirestore());
   }
 
   static Widget wrapClient({
@@ -59,17 +60,20 @@ class DashboardTestHarness {
     FakeFirebaseFirestore? firestore,
   }) {
     final db = firestore ?? createFakeDb();
+    final vaultRepository = VaultDocumentRepository(firestore: db);
     return MaterialApp(
       home: LawyerDashboardScreen(
         user: user,
         caseRepository: CaseRepository(firestore: db),
         connectionRequestRepository: ConnectionRequestRepository(firestore: db),
         chatRepository: ChatRepository(firestore: db),
+        vaultRepository: vaultRepository,
       ),
     );
   }
 
-  static UserModel get client => DummyData.users.firstWhere((u) => u.id == 'client_1');
+  static UserModel get client =>
+      DummyData.users.firstWhere((u) => u.id == 'client_1');
 
   static UserModel get verifiedLawyer =>
       DummyData.users.firstWhere((u) => u.id == 'lawyer_1');

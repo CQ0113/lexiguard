@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/connection_request_model.dart';
-import '../models/case_model.dart' show CaseModel;
+import '../models/case_model.dart'
+    show CaseModel, CaseStatus, LawyerRecommendation;
 import '../models/user_model.dart' show UserModel, UserRole;
 
 export '../models/connection_request_model.dart'
@@ -10,6 +11,7 @@ export '../models/connection_request_model.dart'
         ConnectionRequestStatus,
         ConnectionRequestStatusWire,
         LawyerSnapshot,
+        CaseSnapshot,
         ClientReveal,
         DuplicateRequestException,
         RequestDeclinedException,
@@ -21,8 +23,9 @@ export '../models/connection_request_model.dart'
 class ConnectionRequestRepository {
   ConnectionRequestRepository({FirebaseFirestore? firestore})
     : _db = firestore ?? FirebaseFirestore.instance,
-      _requests =
-          (firestore ?? FirebaseFirestore.instance).collection(collectionName);
+      _requests = (firestore ?? FirebaseFirestore.instance).collection(
+        collectionName,
+      );
 
   static const String collectionName = 'connection_requests';
 
@@ -33,10 +36,8 @@ class ConnectionRequestRepository {
 
   /// Produces a deterministic doc ID that enforces "one request per lawyer per
   /// case" at the DB level.
-  static String docIdFor({
-    required String caseId,
-    required String lawyerId,
-  }) => '${caseId}_$lawyerId';
+  static String docIdFor({required String caseId, required String lawyerId}) =>
+      '${caseId}_$lawyerId';
 
   // ── Lawyer writes ───────────────────────────────────────────────────────────
 
@@ -77,8 +78,7 @@ class ConnectionRequestRepository {
 
     final docId = docIdFor(caseId: targetCase.id, lawyerId: lawyer.id);
     final docRef = _requests.doc(docId);
-    final caseRef =
-        _db.collection('cases').doc(targetCase.id);
+    final caseRef = _db.collection('cases').doc(targetCase.id);
 
     // ── Transaction ────────────────────────────────────────────────────────
     await _db.runTransaction((tx) async {
@@ -88,6 +88,10 @@ class ConnectionRequestRepository {
 
       if (existingSnap.exists) {
         final data = existingSnap.data()!;
+        final existing = ConnectionRequestModel.fromFirestore(existingSnap);
+        if (existing.isClientInitiated) {
+          throw DuplicateRequestException(existing.status);
+        }
         final existingStatus = ConnectionRequestStatusWire.fromWire(
           data['status']?.toString(),
         );
@@ -116,8 +120,11 @@ class ConnectionRequestRepository {
         'lawyerId': lawyer.id,
         'message': message,
         'status': ConnectionRequestStatus.pending.wireValue,
+        'initiatedByRole': 'lawyer',
+        'requestDirection': 'lawyer_to_client',
         'createdAt': existingSnap.exists
-            ? existingSnap.data()!['createdAt'] // preserve original createdAt on re-open
+            ? existingSnap
+                  .data()!['createdAt'] // preserve original createdAt on re-open
             : Timestamp.fromDate(now),
         'updatedAt': Timestamp.fromDate(now),
         'lawyerSnapshot': snapshot.toMap(),
@@ -146,6 +153,106 @@ class ConnectionRequestRepository {
     });
   }
 
+  /// Client requests a recommended lawyer for their own pending case.
+  ///
+  /// Returns the existing status when the deterministic request doc already
+  /// exists as `pending` or `approved`; otherwise returns `null` after writing
+  /// a new/reopened pending client-to-lawyer request.
+  Future<ConnectionRequestStatus?> sendClientRequestToLawyer({
+    required CaseModel targetCase,
+    required UserModel client,
+    required LawyerRecommendation lawyer,
+  }) async {
+    if (client.role != UserRole.client || client.id != targetCase.clientId) {
+      throw StateError('Only the case owner can request a lawyer.');
+    }
+    if (targetCase.status != CaseStatus.pending) {
+      throw StateError('Only pending cases can request a lawyer.');
+    }
+    final assignedLawyerId = targetCase.lawyerId?.trim();
+    if (assignedLawyerId != null && assignedLawyerId.isNotEmpty) {
+      throw const CaseAlreadyConnectedException();
+    }
+
+    final docId = docIdFor(caseId: targetCase.id, lawyerId: lawyer.lawyerId);
+    final docRef = _requests.doc(docId);
+    final caseRef = _db.collection('cases').doc(targetCase.id);
+    ConnectionRequestStatus? existingStatus;
+
+    await _db.runTransaction((tx) async {
+      final existingSnap = await tx.get(docRef);
+      final caseSnap = await tx.get(caseRef);
+
+      if (!caseSnap.exists) {
+        throw StateError('Case ${targetCase.id} does not exist.');
+      }
+      final caseData = caseSnap.data()!;
+      final caseStatus = caseData['status']?.toString();
+      final caseLawyerId = caseData['lawyerId']?.toString().trim();
+      if (caseStatus != CaseStatus.pending.name ||
+          (caseLawyerId != null && caseLawyerId.isNotEmpty)) {
+        throw const CaseAlreadyConnectedException();
+      }
+      if (caseData['clientId']?.toString() != client.id) {
+        throw StateError('Only the case owner can request a lawyer.');
+      }
+
+      Object createdAt = Timestamp.fromDate(DateTime.now());
+      if (existingSnap.exists) {
+        final existing = ConnectionRequestModel.fromFirestore(existingSnap);
+        existingStatus = existing.status;
+        switch (existing.status) {
+          case ConnectionRequestStatus.pending:
+          case ConnectionRequestStatus.approved:
+            return;
+          case ConnectionRequestStatus.declined:
+          case ConnectionRequestStatus.withdrawn:
+          case ConnectionRequestStatus.expired:
+            createdAt = existingSnap.data()?['createdAt'] ?? createdAt;
+            break;
+        }
+      }
+
+      final now = Timestamp.fromDate(DateTime.now());
+      tx.set(docRef, {
+        'id': docId,
+        'caseId': targetCase.id,
+        'clientId': targetCase.clientId,
+        'lawyerId': lawyer.lawyerId,
+        'message': 'The client has requested you for this case.',
+        'status': ConnectionRequestStatus.pending.wireValue,
+        'initiatedByRole': 'client',
+        'requestDirection': 'client_to_lawyer',
+        'createdAt': createdAt,
+        'updatedAt': now,
+        'respondedAt': null,
+        'declineReason': null,
+        'clientReveal': ClientReveal(name: client.name).toMap(),
+        'lawyerSnapshot': LawyerSnapshot(
+          name: lawyer.lawyerName,
+          specialization: lawyer.specialization,
+          yearsExperience: lawyer.yearsExperience,
+          practiceState: lawyer.practiceState,
+          practiceCity: lawyer.practiceCity,
+          languages: lawyer.languages,
+          hourlyRate: lawyer.hourlyRate,
+          verificationStatus: 'auto_verified',
+        ).toMap(),
+        'caseSnapshot': CaseSnapshot(
+          title: targetCase.title,
+          category: targetCase.category.name,
+          location: targetCase.location,
+          budgetRange: targetCase.budgetRange,
+          urgency: targetCase.urgency.name,
+        ).toMap(),
+      });
+
+      existingStatus = null;
+    });
+
+    return existingStatus;
+  }
+
   /// Withdraw a pending request. Only valid from `pending` status.
   Future<void> withdrawRequest(String requestId) async {
     final docRef = _requests.doc(requestId);
@@ -157,6 +264,13 @@ class ConnectionRequestRepository {
       }
 
       final data = snap.data()!;
+      final request = ConnectionRequestModel.fromFirestore(snap);
+      if (request.isClientInitiated) {
+        throw InvalidStatusTransitionException(
+          request.status,
+          ConnectionRequestStatus.withdrawn,
+        );
+      }
       final current = ConnectionRequestStatusWire.fromWire(
         data['status']?.toString(),
       );
@@ -210,6 +324,13 @@ class ConnectionRequestRepository {
       throw StateError('Request $requestId does not exist.');
     }
     final requestData = requestSnap.data()!;
+    final requestModel = ConnectionRequestModel.fromFirestore(requestSnap);
+    if (!requestModel.isLawyerInitiated) {
+      throw InvalidStatusTransitionException(
+        requestModel.status,
+        ConnectionRequestStatus.approved,
+      );
+    }
     final currentStatus = ConnectionRequestStatusWire.fromWire(
       requestData['status']?.toString(),
     );
@@ -235,8 +356,9 @@ class ConnectionRequestRepository {
         .get();
 
     final siblingIds = siblingsSnap.docs
-        .where((d) =>
-            d.id != requestId && d.data()['caseId']?.toString() == caseId)
+        .where(
+          (d) => d.id != requestId && d.data()['caseId']?.toString() == caseId,
+        )
         .map((d) => d.id)
         .toList();
 
@@ -257,7 +379,14 @@ class ConnectionRequestRepository {
       final current = ConnectionRequestStatusWire.fromWire(
         requestTxData['status']?.toString(),
       );
-      if (current != ConnectionRequestStatus.pending) {
+      final freshRequest = ConnectionRequestModel.fromFirestore(requestTxSnap);
+      if (!freshRequest.isLawyerInitiated) {
+        throw InvalidStatusTransitionException(
+          freshRequest.status,
+          ConnectionRequestStatus.approved,
+        );
+      }
+      if (freshRequest.status != ConnectionRequestStatus.pending) {
         throw InvalidStatusTransitionException(
           current,
           ConnectionRequestStatus.approved,
@@ -265,9 +394,7 @@ class ConnectionRequestRepository {
       }
 
       final caseSnap = await tx.get(caseRef);
-      final siblingSnaps = await Future.wait(
-        siblingRefs.map(tx.get),
-      );
+      final siblingSnaps = await Future.wait(siblingRefs.map(tx.get));
 
       // 1. Flip request to approved.
       tx.update(docRef, {
@@ -279,10 +406,7 @@ class ConnectionRequestRepository {
 
       // 2. Claim the case.
       if (caseSnap.exists) {
-        tx.update(caseRef, {
-          'lawyerId': lawyerId,
-          'status': 'active',
-        });
+        tx.update(caseRef, {'lawyerId': lawyerId, 'status': 'active'});
       }
 
       // 3. Expire siblings (only if still pending).
@@ -305,28 +429,24 @@ class ConnectionRequestRepository {
           ? (caseSnap.data()?['title']?.toString() ?? '')
           : '';
       final chatRoomRef = _db.collection('chat_rooms').doc(requestId);
-      tx.set(
-        chatRoomRef,
-        {
-          'id': requestId,
-          'caseId': caseId,
-          'clientId': client.id,
-          'lawyerId': lawyerId,
-          'participants': [client.id, lawyerId],
-          'clientName': reveal.name,
-          'lawyerName': lawyerSnapshotMap['name']?.toString() ?? '',
-          if (lawyerSnapshotMap['avatarUrl'] != null)
-            'lawyerAvatarUrl': lawyerSnapshotMap['avatarUrl'].toString(),
-          'caseTitle': caseTitle,
-          'lastMessageText': '',
-          'lastMessageType': 'text',
-          'lastSenderId': '',
-          'lastMessageAt': now,
-          'createdAt': now,
-          'unreadCounts': {client.id: 0, lawyerId: 0},
-        },
-        SetOptions(merge: true),
-      );
+      tx.set(chatRoomRef, {
+        'id': requestId,
+        'caseId': caseId,
+        'clientId': client.id,
+        'lawyerId': lawyerId,
+        'participants': [client.id, lawyerId],
+        'clientName': reveal.name,
+        'lawyerName': lawyerSnapshotMap['name']?.toString() ?? '',
+        if (lawyerSnapshotMap['avatarUrl'] != null)
+          'lawyerAvatarUrl': lawyerSnapshotMap['avatarUrl'].toString(),
+        'caseTitle': caseTitle,
+        'lastMessageText': '',
+        'lastMessageType': 'text',
+        'lastSenderId': '',
+        'lastMessageAt': now,
+        'createdAt': now,
+        'unreadCounts': {client.id: 0, lawyerId: 0},
+      }, SetOptions(merge: true));
     });
   }
 
@@ -346,6 +466,13 @@ class ConnectionRequestRepository {
       final current = ConnectionRequestStatusWire.fromWire(
         snap.data()!['status']?.toString(),
       );
+      final request = ConnectionRequestModel.fromFirestore(snap);
+      if (!request.isLawyerInitiated) {
+        throw InvalidStatusTransitionException(
+          request.status,
+          ConnectionRequestStatus.declined,
+        );
+      }
       if (current != ConnectionRequestStatus.pending) {
         throw InvalidStatusTransitionException(
           current,
@@ -378,33 +505,235 @@ class ConnectionRequestRepository {
     });
   }
 
+  /// Lawyer accepts a pending client-to-lawyer request.
+  Future<void> approveClientRequest({
+    required String requestId,
+    required UserModel lawyer,
+  }) async {
+    if (lawyer.role != UserRole.lawyer) {
+      throw LawyerNotVerifiedException();
+    }
+
+    final docRef = _requests.doc(requestId);
+    final requestSnap = await docRef.get();
+    if (!requestSnap.exists) {
+      throw StateError('Request $requestId does not exist.');
+    }
+
+    final request = ConnectionRequestModel.fromFirestore(requestSnap);
+    if (!request.isClientInitiated ||
+        request.lawyerId != lawyer.id ||
+        request.status != ConnectionRequestStatus.pending) {
+      throw InvalidStatusTransitionException(
+        request.status,
+        ConnectionRequestStatus.approved,
+      );
+    }
+
+    final siblingsSnap = await _requests
+        .where('caseId', isEqualTo: request.caseId)
+        .where('status', isEqualTo: ConnectionRequestStatus.pending.wireValue)
+        .get();
+    final siblingRefs = siblingsSnap.docs
+        .where((doc) => doc.id != requestId)
+        .map((doc) => doc.reference)
+        .toList();
+    final caseRef = _db.collection('cases').doc(request.caseId);
+
+    await _db.runTransaction((tx) async {
+      final freshRequestSnap = await tx.get(docRef);
+      final caseSnap = await tx.get(caseRef);
+      final siblingSnaps = <DocumentSnapshot<Map<String, dynamic>>>[];
+      for (final ref in siblingRefs) {
+        siblingSnaps.add(await tx.get(ref));
+      }
+
+      if (!freshRequestSnap.exists || !caseSnap.exists) {
+        throw StateError('Request or case no longer exists.');
+      }
+
+      final freshRequest = ConnectionRequestModel.fromFirestore(
+        freshRequestSnap,
+      );
+      if (!freshRequest.isClientInitiated ||
+          freshRequest.lawyerId != lawyer.id ||
+          freshRequest.status != ConnectionRequestStatus.pending) {
+        throw InvalidStatusTransitionException(
+          freshRequest.status,
+          ConnectionRequestStatus.approved,
+        );
+      }
+
+      final caseData = caseSnap.data()!;
+      final caseStatus = caseData['status']?.toString();
+      final caseLawyerId = caseData['lawyerId']?.toString().trim();
+      if (caseStatus != CaseStatus.pending.name ||
+          (caseLawyerId != null && caseLawyerId.isNotEmpty)) {
+        throw const CaseAlreadyConnectedException();
+      }
+
+      final now = Timestamp.fromDate(DateTime.now());
+      tx.update(docRef, {
+        'status': ConnectionRequestStatus.approved.wireValue,
+        'respondedAt': now,
+        'updatedAt': now,
+      });
+      tx.update(caseRef, {
+        'status': CaseStatus.active.name,
+        'lawyerId': lawyer.id,
+      });
+
+      for (final snap in siblingSnaps) {
+        if (!snap.exists) continue;
+        final sibling = ConnectionRequestModel.fromFirestore(snap);
+        if (sibling.status == ConnectionRequestStatus.pending) {
+          tx.update(snap.reference, {
+            'status': ConnectionRequestStatus.expired.wireValue,
+            'updatedAt': now,
+          });
+        }
+      }
+
+      final requestData = freshRequestSnap.data()!;
+      final lawyerSnapshotMap =
+          requestData['lawyerSnapshot'] as Map<String, dynamic>? ?? {};
+      final clientRevealMap =
+          requestData['clientReveal'] as Map<String, dynamic>? ?? {};
+      final caseSnapshotMap =
+          requestData['caseSnapshot'] as Map<String, dynamic>? ?? {};
+      final clientName = clientRevealMap['name']?.toString().trim();
+      final caseTitle = caseData['title']?.toString().trim();
+      final snapshotTitle = caseSnapshotMap['title']?.toString().trim();
+      final chatRoomRef = _db.collection('chat_rooms').doc(requestId);
+      tx.set(chatRoomRef, {
+        'id': requestId,
+        'caseId': request.caseId,
+        'clientId': request.clientId,
+        'lawyerId': lawyer.id,
+        'participants': [request.clientId, lawyer.id],
+        'clientName': clientName == null || clientName.isEmpty
+            ? 'Client'
+            : clientName,
+        'lawyerName': lawyerSnapshotMap['name']?.toString() ?? lawyer.name,
+        if (lawyerSnapshotMap['avatarUrl'] != null)
+          'lawyerAvatarUrl': lawyerSnapshotMap['avatarUrl'].toString(),
+        'caseTitle': caseTitle == null || caseTitle.isEmpty
+            ? (snapshotTitle == null || snapshotTitle.isEmpty
+                  ? request.caseId
+                  : snapshotTitle)
+            : caseTitle,
+        'lastMessageText': '',
+        'lastMessageType': 'text',
+        'lastSenderId': '',
+        'lastMessageAt': now,
+        'createdAt': now,
+        'unreadCounts': {request.clientId: 0, lawyer.id: 0},
+      }, SetOptions(merge: true));
+    });
+  }
+
+  /// Lawyer rejects a pending client-to-lawyer request.
+  Future<void> declineClientRequest({
+    required String requestId,
+    required UserModel lawyer,
+    String? reason,
+  }) async {
+    if (lawyer.role != UserRole.lawyer) {
+      throw LawyerNotVerifiedException();
+    }
+
+    final docRef = _requests.doc(requestId);
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(docRef);
+      if (!snap.exists) {
+        throw StateError('Request $requestId does not exist.');
+      }
+
+      final request = ConnectionRequestModel.fromFirestore(snap);
+      if (!request.isClientInitiated ||
+          request.lawyerId != lawyer.id ||
+          request.status != ConnectionRequestStatus.pending) {
+        throw InvalidStatusTransitionException(
+          request.status,
+          ConnectionRequestStatus.declined,
+        );
+      }
+
+      final now = Timestamp.fromDate(DateTime.now());
+      final payload = <String, dynamic>{
+        'status': ConnectionRequestStatus.declined.wireValue,
+        'respondedAt': now,
+        'updatedAt': now,
+      };
+      final trimmed = reason?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        payload['declineReason'] = trimmed;
+      }
+      tx.update(docRef, payload);
+    });
+  }
+
   // ── Reads (streams) ─────────────────────────────────────────────────────────
 
   /// Pending requests addressed to the given client, newest first.
-  Stream<List<ConnectionRequestModel>> streamPendingForClient(
-    String clientId,
-  ) {
+  Stream<List<ConnectionRequestModel>> streamPendingForClient(String clientId) {
     return _requests
         .where('clientId', isEqualTo: clientId)
         .where('status', isEqualTo: ConnectionRequestStatus.pending.wireValue)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(_mapDocs);
+        .map(
+          (snapshot) => _mapDocs(
+            snapshot,
+          ).where((request) => request.isLawyerInitiated).toList(),
+        );
+  }
+
+  /// All connection requests for a client, newest update first.
+  Stream<List<ConnectionRequestModel>> streamForClient(String clientId) {
+    return _requests.where('clientId', isEqualTo: clientId).snapshots().map((
+      snapshot,
+    ) {
+      final requests = _mapDocs(snapshot);
+      requests.sort((left, right) {
+        final leftTime = left.respondedAt ?? left.updatedAt;
+        final rightTime = right.respondedAt ?? right.updatedAt;
+        return rightTime.compareTo(leftTime);
+      });
+      return requests;
+    });
   }
 
   /// Historical requests (non-pending) for a client, newest first.
-  Stream<List<ConnectionRequestModel>> streamHistoryForClient(
-    String clientId,
-  ) {
+  Stream<List<ConnectionRequestModel>> streamHistoryForClient(String clientId) {
     // Firestore `whereIn` supports up to 10 values — safe here.
     return _requests
         .where('clientId', isEqualTo: clientId)
-        .where('status', whereIn: [
-          ConnectionRequestStatus.approved.wireValue,
-          ConnectionRequestStatus.declined.wireValue,
-          ConnectionRequestStatus.withdrawn.wireValue,
-          ConnectionRequestStatus.expired.wireValue,
-        ])
+        .where(
+          'status',
+          whereIn: [
+            ConnectionRequestStatus.approved.wireValue,
+            ConnectionRequestStatus.declined.wireValue,
+            ConnectionRequestStatus.withdrawn.wireValue,
+            ConnectionRequestStatus.expired.wireValue,
+          ],
+        )
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => _mapDocs(
+            snapshot,
+          ).where((request) => request.isLawyerInitiated).toList(),
+        );
+  }
+
+  /// Approved requests for a client, regardless of who initiated the request.
+  Stream<List<ConnectionRequestModel>> streamApprovedForClient(
+    String clientId,
+  ) {
+    return _requests
+        .where('clientId', isEqualTo: clientId)
+        .where('status', isEqualTo: ConnectionRequestStatus.approved.wireValue)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map(_mapDocs);
@@ -417,6 +746,24 @@ class ConnectionRequestRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map(_mapDocs);
+  }
+
+  /// Pending client-initiated requests addressed to a lawyer, newest first.
+  Stream<List<ConnectionRequestModel>> streamPendingClientRequestsForLawyer(
+    String lawyerId,
+  ) {
+    return _requests
+        .where('lawyerId', isEqualTo: lawyerId)
+        .where('status', isEqualTo: ConnectionRequestStatus.pending.wireValue)
+        .where('initiatedByRole', isEqualTo: 'client')
+        .snapshots()
+        .map((snapshot) {
+          final requests = _mapDocs(snapshot);
+          requests.sort(
+            (left, right) => right.createdAt.compareTo(left.createdAt),
+          );
+          return requests;
+        });
   }
 
   /// All requests for a given case.
@@ -444,8 +791,6 @@ class ConnectionRequestRepository {
   List<ConnectionRequestModel> _mapDocs(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
-    return snapshot.docs
-        .map(ConnectionRequestModel.fromFirestore)
-        .toList();
+    return snapshot.docs.map(ConnectionRequestModel.fromFirestore).toList();
   }
 }

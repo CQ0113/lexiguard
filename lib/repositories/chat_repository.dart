@@ -5,7 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import '../models/chat_message_model.dart';
 import '../models/chat_room_model.dart';
-import '../models/user_model.dart' show UserRole;
+import '../models/user_model.dart' show UserModel, UserRole;
 
 export '../models/chat_message_model.dart'
     show ChatMessage, MessageType, MessageTypeWire;
@@ -15,8 +15,12 @@ export '../models/chat_room_model.dart' show ChatRoom;
 ///
 /// Returns `(storagePath, downloadUrl)`. Overridable for unit tests without
 /// needing a [FirebaseStorage] fake package.
-typedef ChatStorageUploader = Future<({String storagePath, String downloadUrl})>
-    Function(String path, Uint8List bytes, String mimeType);
+typedef ChatStorageUploader =
+    Future<({String storagePath, String downloadUrl})> Function(
+      String path,
+      Uint8List bytes,
+      String mimeType,
+    );
 
 /// Repository for reading and writing chat data.
 ///
@@ -29,9 +33,9 @@ class ChatRepository {
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
     ChatStorageUploader? storageUploader,
-  })  : _db = firestore ?? FirebaseFirestore.instance,
-        _storageOverride = storage,
-        _storageUploader = storageUploader;
+  }) : _db = firestore ?? FirebaseFirestore.instance,
+       _storageOverride = storage,
+       _storageUploader = storageUploader;
 
   static const String _roomsCollection = 'chat_rooms';
   static const String _messagesSubcollection = 'messages';
@@ -63,26 +67,19 @@ class ChatRepository {
         .where('participants', arrayContains: uid)
         .orderBy('lastMessageAt', descending: true)
         .snapshots()
-        .map(
-          (snap) => snap.docs.map(ChatRoom.fromFirestore).toList(),
-        );
+        .map((snap) => snap.docs.map(ChatRoom.fromFirestore).toList());
   }
 
   /// Streams the most recent [limit] messages in a room, newest-first.
   ///
   /// The caller typically reverses the list before rendering in a
   /// `ListView(reverse: true)` so the latest message appears at the bottom.
-  Stream<List<ChatMessage>> streamMessages(
-    String roomId, {
-    int limit = 50,
-  }) {
+  Stream<List<ChatMessage>> streamMessages(String roomId, {int limit = 50}) {
     return _messages(roomId)
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map(
-          (snap) => snap.docs.map(ChatMessage.fromFirestore).toList(),
-        );
+        .map((snap) => snap.docs.map(ChatMessage.fromFirestore).toList());
   }
 
   // ── Writes ──────────────────────────────────────────────────────────────────
@@ -101,10 +98,17 @@ class ChatRepository {
     required UserRole senderRole,
     required String text,
     required String recipientId,
+    DateTime? expiresAt,
+    String? attachmentName,
+    String? attachmentDownloadUrl,
   }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
-      throw ArgumentError.value(text, 'text', 'Chat message text must not be empty.');
+      throw ArgumentError.value(
+        text,
+        'text',
+        'Chat message text must not be empty.',
+      );
     }
 
     final messageRef = _messages(roomId).doc();
@@ -121,6 +125,9 @@ class ChatRepository {
       'type': MessageType.text.wireValue,
       'text': trimmed,
       'createdAt': FieldValue.serverTimestamp(),
+      if (expiresAt != null) 'expiresAt': Timestamp.fromDate(expiresAt),
+      'attachmentName': ?attachmentName,
+      'attachmentDownloadUrl': ?attachmentDownloadUrl,
     });
 
     // 2. Update room last-message preview and increment recipient unread slot.
@@ -230,14 +237,88 @@ class ChatRepository {
     return storagePath;
   }
 
+  /// Sends a vault document directly as a chat attachment message by referencing
+  /// its existing GCS storage path and download URL, avoiding unnecessary downloads.
+  Future<String> sendVaultAttachmentMessage({
+    required String roomId,
+    required String senderId,
+    required UserRole senderRole,
+    required String recipientId,
+    required String downloadUrl,
+    required String storagePath,
+    required String fileName,
+    required String mimeType,
+    required MessageType type,
+    required int sizeBytes,
+  }) async {
+    final messageRef = _messages(roomId).doc();
+    final messageId = messageRef.id;
+
+    final String lastMessageText = type == MessageType.image
+        ? '📷 Photo'
+        : '📎 $fileName';
+
+    final roomRef = _rooms.doc(roomId);
+    final batch = _db.batch();
+
+    batch.set(messageRef, {
+      'id': messageId,
+      'roomId': roomId,
+      'senderId': senderId,
+      'senderRole': senderRole == UserRole.lawyer ? 'lawyer' : 'client',
+      'type': type.wireValue,
+      'attachmentStoragePath': storagePath,
+      'attachmentDownloadUrl': downloadUrl,
+      'attachmentName': fileName,
+      'attachmentSize': sizeBytes,
+      'mimeType': mimeType,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    batch.update(roomRef, {
+      'lastMessageText': lastMessageText,
+      'lastMessageType': type.wireValue,
+      'lastSenderId': senderId,
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'unreadCounts.$recipientId': FieldValue.increment(1),
+    });
+
+    await batch.commit();
+    return storagePath;
+  }
+
+  /// Deletes a message document from the subcollection.
+  Future<void> deleteMessage({
+    required String roomId,
+    required String messageId,
+  }) async {
+    await _messages(roomId).doc(messageId).delete();
+  }
+
+  /// Updates the text content of a message.
+  /// Throws [ArgumentError] if the trimmed new text is empty.
+  Future<void> editMessage({
+    required String roomId,
+    required String messageId,
+    required String newText,
+  }) async {
+    final trimmed = newText.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(
+        newText,
+        'newText',
+        'Edited message text must not be empty.',
+      );
+    }
+    await _messages(roomId).doc(messageId).update({'text': trimmed});
+  }
+
   /// Resets the caller's unread counter to zero.
   ///
   /// Uses dot-path notation (`unreadCounts.<uid>`) so only the caller's slot
   /// is touched — the other participant's count is preserved.
   Future<void> markRoomRead(String roomId, String uid) async {
-    await _rooms.doc(roomId).update({
-      'unreadCounts.$uid': 0,
-    });
+    await _rooms.doc(roomId).update({'unreadCounts.$uid': 0});
   }
 
   /// Fetches a single room document by its [roomId].
@@ -267,7 +348,10 @@ class ChatRepository {
     if (existing != null) return existing;
 
     // Slow path — read the connection_request to back-fill the room.
-    final reqDoc = await _db.collection('connection_requests').doc(roomId).get();
+    final reqDoc = await _db
+        .collection('connection_requests')
+        .doc(roomId)
+        .get();
     if (!reqDoc.exists) {
       throw StateError('No connection_request found for room $roomId');
     }
@@ -275,14 +359,14 @@ class ChatRepository {
     final data = reqDoc.data()!;
     final clientId = data['clientId'] as String? ?? '';
     final lawyerId = data['lawyerId'] as String? ?? '';
-    final caseId   = data['caseId']   as String? ?? '';
+    final caseId = data['caseId'] as String? ?? '';
 
-    final snap     = (data['lawyerSnapshot'] as Map<String, dynamic>?) ?? {};
-    final reveal   = (data['clientReveal']   as Map<String, dynamic>?) ?? {};
+    final snap = (data['lawyerSnapshot'] as Map<String, dynamic>?) ?? {};
+    final reveal = (data['clientReveal'] as Map<String, dynamic>?) ?? {};
 
-    final lawyerName     = snap['name']      as String? ?? 'Lawyer';
-    final lawyerAvatarUrl= snap['avatarUrl'] as String? ?? '';
-    final clientName     = reveal['name']    as String? ?? 'Client';
+    final lawyerName = snap['name'] as String? ?? 'Lawyer';
+    final lawyerAvatarUrl = snap['avatarUrl'] as String? ?? '';
+    final clientName = reveal['name'] as String? ?? 'Client';
 
     // Look up the case title — best-effort; fall back to caseId if absent.
     String caseTitle = caseId;
@@ -291,31 +375,119 @@ class ChatRepository {
       if (caseDoc.exists) {
         caseTitle = (caseDoc.data()?['title'] as String?) ?? caseId;
       }
-    } catch (_) {/* non-fatal */}
+    } catch (_) {
+      /* non-fatal */
+    }
 
     final now = Timestamp.now();
     final roomData = {
-      'caseId':          caseId,
-      'clientId':        clientId,
-      'lawyerId':        lawyerId,
-      'participants':    [clientId, lawyerId],
-      'clientName':      clientName,
-      'lawyerName':      lawyerName,
+      'caseId': caseId,
+      'clientId': clientId,
+      'lawyerId': lawyerId,
+      'participants': [clientId, lawyerId],
+      'clientName': clientName,
+      'lawyerName': lawyerName,
       'lawyerAvatarUrl': lawyerAvatarUrl,
-      'caseTitle':       caseTitle,
+      'caseTitle': caseTitle,
       'lastMessageText': '',
       'lastMessageType': 'text',
-      'lastSenderId':    '',
-      'lastMessageAt':   now,
-      'createdAt':       now,
-      'unreadCounts':    {clientId: 0, lawyerId: 0},
+      'lastSenderId': '',
+      'lastMessageAt': now,
+      'createdAt': now,
+      'unreadCounts': {clientId: 0, lawyerId: 0},
     };
 
     await _rooms.doc(roomId).set(roomData, SetOptions(merge: true));
     return ChatRoom.fromMap(roomId, roomData);
   }
 
+  /// Back-fills missing chat rooms for approved connection requests involving
+  /// [uid]. This repairs older or partially-created approvals where the case
+  /// became active but `chat_rooms/{requestId}` was never written.
+  Future<int> ensureRoomsForApprovedConnections(String uid) async {
+    final approved = 'approved';
+    final clientRequests = await _db
+        .collection('connection_requests')
+        .where('clientId', isEqualTo: uid)
+        .where('status', isEqualTo: approved)
+        .get();
+    final lawyerRequests = await _db
+        .collection('connection_requests')
+        .where('lawyerId', isEqualTo: uid)
+        .where('status', isEqualTo: approved)
+        .get();
+
+    final requestIds = <String>{
+      for (final doc in clientRequests.docs) doc.id,
+      for (final doc in lawyerRequests.docs) doc.id,
+    };
+
+    var created = 0;
+    for (final requestId in requestIds) {
+      final existed = await fetchRoom(requestId) != null;
+      await ensureRoom(requestId);
+      if (!existed) created++;
+    }
+    return created;
+  }
+
+  /// Repairs old approved client-initiated connections that were created
+  /// before the request stored a client display name. This runs only for the
+  /// client themselves, so the app never asks a lawyer to read private client
+  /// user documents.
+  Future<int> syncClientRevealForApprovedConnections(UserModel user) async {
+    if (user.role != UserRole.client) return 0;
+    final name = user.name.trim();
+    if (name.isEmpty) return 0;
+
+    final requests = await _db
+        .collection('connection_requests')
+        .where('clientId', isEqualTo: user.id)
+        .where('status', isEqualTo: 'approved')
+        .get();
+
+    var repaired = 0;
+    for (final request in requests.docs) {
+      final data = request.data();
+      final reveal = Map<String, dynamic>.from(
+        (data['clientReveal'] as Map?) ?? const {},
+      );
+      final revealName = reveal['name']?.toString();
+      final shouldRepairReveal = _isPlaceholderClientName(revealName);
+
+      if (shouldRepairReveal) {
+        reveal['name'] = name;
+        if (user.email.isNotEmpty) reveal['email'] = user.email;
+        if (user.phone.isNotEmpty) reveal['phone'] = user.phone;
+        await request.reference.set({
+          'clientReveal': reveal,
+          'updatedAt': Timestamp.now(),
+        }, SetOptions(merge: true));
+        repaired++;
+      }
+
+      final roomRef = _rooms.doc(request.id);
+      final room = await roomRef.get();
+      if (!room.exists) continue;
+
+      final roomName = room.data()?['clientName']?.toString();
+      if (_isPlaceholderClientName(roomName)) {
+        await roomRef.set({'clientName': name}, SetOptions(merge: true));
+        repaired++;
+      }
+    }
+
+    return repaired;
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  bool _isPlaceholderClientName(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return true;
+    final lower = trimmed.toLowerCase();
+    return lower == 'client' || lower.startsWith('client-');
+  }
 
   /// Sanitizes [value] for use as a Storage filename segment.
   ///

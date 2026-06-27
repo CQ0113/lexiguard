@@ -2,9 +2,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../core/firebase/firebase_initializer.dart';
+import '../data/dummy_data.dart';
 import '../models/user_model.dart';
+import '../repositories/lawyer_profile_repository.dart';
+import '../repositories/user_repository.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_auth_sync_service.dart';
+import 'admin_login_screen.dart';
 import 'shared/live_dashboard_router_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -32,11 +37,24 @@ class _LoginScreenState extends State<LoginScreen> {
   final Color primaryBlue = const Color(0xFF0C1D36);
   final Color goldAccent = const Color(0xFFCFA92A);
   final FirebaseAuthSyncService _authSyncService = FirebaseAuthSyncService();
+
+  UserRepository? _userRepositoryInstance;
+  UserRepository get _userRepository =>
+      _userRepositoryInstance ??= UserRepository();
+
+  LawyerProfileRepository? _lawyerProfileRepositoryInstance;
+  LawyerProfileRepository get _lawyerProfileRepository =>
+      _lawyerProfileRepositoryInstance ??= LawyerProfileRepository();
+
   // Lazy — defers FirebaseAuth.instance until Firebase is confirmed ready.
   AuthService? _authServiceInstance;
   AuthService get _authService => _authServiceInstance ??= AuthService();
   bool _isSubmitting = false;
   bool _isGoogleSubmitting = false;
+
+  static const _devClientEmail = 'dev.client@lexiguard.local';
+  static const _devLawyerEmail = 'dev.lawyer@lexiguard.local';
+  static const _devAccountPassword = 'DevPassword123!';
 
   bool get showLawyerVerificationFields {
     return !isLogin && selectedRole == 'Lawyer';
@@ -107,6 +125,13 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _openAdminLogin() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
+    );
+  }
+
   VerificationStatus _initialStatusForJurisdiction(String jurisdiction) {
     return jurisdiction == 'peninsular'
         ? VerificationStatus.pending
@@ -153,6 +178,159 @@ class _LoginScreenState extends State<LoginScreen> {
       practiceState: practiceState,
       practiceCity: practiceCity,
     );
+  }
+
+  Future<void> _enterDevAccount(UserRole role) async {
+    if (_isSubmitting || _isGoogleSubmitting) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      if (!FirebaseInitializer.isReady) {
+        _showInputError('Firebase is not available for dev account login.');
+        return;
+      }
+
+      final email = role == UserRole.client ? _devClientEmail : _devLawyerEmail;
+      final credential = await _signInOrCreateDevCredential(email);
+      final uid = credential.user?.uid;
+      if (uid == null) {
+        _showInputError('Dev account login failed. Please try again.');
+        return;
+      }
+
+      await _seedDevProfile(uid: uid, email: email, role: role);
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LiveDashboardRouterScreen(uid: uid),
+        ),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (mounted) {
+        _showInputError(_friendlyDevAccountError(error));
+      }
+    } catch (_) {
+      if (mounted) {
+        _showInputError('Could not enter dev account. Please try again.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  Future<UserCredential> _signInOrCreateDevCredential(String email) async {
+    try {
+      return await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: _devAccountPassword,
+      );
+    } on FirebaseAuthException catch (signInError) {
+      if (signInError.code != 'user-not-found' &&
+          signInError.code != 'invalid-credential') {
+        rethrow;
+      }
+
+      try {
+        return await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: _devAccountPassword,
+        );
+      } on FirebaseAuthException catch (createError) {
+        if (createError.code == 'email-already-in-use') {
+          return await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email,
+            password: _devAccountPassword,
+          );
+        }
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> _seedDevProfile({
+    required String uid,
+    required String email,
+    required UserRole role,
+  }) async {
+    final profile = _buildDevProfile(uid: uid, email: email, role: role);
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    await _userRepository.upsertUser(
+      uid: uid,
+      payload: {
+        ...profile.toMap(),
+        'id': uid,
+        'email': email,
+        'role': role == UserRole.lawyer ? 'lawyer' : 'client',
+        'updatedAt': now,
+        'createdAt': profile.createdAt?.toIso8601String() ?? now,
+      },
+    );
+
+    if (role == UserRole.lawyer) {
+      await _lawyerProfileRepository.upsertProfile(uid: uid, profile: profile);
+    }
+  }
+
+  UserModel _buildDevProfile({
+    required String uid,
+    required String email,
+    required UserRole role,
+  }) {
+    if (role == UserRole.client) {
+      final client = DummyData.users.firstWhere(
+        (u) => u.role == UserRole.client,
+      );
+      return UserModel(
+        id: uid,
+        name: client.name,
+        email: email,
+        phone: client.phone,
+        role: UserRole.client,
+        avatarUrl: client.avatarUrl,
+        createdAt: client.createdAt,
+      );
+    }
+
+    final lawyer = DummyData.firstVerifiedLawyer;
+    return UserModel(
+      id: uid,
+      name: lawyer.name,
+      email: email,
+      phone: lawyer.phone,
+      role: UserRole.lawyer,
+      avatarUrl: lawyer.avatarUrl,
+      createdAt: lawyer.createdAt,
+      barNumber: lawyer.barNumber,
+      specialization: lawyer.specialization,
+      hourlyRate: lawyer.hourlyRate,
+      rating: lawyer.rating,
+      yearsExperience: lawyer.yearsExperience,
+      barCouncilVerified: lawyer.barCouncilVerified,
+      verificationStatus: lawyer.verificationStatus,
+      verificationProvider: lawyer.verificationProvider,
+      verifiedAt: lawyer.verifiedAt,
+      lastVerifiedAt: lawyer.lastVerifiedAt,
+      nextReverifyAt: lawyer.nextReverifyAt,
+      verificationBadgeVisible: lawyer.verificationBadgeVisible,
+      legalFullName: lawyer.legalFullName,
+      firmName: lawyer.firmName,
+      jurisdiction: lawyer.jurisdiction,
+      practiceState: lawyer.practiceState,
+      practiceCity: lawyer.practiceCity,
+    );
+  }
+
+  String _friendlyDevAccountError(FirebaseAuthException error) {
+    if (error.code == 'wrong-password' || error.code == 'invalid-credential') {
+      return 'The dev Firebase account exists with a different password.';
+    }
+    return 'Could not enter dev account (${error.code}).';
   }
 
   Future<void> _onGoogleSignIn() async {
@@ -247,7 +425,9 @@ class _LoginScreenState extends State<LoginScreen> {
       // currentUser should never be null here after a successful syncSession.
       // If it is, something unexpected happened Ã¢â‚¬â€ do NOT fall back silently.
       if (currentUser == null) {
-        _showInputError('Authentication failed. Please check your credentials.');
+        _showInputError(
+          'Authentication failed. Please check your credentials.',
+        );
         return;
       }
 
@@ -325,9 +505,10 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-
   Future<void> _showForgotPasswordDialog() async {
-    final dialogEmailCtrl = TextEditingController(text: emailController.text.trim());
+    final dialogEmailCtrl = TextEditingController(
+      text: emailController.text.trim(),
+    );
     bool isSending = false;
     bool sent = false;
 
@@ -337,7 +518,9 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (dialogCtx) => StatefulBuilder(
         builder: (dialogCtx, setDialogState) => AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
               Container(
@@ -346,27 +529,51 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: goldAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(Icons.lock_reset_rounded, color: goldAccent, size: 20),
+                child: Icon(
+                  Icons.lock_reset_rounded,
+                  color: goldAccent,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
-              Text('Reset Password',
-                  style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w700, color: primaryBlue)),
+              Text(
+                'Reset Password',
+                style: GoogleFonts.inter(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: primaryBlue,
+                ),
+              ),
             ],
           ),
           content: sent
               ? Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.mark_email_read_outlined, color: Color(0xFF16A34A), size: 48),
+                    const Icon(
+                      Icons.mark_email_read_outlined,
+                      color: Color(0xFF16A34A),
+                      size: 48,
+                    ),
                     const SizedBox(height: 16),
-                    Text('Email sent!',
-                        style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: primaryBlue)),
+                    Text(
+                      'Email sent!',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: primaryBlue,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'A password reset link was sent to ${dialogEmailCtrl.text.trim()}. '
                       'Check your inbox (and spam folder) and follow the link.',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(fontSize: 13, color: Colors.grey[600], height: 1.5),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                        height: 1.5,
+                      ),
                     ),
                   ],
                 )
@@ -374,8 +581,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Enter your registered email and we'll send a reset link.",
-                        style: GoogleFonts.inter(fontSize: 13, color: Colors.grey[600], height: 1.5)),
+                    Text(
+                      "Enter your registered email and we'll send a reset link.",
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                        height: 1.5,
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
@@ -388,13 +601,26 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: dialogEmailCtrl,
                         keyboardType: TextInputType.emailAddress,
                         autofocus: true,
-                        style: GoogleFonts.inter(color: primaryBlue, fontSize: 14),
+                        style: GoogleFonts.inter(
+                          color: primaryBlue,
+                          fontSize: 14,
+                        ),
                         decoration: InputDecoration(
                           hintText: 'Your email address',
-                          hintStyle: GoogleFonts.inter(color: Colors.grey[400], fontSize: 14),
-                          prefixIcon: Icon(Icons.email_outlined, color: Colors.grey[400], size: 20),
+                          hintStyle: GoogleFonts.inter(
+                            color: Colors.grey[400],
+                            fontSize: 14,
+                          ),
+                          prefixIcon: Icon(
+                            Icons.email_outlined,
+                            color: Colors.grey[400],
+                            size: 20,
+                          ),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
+                          ),
                         ),
                       ),
                     ),
@@ -404,14 +630,24 @@ class _LoginScreenState extends State<LoginScreen> {
               ? [
                   TextButton(
                     onPressed: () => Navigator.of(dialogCtx).pop(),
-                    child: Text('Done',
-                        style: GoogleFonts.inter(color: primaryBlue, fontWeight: FontWeight.w600)),
+                    child: Text(
+                      'Done',
+                      style: GoogleFonts.inter(
+                        color: primaryBlue,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ]
               : [
                   TextButton(
-                    onPressed: isSending ? null : () => Navigator.of(dialogCtx).pop(),
-                    child: Text('Cancel', style: GoogleFonts.inter(color: Colors.grey[500])),
+                    onPressed: isSending
+                        ? null
+                        : () => Navigator.of(dialogCtx).pop(),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.inter(color: Colors.grey[500]),
+                    ),
                   ),
                   ElevatedButton(
                     onPressed: isSending
@@ -419,46 +655,70 @@ class _LoginScreenState extends State<LoginScreen> {
                         : () async {
                             final email = dialogEmailCtrl.text.trim();
                             if (email.isEmpty || !_isValidEmail(email)) {
-                              ScaffoldMessenger.of(dialogCtx).showSnackBar(SnackBar(
-                                content: Text(
-                                  email.isEmpty
-                                      ? 'Please enter your email address.'
-                                      : 'Please enter a valid email address.',
-                                  style: GoogleFonts.inter(color: Colors.white),
+                              ScaffoldMessenger.of(dialogCtx).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    email.isEmpty
+                                        ? 'Please enter your email address.'
+                                        : 'Please enter a valid email address.',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  backgroundColor: const Color(0xFFB91C1C),
+                                  behavior: SnackBarBehavior.floating,
                                 ),
-                                backgroundColor: const Color(0xFFB91C1C),
-                                behavior: SnackBarBehavior.floating,
-                              ));
+                              );
                               return;
                             }
                             setDialogState(() => isSending = true);
                             try {
                               await _authService.sendPasswordResetEmail(email);
-                              setDialogState(() { isSending = false; sent = true; });
+                              setDialogState(() {
+                                isSending = false;
+                                sent = true;
+                              });
                             } on FirebaseAuthException catch (e) {
                               setDialogState(() => isSending = false);
                               if (dialogCtx.mounted) {
                                 final msg = switch (e.code) {
-                                  'user-not-found' => 'No account found with this email.',
-                                  'invalid-email' => 'Please enter a valid email address.',
-                                  'too-many-requests' => 'Too many attempts. Please try again later.',
-                                  _ => 'Could not send reset email (${e.code}).',
+                                  'user-not-found' =>
+                                    'No account found with this email.',
+                                  'invalid-email' =>
+                                    'Please enter a valid email address.',
+                                  'too-many-requests' =>
+                                    'Too many attempts. Please try again later.',
+                                  _ =>
+                                    'Could not send reset email (${e.code}).',
                                 };
-                                ScaffoldMessenger.of(dialogCtx).showSnackBar(SnackBar(
-                                  content: Text(msg, style: GoogleFonts.inter(color: Colors.white)),
-                                  backgroundColor: const Color(0xFFB91C1C),
-                                  behavior: SnackBarBehavior.floating,
-                                ));
+                                ScaffoldMessenger.of(dialogCtx).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      msg,
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    backgroundColor: const Color(0xFFB91C1C),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
                               }
                             } catch (_) {
                               setDialogState(() => isSending = false);
                               if (dialogCtx.mounted) {
-                                ScaffoldMessenger.of(dialogCtx).showSnackBar(SnackBar(
-                                  content: Text('Could not send reset email. Check your connection.',
-                                      style: GoogleFonts.inter(color: Colors.white)),
-                                  backgroundColor: const Color(0xFFB91C1C),
-                                  behavior: SnackBarBehavior.floating,
-                                ));
+                                ScaffoldMessenger.of(dialogCtx).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Could not send reset email. Check your connection.',
+                                      style: GoogleFonts.inter(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    backgroundColor: const Color(0xFFB91C1C),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
                               }
                             }
                           },
@@ -466,16 +726,27 @@ class _LoginScreenState extends State<LoginScreen> {
                       backgroundColor: primaryBlue,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     child: isSending
                         ? const SizedBox(
-                            width: 16, height: 16,
+                            width: 16,
+                            height: 16,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                        : Text('Send Reset Link',
-                            style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            'Send Reset Link',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ],
         ),
@@ -483,6 +754,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     dialogEmailCtrl.dispose();
   }
+
   @override
   void dispose() {
     emailController.dispose();
@@ -723,24 +995,49 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                         const SizedBox(height: 12),
                         if (isLogin)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: _showForgotPasswordDialog,
-                              style: TextButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                minimumSize: const Size(50, 30),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                'Forgot Password?',
-                                style: GoogleFonts.inter(
+                          Row(
+                            children: [
+                              TextButton.icon(
+                                onPressed: _openAdminLogin,
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(50, 30),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                icon: Icon(
+                                  Icons.admin_panel_settings_outlined,
+                                  size: 16,
                                   color: goldAccent,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
+                                ),
+                                label: Text(
+                                  'Login as admin',
+                                  style: GoogleFonts.inter(
+                                    color: goldAccent,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
-                            ),
+                              const Spacer(),
+                              TextButton(
+                                onPressed: _showForgotPasswordDialog,
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(50, 30),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                  'Forgot Password?',
+                                  style: GoogleFonts.inter(
+                                    color: goldAccent,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         const SizedBox(height: 24),
                         ElevatedButton(
@@ -794,6 +1091,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 20),
                         _buildGoogleSignInButton(),
+                        const SizedBox(height: 16),
+                        _buildMockLoginActions(),
                         const SizedBox(height: 32),
                       ],
                     ),
@@ -803,6 +1102,73 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMockLoginActions() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Development quick enter',
+            style: GoogleFonts.inter(
+              color: primaryBlue,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildMockEnterButton(
+                  label: 'Dev Client',
+                  icon: Icons.person_outline_rounded,
+                  onPressed: () => _enterDevAccount(UserRole.client),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildMockEnterButton(
+                  label: 'Dev Lawyer',
+                  icon: Icons.balance_rounded,
+                  onPressed: () => _enterDevAccount(UserRole.lawyer),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMockEnterButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: (_isSubmitting || _isGoogleSubmitting) ? null : onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: primaryBlue,
+        backgroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        side: BorderSide(color: goldAccent.withValues(alpha: 0.45)),
+      ),
+      icon: Icon(icon, size: 17, color: goldAccent),
+      label: Text(
+        label,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -968,7 +1334,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildGoogleSignInButton() {
     return OutlinedButton(
-      onPressed: (_isSubmitting || _isGoogleSubmitting) ? null : _onGoogleSignIn,
+      onPressed: (_isSubmitting || _isGoogleSubmitting)
+          ? null
+          : _onGoogleSignIn,
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1017,10 +1385,26 @@ class _GoogleGPainter extends CustomPainter {
 
     // Draw coloured arc segments
     final segments = [
-      (startAngle: -0.52, sweepAngle: 1.57, color: const Color(0xFF4285F4)), // blue
-      (startAngle: 1.05, sweepAngle: 1.57, color: const Color(0xFF34A853)), // green
-      (startAngle: 2.62, sweepAngle: 1.05, color: const Color(0xFFFBBC05)), // yellow
-      (startAngle: 3.67, sweepAngle: 1.05, color: const Color(0xFFEA4335)), // red
+      (
+        startAngle: -0.52,
+        sweepAngle: 1.57,
+        color: const Color(0xFF4285F4),
+      ), // blue
+      (
+        startAngle: 1.05,
+        sweepAngle: 1.57,
+        color: const Color(0xFF34A853),
+      ), // green
+      (
+        startAngle: 2.62,
+        sweepAngle: 1.05,
+        color: const Color(0xFFFBBC05),
+      ), // yellow
+      (
+        startAngle: 3.67,
+        sweepAngle: 1.05,
+        color: const Color(0xFFEA4335),
+      ), // red
     ];
 
     final paint = Paint()
@@ -1052,4 +1436,3 @@ class _GoogleGPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-

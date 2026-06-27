@@ -10,11 +10,13 @@ class ProfileScreen extends StatefulWidget {
     required this.user,
     this.profileService,
     this.embedded = false,
+    this.readOnly = false,
   });
 
   final UserModel user;
   final ProfileService? profileService;
   final bool embedded;
+  final bool readOnly;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -31,6 +33,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late UserModel _user;
   bool isEditing = false;
   bool _isSaving = false;
+
+  static const List<String> _availableLanguages = [
+    'English',
+    'Malay',
+    'Mandarin',
+    'Tamil',
+    'Cantonese',
+    'Hokkien',
+    'Other',
+  ];
+  late List<String> _selectedLanguages;
 
   late final TextEditingController _fullNameController;
   late final TextEditingController _legalNameController;
@@ -56,6 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _experienceController = TextEditingController();
     _hourlyRateController = TextEditingController();
     _phoneController = TextEditingController();
+    _selectedLanguages = List<String>.from(_user.languages);
     _syncControllers();
   }
 
@@ -88,9 +102,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _experienceController.text = _user.yearsExperience?.toString() ?? '';
     _hourlyRateController.text = _formatNumber(_user.hourlyRate);
     _phoneController.text = _user.phone;
+    _selectedLanguages = List<String>.from(_user.languages);
   }
 
   void _toggleEditing() {
+    if (widget.readOnly) return;
     setState(() {
       if (isEditing) {
         _syncControllers();
@@ -118,6 +134,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'specialization': _specializationController.text.trim(),
         'yearsExperience': yearsExperience,
         'hourlyRate': hourlyRate,
+        'languages': _selectedLanguages,
       } else
         'name': _fullNameController.text.trim(),
     };
@@ -200,11 +217,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _identityCard(),
                 const SizedBox(height: 14),
                 if (_isLawyer) _lawyerProfessionalCard() else _clientInfoCard(),
+                if (_isLawyer) ...[
+                  const SizedBox(height: 14),
+                  _languagesCard(),
+                ],
                 const SizedBox(height: 14),
                 _accountCard(),
-                const SizedBox(height: 14),
-                _securityCard(),
-                if (isEditing) ...[const SizedBox(height: 18), _saveButton()],
+                if (!widget.readOnly) ...[
+                  const SizedBox(height: 14),
+                  _securityCard(),
+                ],
+                if (isEditing && !widget.readOnly) ...[
+                  const SizedBox(height: 18),
+                  _saveButton(),
+                ],
               ],
             ),
           ),
@@ -224,7 +250,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLawyer ? 'Lawyer Profile' : 'My Profile',
           style: GoogleFonts.inter(fontWeight: FontWeight.w700),
         ),
-        actions: [_editButton(color: Colors.white)],
+        actions: widget.readOnly ? null : [_editButton(color: Colors.white)],
       ),
       body: content,
     );
@@ -259,18 +285,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-          _editButton(color: _navy),
+          if (!widget.readOnly) _editButton(color: _navy),
         ],
       ),
     );
   }
 
   Widget _editButton({required Color color}) {
-    return IconButton(
-      tooltip: isEditing ? 'Cancel editing' : 'Edit profile',
-      onPressed: _isSaving ? null : _toggleEditing,
-      icon: Icon(isEditing ? Icons.close_rounded : Icons.edit_outlined),
-      color: color,
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      child: IconButton(
+        tooltip: isEditing ? 'Cancel editing' : 'Edit profile',
+        onPressed: _isSaving ? null : _toggleEditing,
+        icon: Icon(isEditing ? Icons.close_rounded : Icons.edit_outlined),
+        color: color,
+        style: IconButton.styleFrom(
+          hoverColor: Colors.white.withValues(alpha: 0.1),
+        ),
+      ),
     );
   }
 
@@ -279,54 +311,109 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? _legalNameController.text
         : _fullNameController.text;
 
-    return _card(
+    final nameText = displayName.isEmpty ? _user.name : displayName;
+    final isVerified =
+        _user.verificationStatus == VerificationStatus.autoVerified;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0C1D36), Color(0xFF1E293B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
       child: Row(
         children: [
+          // Elegant Avatar with Gold Indicator Ring
           Container(
-            width: 56,
-            height: 56,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
-              color: _navy,
               shape: BoxShape.circle,
-              border: Border.all(color: _gold, width: 2),
+              gradient: const LinearGradient(
+                colors: [_gold, Color(0xFFFBBF24)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
-            child: Center(
-              child: Text(
-                _initials(displayName.isEmpty ? _user.name : displayName),
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+            padding: const EdgeInsets.all(2), // Gold ring thickness
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF0C1D36),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  _initials(nameText),
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
+
+          // User Details Column
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  displayName.isEmpty ? 'Not provided' : displayName,
-                  style: GoogleFonts.inter(
-                    color: _navy,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        nameText,
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isVerified && _isLawyer) ...[
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.verified_rounded,
+                        color: Color(0xFF38BDF8), // Light blue verified tick
+                        size: 18,
+                      ),
+                    ],
+                  ],
                 ),
+                const SizedBox(height: 4),
                 Text(
                   _user.email,
                   style: GoogleFonts.inter(
-                    color: Colors.grey[500],
-                    fontSize: 12,
+                    color: const Color(0xFF94A3B8),
+                    fontSize: 12.5,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 6),
+                _roleChip(),
               ],
             ),
           ),
-          _roleChip(),
         ],
       ),
     );
@@ -334,17 +421,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _roleChip() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _gold.withValues(alpha: 0.12),
+        color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         _isLawyer ? 'LAWYER' : 'CLIENT',
         style: GoogleFonts.inter(
           color: _gold,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -357,17 +445,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _editableRow(
           label: 'Full Name',
           controller: _fullNameController,
+          icon: Icons.person_outline_rounded,
           validator: _required('Full name is required.'),
         ),
         _gap,
         _editableRow(
           label: 'Phone',
           controller: _phoneController,
+          icon: Icons.phone_outlined,
           keyboardType: TextInputType.phone,
           validator: _required('Phone number is required.'),
         ),
         _gap,
-        _readOnlyRow('Account ID', _user.id),
+        _readOnlyRow('Account ID', _user.id, Icons.vpn_key_outlined),
       ],
     );
   }
@@ -379,26 +469,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _editableRow(
           label: 'Legal Name',
           controller: _legalNameController,
+          icon: Icons.person_outline_rounded,
           validator: _required('Legal name is required.'),
         ),
         _gap,
-        _readOnlyRow('Bar Number', _user.barNumber ?? 'Not provided'),
+        _readOnlyRow(
+          'Bar Number',
+          _user.barNumber ?? 'Not provided',
+          Icons.badge_outlined,
+        ),
         _gap,
         _editableRow(
           label: 'Firm',
           controller: _firmController,
+          icon: Icons.business_outlined,
           validator: _required('Firm name is required.'),
         ),
         _gap,
         _editableRow(
           label: 'Specialization',
           controller: _specializationController,
+          icon: Icons.gavel_outlined,
           validator: _required('Specialization is required.'),
         ),
         _gap,
         _editableRow(
           label: 'Experience',
           controller: _experienceController,
+          icon: Icons.work_outline_rounded,
           displayValue: _displayExperience(),
           keyboardType: TextInputType.number,
           suffixText: 'years',
@@ -408,6 +506,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _editableRow(
           label: 'Hourly Rate',
           controller: _hourlyRateController,
+          icon: Icons.payments_outlined,
           displayValue: _displayHourlyRate(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           prefixText: 'RM ',
@@ -418,20 +517,152 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _languagesCard() {
+    return _sectionCard(
+      title: 'Languages spoken',
+      children: [
+        Text(
+          'Select the languages you can serve clients in.',
+          style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        if (!isEditing)
+          _selectedLanguages.isEmpty
+              ? Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 18,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFE5E7EB),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.translate_rounded,
+                        size: 20,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'No languages selected yet — tap edit to add yours.',
+                          style: GoogleFonts.inter(
+                            color: Colors.grey[500],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _selectedLanguages
+                      .map(
+                        (lang) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _gold.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _gold.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.check_circle_rounded,
+                                size: 16,
+                                color: _navy.withValues(alpha: 0.7),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                lang,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: _navy,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _availableLanguages.map((lang) {
+              final selected = _selectedLanguages.contains(lang);
+              return FilterChip(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                label: Text(
+                  lang,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? Colors.white : _navy,
+                  ),
+                ),
+                selected: selected,
+                onSelected: (value) {
+                  setState(() {
+                    if (value) {
+                      _selectedLanguages.add(lang);
+                    } else {
+                      _selectedLanguages.remove(lang);
+                    }
+                  });
+                },
+                selectedColor: _navy,
+                checkmarkColor: _gold,
+                backgroundColor: const Color(0xFFF8FAFC),
+                side: BorderSide(
+                  color: selected ? _navy : const Color(0xFFE5E7EB),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              );
+            }).toList(),
+          ),
+      ],
+    );
+  }
+
   Widget _accountCard() {
     return _sectionCard(
       title: _isLawyer ? 'Account and verification' : 'Account',
       children: [
         if (_isLawyer) ...[
-          _readOnlyRow('Status', _user.verificationStatus.label),
+          _readOnlyRow(
+            'Status',
+            _user.verificationStatus.label,
+            Icons.verified_user_outlined,
+          ),
           _gap,
         ],
-        _readOnlyRow('Email', _user.email),
+        _readOnlyRow('Email', _user.email, Icons.email_outlined),
         if (_isLawyer) ...[
           _gap,
           _editableRow(
             label: 'Phone',
             controller: _phoneController,
+            icon: Icons.phone_outlined,
             keyboardType: TextInputType.phone,
             validator: _required('Phone number is required.'),
           ),
@@ -466,15 +697,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: _gold,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  color: _navy,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           ...children,
         ],
       ),
@@ -483,15 +727,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _card({required Widget child}) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -502,6 +748,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _editableRow({
     required String label,
     required TextEditingController controller,
+    required IconData icon,
     String? displayValue,
     String? prefixText,
     String? suffixText,
@@ -512,6 +759,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return _readOnlyRow(
         label,
         displayValue ?? _emptyFallback(controller.text),
+        icon,
       );
     }
 
@@ -520,7 +768,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(color: Colors.grey[600], fontSize: 12),
+          style: GoogleFonts.inter(
+            color: Colors.grey[600],
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         const SizedBox(height: 6),
         TextFormField(
@@ -529,6 +781,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           validator: validator,
           decoration: _inputDecoration(
             label,
+            icon: icon,
             prefixText: prefixText,
             suffixText: suffixText,
           ),
@@ -542,25 +795,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _readOnlyRow(String label, String value) {
+  Widget _readOnlyRow(String label, String value, IconData icon) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(
-          width: _isLawyer ? 110 : 96,
-          child: Text(
-            label,
-            style: GoogleFonts.inter(color: Colors.grey[500], fontSize: 12),
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: Icon(icon, color: const Color(0xFF64748B), size: 18),
         ),
+        const SizedBox(width: 12),
         Expanded(
-          child: Text(
-            _emptyFallback(value),
-            style: GoogleFonts.inter(
-              color: _navy,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-            overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF64748B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _emptyFallback(value),
+                style: GoogleFonts.inter(
+                  color: _navy,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ],
@@ -575,21 +846,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }) {
     return InkWell(
       onTap: _isSaving ? null : onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
             Container(
-              width: 34,
-              height: 34,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: _navy.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, size: 16, color: _navy),
+              child: Icon(icon, size: 18, color: _navy),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,8 +869,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title,
                     style: GoogleFonts.inter(
                       color: _navy,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                   Text(
@@ -612,7 +883,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: Colors.grey[400], size: 18),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.grey[400],
+              size: 20,
+            ),
           ],
         ),
       ),
@@ -622,18 +897,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _saveButton() {
     return SizedBox(
       width: double.infinity,
-      height: 48,
+      height: 50,
       child: FilledButton.icon(
         onPressed: _isSaving ? null : _saveChanges,
         icon: const Icon(Icons.save_outlined, size: 18),
         label: Text(
           'Save Changes',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
         ),
         style: FilledButton.styleFrom(
           backgroundColor: _navy,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
         ),
       ),
     );
@@ -654,6 +932,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   InputDecoration _inputDecoration(
     String hint, {
+    required IconData icon,
     String? prefixText,
     String? suffixText,
   }) {
@@ -661,28 +940,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
       hintText: hint,
       prefixText: prefixText,
       suffixText: suffixText,
+      prefixIcon: Icon(icon, color: const Color(0xFF64748B), size: 18),
       isDense: true,
       filled: true,
       fillColor: const Color(0xFFF8FAFC),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: _gold, width: 1.4),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFFB91C1C)),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFFB91C1C)),
       ),
     );
   }
+
+  Widget get _gap => const SizedBox(height: 14);
 
   String? Function(String?) _required(String message) {
     return (value) {
@@ -754,8 +1036,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
         .toUpperCase();
   }
-
-  Widget get _gap => const SizedBox(height: 8);
 }
 
 class _EmailChangeDialog extends StatefulWidget {
